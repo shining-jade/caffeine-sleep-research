@@ -7,7 +7,7 @@ import { createLoginHandler } from '../api/student/login.js';
 import { createLogoutHandler } from '../api/student/logout.js';
 import { createSessionHandler } from '../api/student/session.js';
 import { GasGatewayError } from '../api/_lib/gas.js';
-import { createSession } from '../api/_lib/session.js';
+import { createSession, verifySession } from '../api/_lib/session.js';
 
 process.env.SESSION_SECRET = 'student-api-test-session-secret';
 process.env.GAS_API_URL = 'https://example.invalid/gas';
@@ -112,7 +112,12 @@ test('student API issues secure cookie after valid login', async () => {
   assert.deepEqual(forwarded, {
     role: 'public', action: 'checkLogin', params: ['1101', '테스트학생'], subject: null,
   });
-  assert.match(res.getHeader('set-cookie'), /HttpOnly; Secure; SameSite=Lax/);
+  const setCookie = res.getHeader('set-cookie');
+  assert.match(setCookie, /HttpOnly; Secure; SameSite=Lax/);
+  assert.match(setCookie, /Max-Age=7776000/);
+  const token = decodeURIComponent(setCookie.match(/^caffeine_session=([^;]+)/)[1]);
+  assert.equal(verifySession(token, 'student', NOW + 7_775_999).studentId, '1101');
+  assert.throws(() => verifySession(token, 'student', NOW + 7_776_000), /expired session/i);
   assert.deepEqual(res.json(), {
     success: true, authenticated: true, role: 'student', studentId: '1101', name: '테스트학생',
   });

@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { requireEnv } from './env.js';
 
 const COOKIE_NAME = 'caffeine_session';
-const MAX_COOKIE_AGE = 8 * 60 * 60;
+const MAX_COOKIE_AGE = 90 * 24 * 60 * 60;
 
 function encode(value) {
   return Buffer.from(value, 'utf8').toString('base64url');

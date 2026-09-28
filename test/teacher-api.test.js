@@ -97,6 +97,7 @@ test('teacher API issues cookie after correct password without forwarding it', a
   assert.equal(seenCandidate, 'correct-password');
   assert.equal(res.statusCode, 200);
   assert.match(res.getHeader('set-cookie'), /HttpOnly; Secure; SameSite=Lax/);
+  assert.match(res.getHeader('set-cookie'), /Max-Age=28800/);
   assert.deepEqual(res.json(), { success: true, authenticated: true, role: 'teacher' });
 });
 

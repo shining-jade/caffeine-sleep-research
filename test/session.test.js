@@ -63,7 +63,7 @@ test('session cookie uses secure bounded attributes', () => {
   const headers = new Map();
   const res = { setHeader: (name, value) => headers.set(name.toLowerCase(), value) };
 
-  setSessionCookie(res, 'signed-token', 999_999);
+  setSessionCookie(res, 'signed-token', 99_999_999);
   const cookie = headers.get('set-cookie');
 
   assert.match(cookie, /^caffeine_session=signed-token;/);
@@ -71,7 +71,7 @@ test('session cookie uses secure bounded attributes', () => {
   assert.match(cookie, /Secure/);
   assert.match(cookie, /SameSite=Lax/);
   assert.match(cookie, /Path=\//);
-  assert.match(cookie, /Max-Age=28800/);
+  assert.match(cookie, /Max-Age=7776000/);
 
   clearSessionCookie(res);
   assert.match(headers.get('set-cookie'), /Max-Age=0/);

@@ -3,7 +3,7 @@ import { readJson, sendJson } from '../_lib/http.js';
 import { createSession, setSessionCookie } from '../_lib/session.js';
 import { checkLoginRateLimit } from '../_lib/rate-limit.js';
 
-const SESSION_SECONDS = 8 * 60 * 60;
+const SESSION_SECONDS = 90 * 24 * 60 * 60;
 
 function sendKnownError(res, error) {
   const status = Number.isInteger(error?.status) ? error.status : 500;
