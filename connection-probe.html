@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="ko"><meta charset="utf-8"><title>연결 점검</title>
+<pre id="status">연결 확인 중</pre>
+<script>
+fetch('https://script.google.com/macros/s/AKfycbxtCvuN_ytAs4M769uCuq4kUuXRFFSoyR7QlKuNKQoJjlRnZICVDI-0H4QOTa4NQiC88Q/exec?action=testConnection&params=%5B%5D')
+  .then(async response => {
+    document.querySelector('#status').textContent = `${response.status}: ${await response.text()}`;
+  })
+  .catch(error => {
+    document.querySelector('#status').textContent = `연결 실패: ${error.name}: ${error.message}`;
+  });
+</script></html>
