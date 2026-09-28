@@ -9,6 +9,7 @@ import { createLoginHandler as studentLogin } from '../api/student/login.js';
 import { createLogoutHandler as studentLogout } from '../api/student/logout.js';
 import { createActionHandler as teacherAction } from '../api/teacher/action.js';
 import { createLoginHandler as teacherLogin } from '../api/teacher/login.js';
+import { scanPublicBundle } from '../scripts/check-public-bundle.mjs';
 
 process.env.SESSION_SECRET = 'integration-session-secret';
 process.env.GAS_API_URL = 'https://example.invalid/apps-script';
@@ -161,4 +162,29 @@ test('integration: Vercel config schedules 24 unique once-daily UTC reminder slo
     { source: '/', destination: '/index.html' },
     { source: '/teacher', destination: '/teacher/index.html' },
   ]);
+});
+
+test('integration: public scanner rejects reminder secrets and private key material', async () => {
+  const fixture = new URL('./fixtures/public-bundle-unsafe', import.meta.url);
+  const failures = await scanPublicBundle([fixture], { secretValues: ['private-value', 'cron-value'] });
+  assert.deepEqual(new Set(failures.map(({ name }) => name)), new Set([
+    'Apps Script deployment URL',
+    'server-only reminder environment variable',
+    'private key material',
+    'configured secret value',
+  ]));
+});
+
+test('integration: reminder browser APIs are same-origin and initial delivery remains disabled', async () => {
+  const [studentSource, teacherSource, appScriptSource] = await Promise.all([
+    readFile(new URL('../public/js/push-reminders.js', import.meta.url), 'utf8'),
+    readFile(new URL('../public/js/teacher-reminders.js', import.meta.url), 'utf8'),
+    readFile(new URL('../apps-script/Reminders.gs', import.meta.url), 'utf8'),
+  ]);
+  assert.doesNotMatch(`${studentSource}\n${teacherSource}`, /fetch\(['"]https?:\/\//);
+  assert.match(teacherSource, /\/api\/teacher\/reminders\/config/);
+  assert.match(studentSource, /api\.getConfig/);
+  assert.match(appScriptSource, /enabled:\s*false/);
+  assert.match(appScriptSource, /sleepTime:\s*'08:00'/);
+  assert.match(appScriptSource, /caffeineTime:\s*'20:00'/);
 });
