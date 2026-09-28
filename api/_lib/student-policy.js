@@ -34,6 +34,13 @@ export function normalizeStudentRequest(action, params, session) {
       studentId: session.studentId,
       name: session.name,
     };
+  } else if (rule === 'pushSubscription') {
+    const payload = params[0];
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      throw new Error('The first action parameter must be a payload object.');
+    }
+    const { role: _role, studentId: _studentId, name: _name, ...subscription } = payload;
+    normalizedParams[0] = { ...subscription, role: 'student', studentId: session.studentId };
   }
 
   return { action, params: normalizedParams, subject };

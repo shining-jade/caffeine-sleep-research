@@ -13,6 +13,10 @@ async function gateway(extra = {}) {
       getCaffeineDB() { return { success: true, data: [] }; },
       getTeacherData() { return { success: true, students: [] }; },
       saveCaffeineData(payload) { return payload; },
+      getReminderDispatchSnapshot_(type) { return { type }; },
+      claimReminderDeliveries_(keys) { return keys; },
+      recordReminderDeliveryResults_(results) { return { recorded: results.length }; },
+      getReminderAdminConfig_() { return { enabled: false }; },
       ...extra,
     },
   });
@@ -90,5 +94,34 @@ test('unknown roles actions and malformed params are rejected without echoing in
     const result = outputJson(call(context, 'doPost(requestEvent)'));
     assert.equal(result.error, 'REQUEST_REJECTED');
     assert.doesNotMatch(JSON.stringify(result), /sensitive-input|notAFunction/);
+  }
+});
+
+test('scheduler role permits only reminder dispatch actions', async () => {
+  const { context } = await gateway();
+  for (const [action, params] of [
+    ['getReminderDispatchSnapshot', ['sleep', '2026-09-10T08:00:00+09:00']],
+    ['claimReminderDeliveries', [['key'], 'execution', '2026-09-10T08:00:00Z']],
+    ['recordReminderDeliveryResults', [[]]],
+  ]) {
+    context.schedulerEvent = event({ secret, role: 'scheduler', action, params });
+    assert.equal(outputJson(call(context, 'doPost(schedulerEvent)')).success, true);
+  }
+  for (const action of ['getTeacherData', 'savePushSubscription', 'constructor']) {
+    context.deniedSchedulerEvent = event({ secret, role: 'scheduler', action, params: [] });
+    assert.equal(outputJson(call(context, 'doPost(deniedSchedulerEvent)')).error, 'REQUEST_REJECTED');
+  }
+});
+
+test('student teacher and public roles cannot call another reminder role actions', async () => {
+  const { context } = await gateway();
+  const requests = [
+    { role: 'public', action: 'getReminderAdminConfig', params: [] },
+    { role: 'student', action: 'getReminderAdminConfig', params: [], subject: { studentId: '1101', name: '학생' } },
+    { role: 'teacher', action: 'getReminderDispatchSnapshot', params: [] },
+  ];
+  for (const request of requests) {
+    context.crossRoleEvent = event({ secret, ...request });
+    assert.equal(outputJson(call(context, 'doPost(crossRoleEvent)')).error, 'REQUEST_REJECTED');
   }
 });

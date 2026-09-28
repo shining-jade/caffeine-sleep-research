@@ -6,7 +6,7 @@ import { createActionHandler } from '../api/teacher/action.js';
 import { createLoginHandler } from '../api/teacher/login.js';
 import { createLogoutHandler } from '../api/teacher/logout.js';
 import { createSessionHandler } from '../api/teacher/session.js';
-import { TEACHER_ACTIONS } from '../api/_lib/teacher-policy.js';
+import { normalizeTeacherRequest, TEACHER_ACTIONS } from '../api/_lib/teacher-policy.js';
 import { createSession } from '../api/_lib/session.js';
 
 process.env.SESSION_SECRET = 'teacher-api-test-session-secret';
@@ -26,6 +26,8 @@ const EXPECTED_ACTIONS = [
   'saveChallengeBadgeConfig', 'getPendingBadges', 'savePendingBadgesData',
   'getDismissedBadges', 'saveDismissedBadgesData', 'getAwardSettings',
   'saveAwardSettingsData', 'saveAIReport', 'getAIReport', 'saveSleepSettings',
+  'getReminderAdminConfig', 'saveReminderAdminConfig', 'saveTeacherTestSubscription',
+  'deactivateTeacherTestSubscription',
 ];
 
 function request(method, body, cookie = '') {
@@ -171,4 +173,11 @@ test('teacher API session inspection and logout are role-safe', async () => {
   const logoutRes = response();
   await createLogoutHandler()(request('POST'), logoutRes);
   assert.match(logoutRes.getHeader('set-cookie'), /Max-Age=0/);
+});
+
+test('teacher reminder actions are allowlisted without admitting scheduler actions', () => {
+  assert.deepEqual(normalizeTeacherRequest('getReminderAdminConfig', []).params, []);
+  assert.deepEqual(normalizeTeacherRequest('saveReminderAdminConfig', [{ enabled: false }]).params, [{ enabled: false }]);
+  assert.throws(() => normalizeTeacherRequest('getReminderDispatchSnapshot', []), /not allowed/i);
+  assert.throws(() => normalizeTeacherRequest('recordReminderDeliveryResults', []), /not allowed/i);
 });

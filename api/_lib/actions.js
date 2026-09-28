@@ -25,6 +25,10 @@ export const STUDENT_ACTION_RULES = Object.freeze({
   getBadgeConfig: 'passthrough',
   getChallengeBadgeConfig: 'passthrough',
   getSleepSettings: 'passthrough',
+  savePushSubscription: 'pushSubscription',
+  getPushPreferences: 'subscriptionOwned',
+  savePushPreferences: 'subscriptionOwned',
+  deactivatePushSubscription: 'subscriptionOwned',
 });
 
 export const STUDENT_ACTIONS = new Set(Object.keys(STUDENT_ACTION_RULES));

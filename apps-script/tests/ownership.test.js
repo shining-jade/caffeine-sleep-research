@@ -34,6 +34,7 @@ async function ownership(sheets = {}, globals = {}) {
       saveCaffeineData(payload) { return payload; },
       saveSleepData(payload) { return payload; },
       markTeacherAwardsSeen(id, name, awards) { return { id, name, awards }; },
+      upsertPushSubscription_(record) { return record; },
       ...globals,
     },
   });
@@ -160,4 +161,17 @@ test('badge acknowledgement identity is always replaced by the session subject',
   assert.equal(result.id, '1101');
   assert.equal(result.name, '학생');
   assert.equal(result.awards[0].awardId, 'a');
+});
+
+test('student push action overwrites a browser supplied owner and role', async () => {
+  const { context } = await ownership();
+  context.subject = { studentId: '1101', name: '학생' };
+  context.params = [{
+    role: 'teacher-test', studentId: '9999', name: '위조',
+    endpoint: 'https://push.example/device', keys: { p256dh: 'p', auth: 'a' },
+  }];
+  const result = call(context, "dispatchStudentAction_('savePushSubscription',params,subject)");
+  assert.equal(result.role, 'student');
+  assert.equal(result.studentId, '1101');
+  assert.equal(Object.hasOwn(result, 'name'), false);
 });

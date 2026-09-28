@@ -429,3 +429,31 @@ function recordReminderDeliveryResults_(results) {
     return { recorded: results.length };
   });
 }
+
+function getReminderAdminConfig_() {
+  return { config: getReminderConfig_() };
+}
+
+function saveReminderAdminConfig_(config) {
+  return saveReminderConfig_(config, 'teacher');
+}
+
+function saveTeacherTestSubscription_(record) {
+  var safeRecord = Object.assign({}, record || {}, { role: 'teacher-test', studentId: '' });
+  return upsertPushSubscription_(safeRecord);
+}
+
+function deactivateTeacherTestSubscription_(subscriptionId) {
+  return withScriptLock_(function() {
+    var spreadsheet = ensureReminderSheets_();
+    var sheet = spreadsheet.getSheetByName(REMINDER_SHEETS_.subscriptions.name);
+    var rowIndex = findSubscriptionRow_(sheet, subscriptionId);
+    if (rowIndex < 2) throw new Error('REQUEST_REJECTED');
+    var row = sheet.getRange(rowIndex, 1, 1, REMINDER_SHEETS_.subscriptions.headers.length).getValues()[0];
+    if (String(row[1]) !== 'teacher-test') throw new Error('REQUEST_REJECTED');
+    row[8] = false;
+    row[10] = reminderNowIso_();
+    sheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+    return subscriptionViewFromRow_(row);
+  });
+}

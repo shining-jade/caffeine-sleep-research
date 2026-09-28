@@ -28,6 +28,10 @@ const ACTION_NAMES = [
   'saveAIReport',
   'getAIReport',
   'saveSleepSettings',
+  'getReminderAdminConfig',
+  'saveReminderAdminConfig',
+  'saveTeacherTestSubscription',
+  'deactivateTeacherTestSubscription',
 ];
 
 export const TEACHER_ACTIONS = new Set(ACTION_NAMES);

@@ -15,6 +15,8 @@ const EXPECTED_ACTIONS = [
   'analyzeDrinkImageWithAI', 'getTeacherMessages', 'markTeacherMessageRead',
   'replyToTeacherMessage', 'getBadgeConfig', 'getChallengeBadgeConfig',
   'getSleepSettings',
+  'savePushSubscription', 'getPushPreferences', 'savePushPreferences',
+  'deactivatePushSubscription',
 ];
 
 test('student policy contains every student UI action and no login action', () => {
@@ -78,4 +80,20 @@ test('student ownership metadata is attached to record and row operations', () =
 
 test('student policy requires an array of parameters', () => {
   assert.throws(() => normalizeStudentRequest('getStats', { studentId: '9999' }, SESSION), /parameters/i);
+});
+
+test('student push action cannot retain a browser supplied identity', () => {
+  const input = {
+    role: 'teacher-test', studentId: '9999', name: '다른학생',
+    endpoint: 'https://push.example/device', keys: { p256dh: 'p', auth: 'a' },
+  };
+  const saved = normalizeStudentRequest('savePushSubscription', [input], SESSION);
+  assert.deepEqual(saved.params[0], {
+    role: 'student', studentId: '1101',
+    endpoint: 'https://push.example/device', keys: { p256dh: 'p', auth: 'a' },
+  });
+  for (const action of ['getPushPreferences', 'savePushPreferences', 'deactivatePushSubscription']) {
+    const result = normalizeStudentRequest(action, ['device-id', { studentId: '9999' }], SESSION);
+    assert.deepEqual(result.subject, { studentId: '1101', name: '테스트학생' });
+  }
 });

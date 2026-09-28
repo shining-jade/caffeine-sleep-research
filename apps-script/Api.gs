@@ -12,6 +12,8 @@ var STUDENT_ACTIONS_ = {
   getTeacherMessages: 'identityFirst', markTeacherMessageRead: 'messageRow',
   replyToTeacherMessage: 'messageRow', getBadgeConfig: 'passthrough',
   getChallengeBadgeConfig: 'passthrough', getSleepSettings: 'passthrough'
+  , savePushSubscription: 'pushSubscription', getPushPreferences: 'subscriptionOwned'
+  , savePushPreferences: 'subscriptionOwned', deactivatePushSubscription: 'subscriptionOwned'
 };
 
 var TEACHER_ACTIONS_ = {
@@ -27,7 +29,14 @@ var TEACHER_ACTIONS_ = {
   savePendingBadgesData: true, getDismissedBadges: true,
   saveDismissedBadgesData: true, getAwardSettings: true,
   saveAwardSettingsData: true, saveAIReport: true, getAIReport: true,
-  saveSleepSettings: true
+  saveSleepSettings: true, getReminderAdminConfig: true, saveReminderAdminConfig: true,
+  saveTeacherTestSubscription: true, deactivateTeacherTestSubscription: true
+};
+
+var SCHEDULER_ACTIONS_ = {
+  getReminderDispatchSnapshot: true,
+  claimReminderDeliveries: true,
+  recordReminderDeliveryResults: true
 };
 
 var STUDENT_MUTATIONS_ = {
@@ -104,6 +113,7 @@ function handleApiRequest_(request) {
     return dispatchStudentAction_(request.action, request.params, requireSubject_(request.subject));
   }
   if (request.role === 'teacher') return dispatchTeacherAction_(request.action, request.params);
+  if (request.role === 'scheduler') return dispatchSchedulerAction_(request.action, request.params);
   throw new Error('REQUEST_REJECTED');
 }
 
@@ -116,6 +126,16 @@ function dispatchStudentAction_(action, params, subject) {
   if (rule === 'identityPayload' || rule === 'caffeinePayload' || rule === 'sleepPayload') {
     if (!safeParams[0] || typeof safeParams[0] !== 'object' || Array.isArray(safeParams[0])) throw new Error('REQUEST_REJECTED');
     safeParams[0] = Object.assign({}, safeParams[0], { studentId: subject.studentId, name: subject.name });
+  }
+  if (rule === 'pushSubscription') {
+    if (!safeParams[0] || typeof safeParams[0] !== 'object' || Array.isArray(safeParams[0])) throw new Error('REQUEST_REJECTED');
+    safeParams[0] = Object.assign({}, safeParams[0], { role: 'student', studentId: subject.studentId });
+    delete safeParams[0].name;
+  }
+  if (rule === 'subscriptionOwned') {
+    safeParams = action === 'savePushPreferences'
+      ? [safeParams[0], subject, safeParams[1]]
+      : [safeParams[0], subject];
   }
   if (action === 'saveCaffeineData' || action === 'updateCaffeineData') {
     safeParams[0].time = normalizeCaffeineTime_(safeParams[0].time);
@@ -137,6 +157,11 @@ function dispatchTeacherAction_(action, params) {
   var safeParams = params.slice();
   var execute = function() { return invokeAction_(action, safeParams); };
   return TEACHER_MUTATIONS_[action] ? withScriptLock_(execute) : execute();
+}
+
+function dispatchSchedulerAction_(action, params) {
+  if (!SCHEDULER_ACTIONS_[action]) throw new Error('REQUEST_REJECTED');
+  return invokeAction_(action, params.slice());
 }
 
 function invokeAction_(action, params) {
@@ -168,6 +193,10 @@ function invokeAction_(action, params) {
     case 'getBadgeConfig': return getBadgeConfig.apply(null, params);
     case 'getChallengeBadgeConfig': return getChallengeBadgeConfig.apply(null, params);
     case 'getSleepSettings': return getSleepSettings.apply(null, params);
+    case 'savePushSubscription': return upsertPushSubscription_.apply(null, params);
+    case 'getPushPreferences': return getPushPreferences_.apply(null, params);
+    case 'savePushPreferences': return setPushPreferences_.apply(null, params);
+    case 'deactivatePushSubscription': return deactivatePushSubscription_.apply(null, params);
     case 'getTeacherData': return getTeacherData.apply(null, params);
     case 'handleAIReportForTeacher': return handleAIReportForTeacher.apply(null, params);
     case 'grantTeacherAwards': return grantTeacherAwards.apply(null, params);
@@ -196,6 +225,13 @@ function invokeAction_(action, params) {
     case 'saveAIReport': return saveAIReport.apply(null, params);
     case 'getAIReport': return getAIReport.apply(null, params);
     case 'saveSleepSettings': return saveSleepSettings.apply(null, params);
+    case 'getReminderAdminConfig': return getReminderAdminConfig_.apply(null, params);
+    case 'saveReminderAdminConfig': return saveReminderAdminConfig_.apply(null, params);
+    case 'saveTeacherTestSubscription': return saveTeacherTestSubscription_.apply(null, params);
+    case 'deactivateTeacherTestSubscription': return deactivateTeacherTestSubscription_.apply(null, params);
+    case 'getReminderDispatchSnapshot': return getReminderDispatchSnapshot_.apply(null, params);
+    case 'claimReminderDeliveries': return claimReminderDeliveries_.apply(null, params);
+    case 'recordReminderDeliveryResults': return recordReminderDeliveryResults_.apply(null, params);
   }
   throw new Error('REQUEST_REJECTED');
 }
