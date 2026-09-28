@@ -10,6 +10,15 @@ export async function loadAppsScript({
   const context = vm.createContext({
     JSON, Object, Array, String, Number, Boolean, Date, RegExp, Error, Math, console,
     Logger: { log() {} },
+    Utilities: { getUuid() { return globals.__uuid || 'server-generated-uuid'; } },
+    LockService: {
+      getScriptLock() {
+        return {
+          waitLock() { globals.__lockEvents?.push('lock'); },
+          releaseLock() { globals.__lockEvents?.push('unlock'); },
+        };
+      },
+    },
     PropertiesService: {
       getScriptProperties() {
         return { getProperty(name) { return properties[name] ?? null; } };

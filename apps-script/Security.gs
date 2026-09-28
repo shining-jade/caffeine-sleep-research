@@ -22,3 +22,6 @@ function requireSubject_(subject) {
     name: String(subject.name).trim()
   };
 }
+
+// Production requests must not write student identifiers or health records to execution logs.
+function safeLog_() {}

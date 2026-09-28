@@ -33,9 +33,9 @@ function legacyDoGet_(e) {
 // GitHub Pages에서 오는 GET API 요청 처리기
 function legacyHandleAPIRequest_(action, params) {
   try {
-    Logger.log('=== GET API 요청 ===');
-    Logger.log('action: ' + action);
-    Logger.log('params: ' + JSON.stringify(params));
+    safeLog_('=== GET API 요청 ===');
+    safeLog_('action: ' + action);
+    safeLog_('params: ' + JSON.stringify(params));
 
     const ALLOWED_ACTIONS = {
       // 인증
@@ -129,14 +129,14 @@ function legacyHandleAPIRequest_(action, params) {
     else if (params.length === 2) result = fn(params[0], params[1]);
     else                          result = fn(...params);
 
-    Logger.log('GET API 결과: ' + JSON.stringify(result));
+    safeLog_('GET API 결과: ' + JSON.stringify(result));
 
     return ContentService
       .createTextOutput(JSON.stringify({ success: true, data: result }))
       .setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
-    Logger.log('❌ GET API 오류: ' + err.message);
+    safeLog_('❌ GET API 오류: ' + err.message);
     return ContentService
       .createTextOutput(JSON.stringify({ success: false, error: err.message }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -177,11 +177,11 @@ function onEdit(e) {
         const studentId = String(grade) + String(classNum) + String(number).padStart(2, '0');
         idCell.setValue(Number(studentId));
 
-        Logger.log(`자동 학번 생성: ${row}행 - ${studentId}`);
+        safeLog_(`자동 학번 생성: ${row}행 - ${studentId}`);
       }
     }
   } catch (error) {
-    Logger.log('onEdit 오류: ' + error);
+    safeLog_('onEdit 오류: ' + error);
   }
 }
 
@@ -221,24 +221,24 @@ function getKSTDate() {
 // Students 시트 구조: A:학년, B:반, C:번호, D:이름, E:학번ID
 function checkLogin(studentId, name) {
   try {
-    Logger.log('=== 로그인 시도 ===');
-    Logger.log('입력된 학번: "' + studentId + '"');
-    Logger.log('입력된 이름: "' + name + '"');
+    safeLog_('=== 로그인 시도 ===');
+    safeLog_('입력된 학번: "' + studentId + '"');
+    safeLog_('입력된 이름: "' + name + '"');
 
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("students");
 
     if (!sheet) {
-      Logger.log('❌ students 시트를 찾을 수 없음');
+      safeLog_('❌ students 시트를 찾을 수 없음');
       return { success: false, message: "학생 명단 시트를 찾을 수 없습니다." };
     }
 
     const data = sheet.getDataRange().getValues();
-    Logger.log('students 시트 데이터 행 수: ' + (data.length - 1) + '명');
+    safeLog_('students 시트 데이터 행 수: ' + (data.length - 1) + '명');
 
     // 처음 5개 행 로그 출력 (디버깅용)
     for (let i = 1; i < Math.min(6, data.length); i++) {
-      Logger.log(`${i}행 - E열(학번): "${data[i][4]}", D열(이름): "${data[i][3]}"`);
+      safeLog_(`${i}행 - E열(학번): "${data[i][4]}", D열(이름): "${data[i][3]}"`);
     }
 
     for (let i = 1; i < data.length; i++) {
@@ -248,7 +248,7 @@ function checkLogin(studentId, name) {
       const inputId = normalizeId(studentId);
 
       if (rowId === inputId && rowName === name.trim()) {
-        Logger.log('✅ 로그인 성공: ' + i + '행에서 일치');
+        safeLog_('✅ 로그인 성공: ' + i + '행에서 일치');
         // 비수치 학번(교직원·교생)은 "학번_이름" 복합키로 고유화
         const uniqueId = /^\d+$/.test(inputId) ? inputId : inputId + '_' + name.trim();
         return {
@@ -259,10 +259,10 @@ function checkLogin(studentId, name) {
       }
     }
 
-    Logger.log('❌ 일치하는 데이터 없음');
+    safeLog_('❌ 일치하는 데이터 없음');
     return { success: false, message: "등록되지 않은 정보입니다. 학번과 이름을 다시 확인해주세요." };
   } catch (error) {
-    Logger.log('❌ 로그인 오류: ' + error);
+    safeLog_('❌ 로그인 오류: ' + error);
     return { success: false, message: "오류가 발생했습니다: " + error.message };
   }
 }
@@ -305,7 +305,7 @@ function saveCaffeineData(payload) {
 
     return { success: true };
   } catch (error) {
-    Logger.log('카페인 저장 오류: ' + error);
+    safeLog_('카페인 저장 오류: ' + error);
     throw error;
   }
 }
@@ -329,12 +329,12 @@ function saveSleepData(payload) {
   try {
     // payload 검증
     if (!payload) {
-      Logger.log('❌ saveSleepData: payload가 undefined입니다');
+      safeLog_('❌ saveSleepData: payload가 undefined입니다');
       throw new Error("데이터가 전달되지 않았습니다.");
     }
 
-    Logger.log('=== saveSleepData 시작 ===');
-    Logger.log('받은 데이터: ' + JSON.stringify(payload));
+    safeLog_('=== saveSleepData 시작 ===');
+    safeLog_('받은 데이터: ' + JSON.stringify(payload));
 
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("sleep") || (() => {
@@ -346,18 +346,18 @@ function saveSleepData(payload) {
         "취침전스마트폰", "취침전활동", "잠들기소요시간", "수면중각성", "낮졸림"
       ]);
       s.setFrozenRows(1);
-      Logger.log("✅ sleep 시트 자동 생성 완료");
+      safeLog_("✅ sleep 시트 자동 생성 완료");
       return s;
     })();
 
     // 필수 필드 확인
     if (!payload.studentId) {
-      Logger.log('❌ payload.studentId가 없습니다: ' + JSON.stringify(payload));
+      safeLog_('❌ payload.studentId가 없습니다: ' + JSON.stringify(payload));
       throw new Error("학번이 전달되지 않았습니다.");
     }
 
     if (!payload.date) {
-      Logger.log('❌ payload.date가 없습니다');
+      safeLog_('❌ payload.date가 없습니다');
       throw new Error("날짜가 전달되지 않았습니다.");
     }
 
@@ -365,14 +365,14 @@ function saveSleepData(payload) {
     const p = parseStudentId(normalizeId(payload.studentId));
     const resolvedWakeDate = payload.wakeDate || getWakeDateFromSleepPayload(payload);
 
-    Logger.log(`학번: ${payload.studentId}, 날짜: ${payload.date}`);
+    safeLog_(`학번: ${payload.studentId}, 날짜: ${payload.date}`);
 
     // 기존 데이터 확인 - 같은 날짜에 같은 학생의 데이터가 있는지 체크
     const data = sheet.getDataRange().getValues();
     let existingRowIndex = -1;
 
-    Logger.log(`기존 데이터 검색 시작: 총 ${data.length - 1}행 확인`);
-    Logger.log(`검색 조건 - 학번: "${payload.studentId}", 날짜: "${payload.date}"`);
+    safeLog_(`기존 데이터 검색 시작: 총 ${data.length - 1}행 확인`);
+    safeLog_(`검색 조건 - 학번: "${payload.studentId}", 날짜: "${payload.date}"`);
 
     for (let i = 1; i < data.length; i++) {
       const rowStudentId = normalizeId(data[i][4]); // E열
@@ -395,7 +395,7 @@ function saveSleepData(payload) {
 
       // 디버깅 로그 (처음 3개만)
       if (i <= 3) {
-        Logger.log(`Row ${i + 1}: 학번="${rowStudentId}", 날짜="${rowDate}" (원본: ${rowDateRaw})`);
+        safeLog_(`Row ${i + 1}: 학번="${rowStudentId}", 날짜="${rowDate}" (원본: ${rowDateRaw})`);
       }
 
       // 같은 학생의 같은 날짜 기록이 있는 경우
@@ -408,29 +408,29 @@ function saveSleepData(payload) {
           rowDate === String(payload.date).trim() &&
           nameMatch) {
         existingRowIndex = i + 1; // 시트는 1-based index
-        Logger.log(`✅ 기존 데이터 발견: Row ${existingRowIndex}`);
-        Logger.log(`   학번 일치: "${rowStudentId}" === "${payload.studentId}"`);
-        Logger.log(`   날짜 일치: "${rowDate}" === "${payload.date}"`);
+        safeLog_(`✅ 기존 데이터 발견: Row ${existingRowIndex}`);
+        safeLog_(`   학번 일치: "${rowStudentId}" === "${payload.studentId}"`);
+        safeLog_(`   날짜 일치: "${rowDate}" === "${payload.date}"`);
         break;
       }
     }
 
     if (existingRowIndex === -1) {
-      Logger.log(`기존 데이터 없음 - 새로 추가됨`);
+      safeLog_(`기존 데이터 없음 - 새로 추가됨`);
     }
 
     let wasUpdated = false;
 
     if (existingRowIndex > 0) {
       // 기존 데이터가 있으면 해당 행 삭제
-      Logger.log(`⚠️ Row ${existingRowIndex} 삭제 시작...`);
+      safeLog_(`⚠️ Row ${existingRowIndex} 삭제 시작...`);
       sheet.deleteRow(existingRowIndex);
-      Logger.log(`✅ 기존 수면 기록 삭제 완료: 학번=${payload.studentId}, 날짜=${payload.date}`);
+      safeLog_(`✅ 기존 수면 기록 삭제 완료: 학번=${payload.studentId}, 날짜=${payload.date}`);
       wasUpdated = true;
     }
 
     // 새로운 데이터 추가 (항상)
-    Logger.log(`새 데이터 추가 중...`);
+    safeLog_(`새 데이터 추가 중...`);
     sheet.appendRow([
       kstTimestamp,           // A: 타임스탬프
       p.grade,                // B: 학년
@@ -453,8 +453,8 @@ function saveSleepData(payload) {
       payload.daytime || ''      // R: 낮 졸림
     ]);
 
-    Logger.log(`✅ 수면 기록 저장 완료: 학번=${payload.studentId}, 날짜=${payload.date}, 덮어쓰기=${wasUpdated}`);
-    Logger.log('=== saveSleepData 종료 ===');
+    safeLog_(`✅ 수면 기록 저장 완료: 학번=${payload.studentId}, 날짜=${payload.date}, 덮어쓰기=${wasUpdated}`);
+    safeLog_('=== saveSleepData 종료 ===');
 
     return {
       success: true,
@@ -462,8 +462,8 @@ function saveSleepData(payload) {
       message: wasUpdated ? '같은 날짜의 기존 데이터가 수정되었습니다.' : '수면 기록이 저장되었습니다.'
     };
   } catch (error) {
-    Logger.log('❌ 수면 저장 오류: ' + error);
-    Logger.log('오류 스택: ' + error.stack);
+    safeLog_('❌ 수면 저장 오류: ' + error);
+    safeLog_('오류 스택: ' + error.stack);
     throw error;
   }
 }
@@ -511,7 +511,7 @@ function saveWeightData(payload) {
 
     return { success: true };
   } catch (error) {
-    Logger.log('체중 저장 오류: ' + error);
+    safeLog_('체중 저장 오류: ' + error);
     throw error;
   }
 }
@@ -523,13 +523,13 @@ function getWeightData(studentId) {
     const sheet = ss.getSheetByName("info");
 
     if (!sheet) {
-      Logger.log('info 시트를 찾을 수 없습니다');
+      safeLog_('info 시트를 찾을 수 없습니다');
       return { success: false, weight: null };
     }
 
     const lastRow = sheet.getLastRow();
     if (lastRow <= 1) {
-      Logger.log('info 데이터가 없습니다');
+      safeLog_('info 데이터가 없습니다');
       return { success: false, weight: null };
     }
 
@@ -541,7 +541,7 @@ function getWeightData(studentId) {
       if (String(data[i][0]).trim() === normalizeId(studentId)) {
         const weight = parseFloat(data[i][1]);
         if (weight && weight > 0) {
-          Logger.log(`초기설정 조회 성공: ${studentId} = ${weight}kg`);
+          safeLog_(`초기설정 조회 성공: ${studentId} = ${weight}kg`);
           return {
             success: true,
             weight: weight,
@@ -554,10 +554,10 @@ function getWeightData(studentId) {
       }
     }
 
-    Logger.log(`초기설정 정보 없음: ${studentId}`);
+    safeLog_(`초기설정 정보 없음: ${studentId}`);
     return { success: false, weight: null };
   } catch (error) {
-    Logger.log('체중 조회 오류: ' + error);
+    safeLog_('체중 조회 오류: ' + error);
     return { success: false, weight: null };
   }
 }
@@ -604,10 +604,10 @@ function saveInitialSetup(payload) {
       ]);
     }
 
-    Logger.log(`초기설정 저장 완료: ${normId}, 체중=${payload.weight}, 목표카페인=${payload.targetCaf}, 취침=${payload.targetBedtime}, 기상=${payload.targetWakeTime}`);
+    safeLog_(`초기설정 저장 완료: ${normId}, 체중=${payload.weight}, 목표카페인=${payload.targetCaf}, 취침=${payload.targetBedtime}, 기상=${payload.targetWakeTime}`);
     return { success: true };
   } catch (error) {
-    Logger.log('초기설정 저장 오류: ' + error);
+    safeLog_('초기설정 저장 오류: ' + error);
     throw error;
   }
 }
@@ -653,7 +653,7 @@ function updateCaffeineData(payload) {
 
     throw new Error("수정할 기록을 찾을 수 없습니다.");
   } catch (error) {
-    Logger.log('카페인 수정 오류: ' + error);
+    safeLog_('카페인 수정 오류: ' + error);
     throw error;
   }
 }
@@ -701,7 +701,7 @@ function updateSleepData(payload) {
 
     throw new Error("수정할 기록을 찾을 수 없습니다.");
   } catch (error) {
-    Logger.log('수면 수정 오류: ' + error);
+    safeLog_('수면 수정 오류: ' + error);
     throw error;
   }
 }
@@ -722,14 +722,14 @@ function deleteCaffeineData(id) {
       if (String(data[i][9]) === String(id)) { // J열: 고유ID
         const rowIndex = i + 1;
         sheet.deleteRow(rowIndex);
-        Logger.log(`카페인 기록 삭제 완료: ID=${id}, Row=${rowIndex}`);
+        safeLog_(`카페인 기록 삭제 완료: ID=${id}, Row=${rowIndex}`);
         return { success: true };
       }
     }
 
     throw new Error("삭제할 기록을 찾을 수 없습니다.");
   } catch (error) {
-    Logger.log('카페인 삭제 오류: ' + error);
+    safeLog_('카페인 삭제 오류: ' + error);
     throw error;
   }
 }
@@ -750,14 +750,14 @@ function deleteSleepData(id) {
       if (String(data[i][13]) === String(id)) { // N열: 고유ID
         const rowIndex = i + 1;
         sheet.deleteRow(rowIndex);
-        Logger.log(`수면 기록 삭제 완료: ID=${id}, Row=${rowIndex}`);
+        safeLog_(`수면 기록 삭제 완료: ID=${id}, Row=${rowIndex}`);
         return { success: true };
       }
     }
 
     throw new Error("삭제할 기록을 찾을 수 없습니다.");
   } catch (error) {
-    Logger.log('수면 삭제 오류: ' + error);
+    safeLog_('수면 삭제 오류: ' + error);
     throw error;
   }
 }
@@ -769,13 +769,13 @@ function getCaffeineLogs(studentId, startDate, endDate) {
     const sheet = ss.getSheetByName("caffeine");
 
     if (!sheet) {
-      Logger.log('카페인 시트를 찾을 수 없습니다');
+      safeLog_('카페인 시트를 찾을 수 없습니다');
       return [];
     }
 
     const lastRow = sheet.getLastRow();
     if (lastRow <= 1) {
-      Logger.log('카페인 데이터가 없습니다');
+      safeLog_('카페인 데이터가 없습니다');
       return [];
     }
 
@@ -823,7 +823,7 @@ function getCaffeineLogs(studentId, startDate, endDate) {
 
     return logs;
   } catch (error) {
-    Logger.log('카페인 로그 조회 오류: ' + error);
+    safeLog_('카페인 로그 조회 오류: ' + error);
     return [];
   }
 }
@@ -831,31 +831,31 @@ function getCaffeineLogs(studentId, startDate, endDate) {
 // 수면 로그 조회 (강화된 디버깅 버전)
 function getSleepLogs(studentId, startDate, endDate) {
   try {
-    Logger.log(`=== getSleepLogs 시작 ===`);
-    Logger.log(`입력 파라미터:`);
-    Logger.log(`  studentId: "${studentId}" (타입: ${typeof studentId})`);
-    Logger.log(`  startDate: ${startDate}`);
-    Logger.log(`  endDate: ${endDate}`);
+    safeLog_(`=== getSleepLogs 시작 ===`);
+    safeLog_(`입력 파라미터:`);
+    safeLog_(`  studentId: "${studentId}" (타입: ${typeof studentId})`);
+    safeLog_(`  startDate: ${startDate}`);
+    safeLog_(`  endDate: ${endDate}`);
 
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("sleep");
 
     if (!sheet) {
-      Logger.log('❌ 수면 시트를 찾을 수 없습니다');
+      safeLog_('❌ 수면 시트를 찾을 수 없습니다');
       return [];
     }
 
     const lastRow = sheet.getLastRow();
-    Logger.log(`✓ 수면 시트 총 행 수: ${lastRow}`);
+    safeLog_(`✓ 수면 시트 총 행 수: ${lastRow}`);
 
     if (lastRow <= 1) {
-      Logger.log('⚠️ 수면 데이터가 없습니다 (헤더만 존재)');
+      safeLog_('⚠️ 수면 데이터가 없습니다 (헤더만 존재)');
       return [];
     }
 
     // 모든 데이터 읽기 (A:R, 18개 컬럼)
     const data = sheet.getRange(2, 1, lastRow - 1, 19).getValues();
-    Logger.log(`✓ 읽어온 데이터 행 수: ${data.length}`);
+    safeLog_(`✓ 읽어온 데이터 행 수: ${data.length}`);
 
     const logs = [];
     let matchCount = 0;
@@ -867,13 +867,13 @@ function getSleepLogs(studentId, startDate, endDate) {
 
       // 모든 행의 학번 출력 (처음 5개만)
       if (i < 5) {
-        Logger.log(`Row ${i + 2}: 학번="${rowStudentId}" vs 입력학번="${studentId}"`);
+        safeLog_(`Row ${i + 2}: 학번="${rowStudentId}" vs 입력학번="${studentId}"`);
       }
 
       // 학번 비교
       if (rowStudentId === normalizeId(studentId)) {
         matchCount++;
-        Logger.log(`  ✓ Row ${i + 2} 매칭됨!`);
+        safeLog_(`  ✓ Row ${i + 2} 매칭됨!`);
 
         const sleepDate = row[6]; // G열: 날짜
         let dateStr = '';
@@ -881,19 +881,19 @@ function getSleepLogs(studentId, startDate, endDate) {
         // 날짜 형식 처리
         if (sleepDate instanceof Date) {
           dateStr = Utilities.formatDate(sleepDate, "Asia/Seoul", "yyyy-MM-dd");
-          Logger.log(`    날짜(Date): ${dateStr}`);
+          safeLog_(`    날짜(Date): ${dateStr}`);
         } else if (sleepDate) {
           dateStr = String(sleepDate);
-          Logger.log(`    날짜(String): ${dateStr}`);
+          safeLog_(`    날짜(String): ${dateStr}`);
         } else {
-          Logger.log(`    ⚠️ 날짜가 비어있음`);
+          safeLog_(`    ⚠️ 날짜가 비어있음`);
           dateStr = '';
         }
 
         // 날짜 필터링
         if (startDate && endDate) {
           if (dateStr < startDate || dateStr > endDate) {
-            Logger.log(`    ⏭️ 날짜 범위 벗어남 (${startDate} ~ ${endDate})`);
+            safeLog_(`    ⏭️ 날짜 범위 벗어남 (${startDate} ~ ${endDate})`);
             skipCount++;
             continue;
           }
@@ -939,16 +939,16 @@ function getSleepLogs(studentId, startDate, endDate) {
           daytime:    String(row[18] || '')    // S: daytime
         };
 
-        Logger.log(`    로그 생성: ${JSON.stringify(log)}`);
+        safeLog_(`    로그 생성: ${JSON.stringify(log)}`);
         logs.push(log);
       }
     }
 
-    Logger.log(`\n📊 결과 요약:`);
-    Logger.log(`  총 검사한 행: ${data.length}`);
-    Logger.log(`  학번 매칭: ${matchCount}개`);
-    Logger.log(`  날짜 필터로 제외: ${skipCount}개`);
-    Logger.log(`  최종 반환: ${logs.length}개`);
+    safeLog_(`\n📊 결과 요약:`);
+    safeLog_(`  총 검사한 행: ${data.length}`);
+    safeLog_(`  학번 매칭: ${matchCount}개`);
+    safeLog_(`  날짜 필터로 제외: ${skipCount}개`);
+    safeLog_(`  최종 반환: ${logs.length}개`);
 
     // 날짜 역순 정렬
     logs.sort((a, b) => {
@@ -957,12 +957,12 @@ function getSleepLogs(studentId, startDate, endDate) {
       return dateB - dateA;
     });
 
-    Logger.log(`=== getSleepLogs 완료 ===\n`);
+    safeLog_(`=== getSleepLogs 완료 ===\n`);
 
     return logs;
   } catch (error) {
-    Logger.log('❌ 수면 로그 조회 오류: ' + error);
-    Logger.log('오류 스택: ' + error.stack);
+    safeLog_('❌ 수면 로그 조회 오류: ' + error);
+    safeLog_('오류 스택: ' + error.stack);
     return [];
   }
 }
@@ -1034,7 +1034,7 @@ function getDashboardData(studentId, startDate, endDate) {
       sleepData: sleepData
     };
   } catch (error) {
-    Logger.log('대시보드 데이터 조회 오류: ' + error);
+    safeLog_('대시보드 데이터 조회 오류: ' + error);
     return {
       labels: [],
       caffeineData: [],
@@ -1144,8 +1144,8 @@ function getStats(studentId) {
       sleepData: sleepDataArray
     };
   } catch (error) {
-    Logger.log('통계 조회 오류: ' + error);
-    Logger.log('오류 상세: ' + error.stack);
+    safeLog_('통계 조회 오류: ' + error);
+    safeLog_('오류 상세: ' + error.stack);
     return {
       todayTotal: 0,
       labels: [],
@@ -1158,8 +1158,8 @@ function getStats(studentId) {
 // 필터링된 통계 조회
 function getFilteredStats(studentId, endDateStr) {
   try {
-    Logger.log(`=== getFilteredStats 시작 ===`);
-    Logger.log(`학번: ${studentId}, 종료일: ${endDateStr}`);
+    safeLog_(`=== getFilteredStats 시작 ===`);
+    safeLog_(`학번: ${studentId}, 종료일: ${endDateStr}`);
 
     const ss = getSpreadsheet_();
     const caffeineSheet = ss.getSheetByName("caffeine");
@@ -1175,7 +1175,7 @@ function getFilteredStats(studentId, endDateStr) {
       dates.push(Utilities.formatDate(date, "Asia/Seoul", "yyyy-MM-dd"));
     }
 
-    Logger.log(`조회 기간: ${dates[0]} ~ ${dates[dates.length-1]}`);
+    safeLog_(`조회 기간: ${dates[0]} ~ ${dates[dates.length-1]}`);
 
     let selectedDayTotal = 0;
     const caffeineByDate = {};
@@ -1214,7 +1214,7 @@ function getFilteredStats(studentId, endDateStr) {
             matchCount++;
           }
         }
-        Logger.log(`카페인 데이터 매칭: ${matchCount}건`);
+        safeLog_(`카페인 데이터 매칭: ${matchCount}건`);
       }
     }
 
@@ -1244,7 +1244,7 @@ function getFilteredStats(studentId, endDateStr) {
             matchCount++;
           }
         }
-        Logger.log(`수면 데이터 매칭: ${matchCount}건`);
+        safeLog_(`수면 데이터 매칭: ${matchCount}건`);
       }
     }
 
@@ -1265,13 +1265,13 @@ function getFilteredStats(studentId, endDateStr) {
       sleepData: sleepDataArray
     };
 
-    Logger.log(`결과: todayTotal=${selectedDayTotal}, 카페인 데이터=${caffeineDataArray.length}개, 수면 데이터=${sleepDataArray.length}개`);
-    Logger.log(`=== getFilteredStats 완료 ===`);
+    safeLog_(`결과: todayTotal=${selectedDayTotal}, 카페인 데이터=${caffeineDataArray.length}개, 수면 데이터=${sleepDataArray.length}개`);
+    safeLog_(`=== getFilteredStats 완료 ===`);
 
     return result;
   } catch (error) {
-    Logger.log('필터링된 통계 조회 오류: ' + error);
-    Logger.log('오류 상세: ' + error.stack);
+    safeLog_('필터링된 통계 조회 오류: ' + error);
+    safeLog_('오류 상세: ' + error.stack);
     return {
       todayTotal: 0,
       labels: [],
@@ -1291,55 +1291,55 @@ function getFilteredStats(studentId, endDateStr) {
  * 실행 방법: 상단 함수 선택 → debugCurrentCode 선택 → 실행(▶) 클릭
  */
 function debugCurrentCode() {
-  Logger.log('🔍 ===== 코드 상태 진단 시작 =====');
+  safeLog_('🔍 ===== 코드 상태 진단 시작 =====');
 
   // 1. getWeeklyDetailedData 함수 테스트
-  Logger.log('\n📝 테스트 1: getWeeklyDetailedData 함수');
+  safeLog_('\n📝 테스트 1: getWeeklyDetailedData 함수');
   try {
     const testResult = getWeeklyDetailedData('1101'); // 학번 예시
 
-    Logger.log('반환 타입: ' + typeof testResult);
+    safeLog_('반환 타입: ' + typeof testResult);
 
     if (typeof testResult === 'string') {
-      Logger.log('❌❌❌ 치명적 오류: 문자열로 반환됨!');
-      Logger.log('❌ 코드가 수정되지 않았습니다!');
-      Logger.log('❌ 최종_정리_코드.gs 파일의 getWeeklyDetailedData 함수로 교체 필요');
+      safeLog_('❌❌❌ 치명적 오류: 문자열로 반환됨!');
+      safeLog_('❌ 코드가 수정되지 않았습니다!');
+      safeLog_('❌ 최종_정리_코드.gs 파일의 getWeeklyDetailedData 함수로 교체 필요');
     } else if (typeof testResult === 'object') {
-      Logger.log('✅ 객체로 반환됨 (정상)');
-      Logger.log('✅ recordedDays: ' + testResult.recordedDays);
-      Logger.log('✅ totalDays: ' + testResult.totalDays);
+      safeLog_('✅ 객체로 반환됨 (정상)');
+      safeLog_('✅ recordedDays: ' + testResult.recordedDays);
+      safeLog_('✅ totalDays: ' + testResult.totalDays);
 
       if (testResult.recordedDays !== undefined) {
-        Logger.log('✅✅✅ 코드가 올바르게 수정됨!');
+        safeLog_('✅✅✅ 코드가 올바르게 수정됨!');
       } else {
-        Logger.log('❌ recordedDays가 없음 - 수정 실패');
+        safeLog_('❌ recordedDays가 없음 - 수정 실패');
       }
     }
   } catch (error) {
-    Logger.log('❌ 함수 실행 오류: ' + error);
+    safeLog_('❌ 함수 실행 오류: ' + error);
   }
 
   // 2. generateAIHealthReport 함수 확인
-  Logger.log('\n📝 테스트 2: generateAIHealthReport 함수 시그니처 확인');
+  safeLog_('\n📝 테스트 2: generateAIHealthReport 함수 시그니처 확인');
   const funcString = generateAIHealthReport.toString();
 
   if (funcString.includes('recordedDays < 3')) {
-    Logger.log('✅ 데이터 부족 체크 코드 있음');
+    safeLog_('✅ 데이터 부족 체크 코드 있음');
   } else {
-    Logger.log('❌ 데이터 부족 체크 코드 없음 - 수정 필요');
+    safeLog_('❌ 데이터 부족 체크 코드 없음 - 수정 필요');
   }
 
   if (funcString.includes('getInsufficientDataMessage')) {
-    Logger.log('✅ 데이터 부족 메시지 함수 호출 있음');
+    safeLog_('✅ 데이터 부족 메시지 함수 호출 있음');
   } else {
-    Logger.log('❌ 데이터 부족 메시지 함수 호출 없음 - 수정 필요');
+    safeLog_('❌ 데이터 부족 메시지 함수 호출 없음 - 수정 필요');
   }
 
-  Logger.log('\n🔍 ===== 코드 상태 진단 완료 =====');
-  Logger.log('\n📋 결과 요약:');
-  Logger.log('위 로그를 확인하여:');
-  Logger.log('- ✅가 모두 표시되면: 코드 수정 완료, 웹앱 재배포 필요');
-  Logger.log('- ❌가 하나라도 있으면: 코드 재수정 필요');
+  safeLog_('\n🔍 ===== 코드 상태 진단 완료 =====');
+  safeLog_('\n📋 결과 요약:');
+  safeLog_('위 로그를 확인하여:');
+  safeLog_('- ✅가 모두 표시되면: 코드 수정 완료, 웹앱 재배포 필요');
+  safeLog_('- ❌가 하나라도 있으면: 코드 재수정 필요');
 }
 
 // ============================================
@@ -1361,7 +1361,7 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
         dates.push(Utilities.formatDate(new Date(d), "Asia/Seoul", "yyyy-MM-dd"));
       }
-      Logger.log(`📅 교사 지정 기간 사용: ${startDate} ~ ${endDate} (${dates.length}일)`);
+      safeLog_(`📅 교사 지정 기간 사용: ${startDate} ~ ${endDate} (${dates.length}일)`);
     } else {
       // 기본: 오늘 기준 최근 7일 (학생용)
       for (let i = 6; i >= 0; i--) {
@@ -1369,37 +1369,37 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
         date.setDate(date.getDate() - i);
         dates.push(Utilities.formatDate(date, "Asia/Seoul", "yyyy-MM-dd"));
       }
-      Logger.log(`📅 기본 기간 사용: 최근 7일`);
+      safeLog_(`📅 기본 기간 사용: 최근 7일`);
     }
 
-    Logger.log(`\n========================================`);
-    Logger.log(`=== 📋 주간 데이터 수집 시작 ===`);
-    Logger.log(`========================================`);
-    Logger.log(`🔍 검색 학번: "${studentId}" (타입: ${typeof studentId})`);
-    Logger.log(`📅 분석 기간: ${dates[0]} ~ ${dates[dates.length-1]}`);
+    safeLog_(`\n========================================`);
+    safeLog_(`=== 📋 주간 데이터 수집 시작 ===`);
+    safeLog_(`========================================`);
+    safeLog_(`🔍 검색 학번: "${studentId}" (타입: ${typeof studentId})`);
+    safeLog_(`📅 분석 기간: ${dates[0]} ~ ${dates[dates.length-1]}`);
 
     // 시트 데이터 전체 확인
     if (caffeineSheet) {
       const caffeineData = caffeineSheet.getDataRange().getValues();
-      Logger.log(`\n☕ 카페인 시트 총 ${caffeineData.length - 1}개 행`);
+      safeLog_(`\n☕ 카페인 시트 총 ${caffeineData.length - 1}개 행`);
 
       // 처음 3개 행의 학번 샘플 출력
-      Logger.log(`   샘플 데이터 (처음 3행):`);
+      safeLog_(`   샘플 데이터 (처음 3행):`);
       for (let i = 1; i < Math.min(4, caffeineData.length); i++) {
         const rowId = normalizeId(caffeineData[i][4]);
-        Logger.log(`     Row ${i + 1}: 학번="${rowId}" ${rowId === normalizeId(studentId) ? '✅ 일치!' : ''}`);
+        safeLog_(`     Row ${i + 1}: 학번="${rowId}" ${rowId === normalizeId(studentId) ? '✅ 일치!' : ''}`);
       }
     }
 
     if (sleepSheet) {
       const sleepData = sleepSheet.getDataRange().getValues();
-      Logger.log(`\n😴 수면 시트 총 ${sleepData.length - 1}개 행`);
+      safeLog_(`\n😴 수면 시트 총 ${sleepData.length - 1}개 행`);
 
       // 처음 3개 행의 학번 샘플 출력
-      Logger.log(`   샘플 데이터 (처음 3행):`);
+      safeLog_(`   샘플 데이터 (처음 3행):`);
       for (let i = 1; i < Math.min(4, sleepData.length); i++) {
         const rowId = normalizeId(sleepData[i][4]);
-        Logger.log(`     Row ${i + 1}: 학번="${rowId}" ${rowId === normalizeId(studentId) ? '✅ 일치!' : ''}`);
+        safeLog_(`     Row ${i + 1}: 학번="${rowId}" ${rowId === normalizeId(studentId) ? '✅ 일치!' : ''}`);
       }
     }
 
@@ -1409,7 +1409,7 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
     let sleepRecordedDays = 0;
     let overCaffeineDays = [];
 
-    Logger.log(`\n📊 일별 데이터 수집:`);
+    safeLog_(`\n📊 일별 데이터 수집:`);
 
     dates.forEach(date => {
       let caffeine = 0;
@@ -1439,7 +1439,7 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
                 const tempDate = new Date(intakeTime);
                 dateStr = Utilities.formatDate(tempDate, "Asia/Seoul", "yyyy-MM-dd");
               } catch (e) {
-                Logger.log(`   ⚠️ 날짜 변환 실패: ${intakeTime}`);
+                safeLog_(`   ⚠️ 날짜 변환 실패: ${intakeTime}`);
                 continue;
               }
             }
@@ -1474,7 +1474,7 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
                 const tempDate = new Date(sleepDate);
                 dateStr = Utilities.formatDate(tempDate, "Asia/Seoul", "yyyy-MM-dd");
               } catch (e) {
-                Logger.log(`   ⚠️ 날짜 변환 실패: ${sleepDate}`);
+                safeLog_(`   ⚠️ 날짜 변환 실패: ${sleepDate}`);
                 continue;
               }
             }
@@ -1512,15 +1512,15 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
       const detailLine = `${date.substr(5)}(${dayName}): ${caffeineStr}, ${sleepStr}`;
       details += detailLine + '\n';
 
-      Logger.log(`   ${detailLine} (카페인 ${caffeineMatchCount}건, 수면 ${sleepMatchCount}건)`);
+      safeLog_(`   ${detailLine} (카페인 ${caffeineMatchCount}건, 수면 ${sleepMatchCount}건)`);
     });
 
-    Logger.log(`\n========================================`);
-    Logger.log(`📈 최종 결과:`);
-    Logger.log(`   - 전체 기록: ${recordedDays}/7일`);
-    Logger.log(`   - ☕ 카페인 기록: ${caffeineRecordedDays}/7일`);
-    Logger.log(`   - 😴 수면 기록: ${sleepRecordedDays}/7일`);
-    Logger.log(`========================================\n`);
+    safeLog_(`\n========================================`);
+    safeLog_(`📈 최종 결과:`);
+    safeLog_(`   - 전체 기록: ${recordedDays}/7일`);
+    safeLog_(`   - ☕ 카페인 기록: ${caffeineRecordedDays}/7일`);
+    safeLog_(`   - 😴 수면 기록: ${sleepRecordedDays}/7일`);
+    safeLog_(`========================================\n`);
 
     return {
       details: details,
@@ -1531,8 +1531,8 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
       overCaffeineDays: overCaffeineDays
     };
   } catch (error) {
-    Logger.log('❌ 주간 데이터 수집 오류: ' + error);
-    Logger.log('스택 추적: ' + error.stack);
+    safeLog_('❌ 주간 데이터 수집 오류: ' + error);
+    safeLog_('스택 추적: ' + error.stack);
     return {
       details: "",
       recordedDays: 0,
@@ -1549,18 +1549,18 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
 // ============================================
 
 function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine, avgSleep, weight, limit) {
-  Logger.log('\n\n========================================');
-  Logger.log('=== AI 건강 리포트 생성 시작 ===');
-  Logger.log('========================================');
-  Logger.log(`👤 학생 정보:`);
-  Logger.log(`   - 이름: ${name}`);
-  Logger.log(`   - 학번: ${studentId} (타입: ${typeof studentId})`);
-  Logger.log(`\n📊 프론트엔드에서 전달받은 통계 (참고용):`);
-  Logger.log(`   - 주간 카페인 총량: ${weekCaffeineTotal}mg`);
-  Logger.log(`   - 일평균 카페인: ${avgCaffeine}mg`);
-  Logger.log(`   - 평균 수면: ${avgSleep}시간`);
-  Logger.log(`   - 체중: ${weight}kg`);
-  Logger.log(`   - 일일 권장량: ${limit}mg`);
+  safeLog_('\n\n========================================');
+  safeLog_('=== AI 건강 리포트 생성 시작 ===');
+  safeLog_('========================================');
+  safeLog_(`👤 학생 정보:`);
+  safeLog_(`   - 이름: ${name}`);
+  safeLog_(`   - 학번: ${studentId} (타입: ${typeof studentId})`);
+  safeLog_(`\n📊 프론트엔드에서 전달받은 통계 (참고용):`);
+  safeLog_(`   - 주간 카페인 총량: ${weekCaffeineTotal}mg`);
+  safeLog_(`   - 일평균 카페인: ${avgCaffeine}mg`);
+  safeLog_(`   - 평균 수면: ${avgSleep}시간`);
+  safeLog_(`   - 체중: ${weight}kg`);
+  safeLog_(`   - 일일 권장량: ${limit}mg`);
 
   // API 호출 여부와 무관하게 실제 기록일을 보존해 규칙 기반 분석에 사용한다.
   let caffeineRecordedDays = 0;
@@ -1573,11 +1573,11 @@ function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine,
     const hasApiKey = !!apiKey;
 
     if (hasApiKey) {
-      Logger.log(`\n✓ API 키 확인 완료`);
+      safeLog_(`\n✓ API 키 확인 완료`);
     } else {
-      Logger.log("ℹ️ API 키 없음 → 규칙 기반 분석으로 진행");
+      safeLog_("ℹ️ API 키 없음 → 규칙 기반 분석으로 진행");
     }
-    Logger.log(`\n🔍 스프레드시트에서 학번 ${studentId}의 실제 데이터 조회 중...`);
+    safeLog_(`\n🔍 스프레드시트에서 학번 ${studentId}의 실제 데이터 조회 중...`);
 
     // 주간 데이터 수집
     const weeklyData = getWeeklyDetailedData(studentId);
@@ -1587,11 +1587,11 @@ function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine,
     sleepRecordedDays = weeklyData.sleepRecordedDays;
     overCaffeineDays = weeklyData.overCaffeineDays || [];
 
-    Logger.log('✓ 주간 데이터 수집 완료');
-    Logger.log(`⭐⭐⭐ 카페인: ${caffeineRecordedDays}일, 수면: ${sleepRecordedDays}일`);
+    safeLog_('✓ 주간 데이터 수집 완료');
+    safeLog_(`⭐⭐⭐ 카페인: ${caffeineRecordedDays}일, 수면: ${sleepRecordedDays}일`);
 
     // ⭐⭐⭐ 서버에서 직접 통계 재계산 ⭐⭐⭐
-    Logger.log(`\n🔄 서버에서 실제 통계 재계산 중...`);
+    safeLog_(`\n🔄 서버에서 실제 통계 재계산 중...`);
 
     const ss = getSpreadsheet_();
     const caffeineSheet = ss.getSheetByName("caffeine");
@@ -1644,24 +1644,24 @@ function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine,
     const realAvgSleep = realSleepDays > 0 ? (realWeekSleepTotal / realSleepDays) : 0;
     const realAvgCaffeine = realWeekCaffeineTotal / 7;
 
-    Logger.log(`\n📊 서버에서 계산한 실제 통계:`);
-    Logger.log(`   - 카페인 총량: ${realWeekCaffeineTotal}mg`);
-    Logger.log(`   - 카페인 평균: ${realAvgCaffeine.toFixed(0)}mg/일`);
-    Logger.log(`   - 수면 총량: ${realWeekSleepTotal.toFixed(1)}시간`);
-    Logger.log(`   - 수면 평균: ${realAvgSleep.toFixed(1)}시간 (${realSleepDays}일)`);
+    safeLog_(`\n📊 서버에서 계산한 실제 통계:`);
+    safeLog_(`   - 카페인 총량: ${realWeekCaffeineTotal}mg`);
+    safeLog_(`   - 카페인 평균: ${realAvgCaffeine.toFixed(0)}mg/일`);
+    safeLog_(`   - 수면 총량: ${realWeekSleepTotal.toFixed(1)}시간`);
+    safeLog_(`   - 수면 평균: ${realAvgSleep.toFixed(1)}시간 (${realSleepDays}일)`);
 
     // ⭐⭐⭐ 실제 계산된 값으로 변수 교체 ⭐⭐⭐
     weekCaffeineTotal = realWeekCaffeineTotal;
     avgCaffeine = realAvgCaffeine;
     avgSleep = realAvgSleep;
 
-    Logger.log(`\n✅ 통계 재계산 완료 - 실제 값으로 업데이트됨`);
+    safeLog_(`\n✅ 통계 재계산 완료 - 실제 값으로 업데이트됨`);
 
     // 개별 체크: 카페인·수면 둘 다 3일 미만일 때만 분석 불가 (하나라도 3일 이상이면 진행)
     if (caffeineRecordedDays < 3 && sleepRecordedDays < 3) {
-      Logger.log(`⚠️⚠️⚠️ 데이터 부족 → AI 분석 건너뛰기`);
-      Logger.log(`  카페인: ${caffeineRecordedDays}/3일 ${caffeineRecordedDays >= 3 ? '✅' : '❌'}`);
-      Logger.log(`  수면: ${sleepRecordedDays}/3일 ${sleepRecordedDays >= 3 ? '✅' : '❌'}`);
+      safeLog_(`⚠️⚠️⚠️ 데이터 부족 → AI 분석 건너뛰기`);
+      safeLog_(`  카페인: ${caffeineRecordedDays}/3일 ${caffeineRecordedDays >= 3 ? '✅' : '❌'}`);
+      safeLog_(`  수면: ${sleepRecordedDays}/3일 ${sleepRecordedDays >= 3 ? '✅' : '❌'}`);
 
       return {
         success: true,
@@ -1679,7 +1679,7 @@ function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine,
     }
 
     if (!hasApiKey) {
-      Logger.log('📗 규칙 기반 분석 반환 (카페인 ' + caffeineRecordedDays + '일 / 수면 ' + sleepRecordedDays + '일)');
+      safeLog_('📗 규칙 기반 분석 반환 (카페인 ' + caffeineRecordedDays + '일 / 수면 ' + sleepRecordedDays + '일)');
       return {
         success: true,
         analysis: getStructuredFallbackAnalysis(
@@ -1691,7 +1691,7 @@ function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine,
       };
     }
 
-Logger.log('✅✅✅ 데이터 충분 → AI 분석 진행');
+safeLog_('✅✅✅ 데이터 충분 → AI 분석 진행');
 
 const modelName = "gemini-2.0-flash";
 const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
@@ -1751,7 +1751,7 @@ const options = {
   muteHttpExceptions: true
 };
 
-Logger.log('🚀 Gemini API 호출 중...');
+safeLog_('🚀 Gemini API 호출 중...');
 
 try {
   const fetchResult   = fetchWithRetry(apiUrl, options, 3);
@@ -1760,7 +1760,7 @@ try {
 
   if (!fetchResponse || fetchResponse.getResponseCode() !== 200) {
     const errInfo = getApiErrorInfo(fetchErrCode || 'UNKNOWN_ERROR');
-    Logger.log('❌ API 호출 실패: ' + (fetchErrCode || 'UNKNOWN_ERROR'));
+    safeLog_('❌ API 호출 실패: ' + (fetchErrCode || 'UNKNOWN_ERROR'));
     throw new Error('[' + (fetchErrCode || 'UNKNOWN_ERROR') + '] ' + errInfo.desc);
   }
 
@@ -1772,7 +1772,7 @@ try {
     const candidate = result.candidates[0];
     const finishReason = candidate.finishReason;
 
-    Logger.log(`📊 생성 완료 이유: ${finishReason}`);
+    safeLog_(`📊 생성 완료 이유: ${finishReason}`);
 
     const analysis = candidate.content.parts[0].text.trim();
 
@@ -1783,8 +1783,8 @@ try {
 
     // ⭐⭐⭐ 토큰 제한 또는 미완성 문장 체크 ⭐⭐⭐
     if (finishReason === "MAX_TOKENS" || !isComplete || analysis.length < 100) {
-      Logger.log('⚠️⚠️⚠️ AI 분석이 완성되지 않음 → 대체 분석으로 전환');
-      Logger.log(`사유: ${finishReason}, 완성도: ${isComplete}, 길이: ${analysis.length}자`);
+      safeLog_('⚠️⚠️⚠️ AI 분석이 완성되지 않음 → 대체 분석으로 전환');
+      safeLog_(`사유: ${finishReason}, 완성도: ${isComplete}, 길이: ${analysis.length}자`);
 
       // ⭐ 자동으로 대체 분석으로 전환
       return {
@@ -1799,8 +1799,8 @@ try {
       };
     }
 
-    Logger.log(`✅ AI 분석 성공! (${analysis.length}자)`);
-    Logger.log(analysis);
+    safeLog_(`✅ AI 분석 성공! (${analysis.length}자)`);
+    safeLog_(analysis);
 
     return {
       success:     true,
@@ -1812,8 +1812,8 @@ try {
   }
 
 } catch (error) {
-  Logger.log('❌ AI 분석 실패: ' + error.message);
-  Logger.log('→ 대체 분석으로 자동 전환');
+  safeLog_('❌ AI 분석 실패: ' + error.message);
+  safeLog_('→ 대체 분석으로 자동 전환');
 
   // 오류 메시지에서 errorCode 추출 ([CODE] 형식)
   const ecMatch = error.message.match(/^\[([A-Z_]+)\]/);
@@ -1832,7 +1832,7 @@ try {
 }
 
   } catch (error) {
-    Logger.log('❌ AI 분석 실패: ' + error.message);
+    safeLog_('❌ AI 분석 실패: ' + error.message);
     const ecMatch = error.message.match(/^\[([A-Z_]+)\]/);
     const ec      = ecMatch ? ecMatch[1] : 'UNKNOWN_ERROR';
     return {
@@ -1857,8 +1857,8 @@ try {
 // ============================================
 
 function getInsufficientDataMessage(recordedDays, totalDays, avgCaffeine, avgSleep, caffeineCount, sleepCount) {
-  Logger.log('⚠️ 데이터 부족 메시지 생성');
-  Logger.log(`카페인: ${caffeineCount}일, 수면: ${sleepCount}일`);
+  safeLog_('⚠️ 데이터 부족 메시지 생성');
+  safeLog_(`카페인: ${caffeineCount}일, 수면: ${sleepCount}일`);
 
   // 프론트엔드 카드 렌더러가 파싱할 수 있는 구조화된 마커 형식으로 반환
   const cafNeed = Math.max(0, 3 - caffeineCount);
@@ -1878,7 +1878,7 @@ function getInsufficientDataMessage(recordedDays, totalDays, avgCaffeine, avgSle
 // ============================================
 
 function getStructuredFallbackAnalysis(avgCaffeine, avgSleep, limit, weekTotal, caffeineCount, sleepCount, totalDays, overCaffeineDays) {
-  Logger.log('대체 분석 사용 중');
+  safeLog_('대체 분석 사용 중');
 
   avgCaffeine   = parseFloat(avgCaffeine)  || 0;
   avgSleep      = parseFloat(avgSleep)     || 0;
@@ -2065,12 +2065,12 @@ function setGeminiAPIKey() {
   // 속성: GEMINI_API_KEY / 값: 발급받은 Gemini API 키 를 직접 등록하세요.
   const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
   if (!apiKey) {
-    Logger.log("❌ API 키가 스크립트 속성에 설정되지 않았습니다.");
-    Logger.log("   Apps Script → 프로젝트 설정 → 스크립트 속성에서 GEMINI_API_KEY를 추가하세요.");
+    safeLog_("❌ API 키가 스크립트 속성에 설정되지 않았습니다.");
+    safeLog_("   Apps Script → 프로젝트 설정 → 스크립트 속성에서 GEMINI_API_KEY를 추가하세요.");
     return;
   }
-  Logger.log("✅ API 키 확인 완료: " + apiKey.substring(0, 15) + "...");
-  Logger.log("✅ 모델: Gemini 2.5 Flash");
+  safeLog_("✅ API 키 확인 완료: " + apiKey.substring(0, 15) + "...");
+  safeLog_("✅ 모델: Gemini 2.5 Flash");
 }
 
 // API 키 확인 함수
@@ -2078,12 +2078,12 @@ function checkGeminiAPIKey() {
   const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
 
   if (apiKey) {
-    Logger.log("✅ API 키가 설정되어 있습니다");
-    Logger.log("키: " + apiKey.substring(0, 15) + "...");
-    Logger.log("길이: " + apiKey.length + " 문자");
+    safeLog_("✅ API 키가 설정되어 있습니다");
+    safeLog_("키: " + apiKey.substring(0, 15) + "...");
+    safeLog_("길이: " + apiKey.length + " 문자");
   } else {
-    Logger.log("❌ API 키가 설정되지 않았습니다!");
-    Logger.log("setGeminiAPIKey() 함수를 먼저 실행하세요");
+    safeLog_("❌ API 키가 설정되지 않았습니다!");
+    safeLog_("setGeminiAPIKey() 함수를 먼저 실행하세요");
   }
 }
 
@@ -2223,7 +2223,7 @@ function sendTeacherMessage(data) {
     ]);
     return { success: true };
   } catch (err) {
-    Logger.log('sendTeacherMessage error: ' + err.message);
+    safeLog_('sendTeacherMessage error: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -2302,7 +2302,7 @@ function sendTeacherMessage(data) {
     ]);
     return { success: true };
   } catch (err) {
-    Logger.log('sendTeacherMessage error: ' + err.message);
+    safeLog_('sendTeacherMessage error: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -2319,7 +2319,7 @@ function getSentTeacherMessages() {
     result.reverse();
     return { success: true, data: result };
   } catch (err) {
-    Logger.log('getSentTeacherMessages error: ' + err.message);
+    safeLog_('getSentTeacherMessages error: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -2338,7 +2338,7 @@ function getTeacherMessages(studentId) {
     result.reverse();
     return { success: true, data: result };
   } catch (err) {
-    Logger.log('getTeacherMessages error: ' + err.message);
+    safeLog_('getTeacherMessages error: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -2388,7 +2388,7 @@ function saveTeacherPdfAndSendMessage(data) {
     }
     return { success: true, fileName: file.getName(), fileUrl: file.getUrl(), fileId: file.getId() };
   } catch (err) {
-    Logger.log('saveTeacherPdfAndSendMessage error: ' + err.message);
+    safeLog_('saveTeacherPdfAndSendMessage error: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -2405,7 +2405,7 @@ function getSentTeacherMessages() {
     result.reverse();
     return { success: true, data: result };
   } catch (err) {
-    Logger.log('getSentTeacherMessages error: ' + err.message);
+    safeLog_('getSentTeacherMessages error: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -2424,7 +2424,7 @@ function getTeacherMessages(studentId) {
     result.reverse();
     return { success: true, data: result };
   } catch (err) {
-    Logger.log('getTeacherMessages error: ' + err.message);
+    safeLog_('getTeacherMessages error: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -2474,7 +2474,7 @@ function saveTeacherPdfAndSendMessage(data) {
     }
     return { success: true, fileName: file.getName(), fileUrl: file.getUrl(), fileId: file.getId() };
   } catch (err) {
-    Logger.log('saveTeacherPdfAndSendMessage error: ' + err.message);
+    safeLog_('saveTeacherPdfAndSendMessage error: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -2598,10 +2598,10 @@ function saveChallengeBadgeConfig(config) {
   try {
     const props = PropertiesService.getScriptProperties();
     props.setProperty('BADGE_CONFIG_V3', JSON.stringify(config));
-    Logger.log('✅ saveChallengeBadgeConfig 저장 완료: ' + config.challengeName);
+    safeLog_('✅ saveChallengeBadgeConfig 저장 완료: ' + config.challengeName);
     return { success: true };
   } catch(e) {
-    Logger.log('❌ saveChallengeBadgeConfig 오류: ' + e.message);
+    safeLog_('❌ saveChallengeBadgeConfig 오류: ' + e.message);
     return { success: false, error: e.message };
   }
 }
@@ -2732,46 +2732,46 @@ function testAIAnalysis() {
     65,
     100
   );
-  Logger.log("=== AI 분석 결과 ===");
-  Logger.log("성공 여부: " + result.success);
-  Logger.log("분석 내용:\n" + result.analysis);
+  safeLog_("=== AI 분석 결과 ===");
+  safeLog_("성공 여부: " + result.success);
+  safeLog_("분석 내용:\n" + result.analysis);
 }
 
 // 수면 로그 테스트 함수
 function testSleepLogs() {
   const studentId = "0000";
-  Logger.log("=== 수면 로그 테스트 시작 ===");
-  Logger.log("학번: " + studentId);
+  safeLog_("=== 수면 로그 테스트 시작 ===");
+  safeLog_("학번: " + studentId);
 
   const logs = getSleepLogs(studentId);
 
-  Logger.log("=== 결과 ===");
-  Logger.log("총 로그 개수: " + logs.length);
+  safeLog_("=== 결과 ===");
+  safeLog_("총 로그 개수: " + logs.length);
 
   if (logs.length > 0) {
-    Logger.log("첫 번째 로그:");
-    Logger.log(JSON.stringify(logs[0], null, 2));
+    safeLog_("첫 번째 로그:");
+    safeLog_(JSON.stringify(logs[0], null, 2));
   } else {
-    Logger.log("로그가 없습니다!");
+    safeLog_("로그가 없습니다!");
   }
 }
 
 // 카페인 로그 테스트 함수
 function testCaffeineLogs() {
   const studentId = "1101";
-  Logger.log("=== 카페인 로그 테스트 시작 ===");
-  Logger.log("학번: " + studentId);
+  safeLog_("=== 카페인 로그 테스트 시작 ===");
+  safeLog_("학번: " + studentId);
 
   const logs = getCaffeineLogs(studentId);
 
-  Logger.log("=== 결과 ===");
-  Logger.log("총 로그 개수: " + logs.length);
+  safeLog_("=== 결과 ===");
+  safeLog_("총 로그 개수: " + logs.length);
 
   if (logs.length > 0) {
-    Logger.log("첫 번째 로그:");
-    Logger.log(JSON.stringify(logs[0], null, 2));
+    safeLog_("첫 번째 로그:");
+    safeLog_(JSON.stringify(logs[0], null, 2));
   } else {
-    Logger.log("로그가 없습니다!");
+    safeLog_("로그가 없습니다!");
   }
 }
 
@@ -2786,7 +2786,7 @@ function generateAllStudentIds() {
     const sheet = ss.getSheetByName("students");
 
     if (!sheet) {
-      Logger.log('students 시트를 찾을 수 없습니다');
+      safeLog_('students 시트를 찾을 수 없습니다');
       return;
     }
 
@@ -2802,13 +2802,13 @@ function generateAllStudentIds() {
         const studentId = String(grade) + String(classNum) + String(number).padStart(2, '0');
         sheet.getRange(row, 5).setValue(Number(studentId)); // E: 학번 ID
         updateCount++;
-        Logger.log(`${row}행: ${grade}학년 ${classNum}반 ${number}번 → 학번 ${studentId}`);
+        safeLog_(`${row}행: ${grade}학년 ${classNum}반 ${number}번 → 학번 ${studentId}`);
       }
     }
 
-    Logger.log(`총 ${updateCount}개의 학번이 생성되었습니다.`);
+    safeLog_(`총 ${updateCount}개의 학번이 생성되었습니다.`);
   } catch (error) {
-    Logger.log('학번 생성 오류: ' + error);
+    safeLog_('학번 생성 오류: ' + error);
   }
 }
 
@@ -2818,7 +2818,7 @@ function generateAllStudentIds() {
 
 // 연결 테스트
 function testConnection() {
-  Logger.log('testConnection 호출됨');
+  safeLog_('testConnection 호출됨');
   return {
     success: true,
     message: 'Google Apps Script 연결 성공!',
@@ -2828,21 +2828,21 @@ function testConnection() {
 
 // 간단한 객체 저장 테스트
 function testSaveSimple(data) {
-  Logger.log('=== testSaveSimple 시작 ===');
-  Logger.log('받은 데이터 타입: ' + typeof data);
-  Logger.log('받은 데이터: ' + JSON.stringify(data));
+  safeLog_('=== testSaveSimple 시작 ===');
+  safeLog_('받은 데이터 타입: ' + typeof data);
+  safeLog_('받은 데이터: ' + JSON.stringify(data));
 
   if (!data) {
-    Logger.log('❌ data가 undefined입니다');
+    safeLog_('❌ data가 undefined입니다');
     throw new Error('데이터가 전달되지 않았습니다');
   }
 
   if (!data.studentId) {
-    Logger.log('❌ data.studentId가 없습니다');
+    safeLog_('❌ data.studentId가 없습니다');
     throw new Error('studentId가 없습니다');
   }
 
-  Logger.log('✅ 데이터 검증 성공');
+  safeLog_('✅ 데이터 검증 성공');
 
   return {
     success: true,
@@ -2853,10 +2853,10 @@ function testSaveSimple(data) {
 
 // saveSleepData 디버깅 버전
 function saveSleepDataDebug(payload) {
-  Logger.log('=== saveSleepDataDebug 시작 ===');
-  Logger.log('Arguments 개수: ' + arguments.length);
-  Logger.log('payload 타입: ' + typeof payload);
-  Logger.log('payload 값: ' + JSON.stringify(payload));
+  safeLog_('=== saveSleepDataDebug 시작 ===');
+  safeLog_('Arguments 개수: ' + arguments.length);
+  safeLog_('payload 타입: ' + typeof payload);
+  safeLog_('payload 값: ' + JSON.stringify(payload));
 
   // 각 필드 개별 확인
   const fields = ['studentId', 'name', 'date', 'sleepTime', 'wakeTime', 'hours', 'condition', 'memo', 'id'];
@@ -2874,7 +2874,7 @@ function saveSleepDataDebug(payload) {
     report.error = 'payload is null or undefined';
   }
 
-  Logger.log('필드 분석: ' + JSON.stringify(report, null, 2));
+  safeLog_('필드 분석: ' + JSON.stringify(report, null, 2));
 
   return {
     success: true,
@@ -2885,10 +2885,10 @@ function saveSleepDataDebug(payload) {
 
 // 수면 저장 단순화 버전 (디버깅용)
 function saveSleepDataSimple(studentId, name, date, sleepTime, wakeTime, hours, condition, memo, id) {
-  Logger.log('=== saveSleepDataSimple (개별 파라미터) ===');
-  Logger.log(`studentId: ${studentId}`);
-  Logger.log(`name: ${name}`);
-  Logger.log(`date: ${date}`);
+  safeLog_('=== saveSleepDataSimple (개별 파라미터) ===');
+  safeLog_(`studentId: ${studentId}`);
+  safeLog_(`name: ${name}`);
+  safeLog_(`date: ${date}`);
 
   const ss = getSpreadsheet_();
   const sheet = ss.getSheetByName("sleep");
@@ -2928,18 +2928,18 @@ function checkSleepDataForStudent() {
   const testStudentId = "1101";  // 테스트할 학번
   const testDate = "2026-02-14";  // 테스트할 날짜
 
-  Logger.log(`=== 수면 데이터 확인: 학번=${testStudentId}, 날짜=${testDate} ===`);
+  safeLog_(`=== 수면 데이터 확인: 학번=${testStudentId}, 날짜=${testDate} ===`);
 
   const ss = getSpreadsheet_();
   const sheet = ss.getSheetByName("sleep");
 
   if (!sheet) {
-    Logger.log("❌ sleep 시트 없음");
+    safeLog_("❌ sleep 시트 없음");
     return;
   }
 
   const data = sheet.getDataRange().getValues();
-  Logger.log(`총 데이터 행 수: ${data.length - 1}`);
+  safeLog_(`총 데이터 행 수: ${data.length - 1}`);
 
   let foundCount = 0;
 
@@ -2955,24 +2955,24 @@ function checkSleepDataForStudent() {
     }
 
     if (rowStudentId === testStudentId) {
-      Logger.log(`\nRow ${i + 1}:`);
-      Logger.log(`  날짜: ${rowDate}`);
-      Logger.log(`  취침: ${data[i][7]}`);
-      Logger.log(`  기상: ${data[i][8]}`);
-      Logger.log(`  시간: ${data[i][9]}시간`);
-      Logger.log(`  컨디션: ${data[i][10]}`);
-      Logger.log(`  메모: ${data[i][11]}`);
+      safeLog_(`\nRow ${i + 1}:`);
+      safeLog_(`  날짜: ${rowDate}`);
+      safeLog_(`  취침: ${data[i][7]}`);
+      safeLog_(`  기상: ${data[i][8]}`);
+      safeLog_(`  시간: ${data[i][9]}시간`);
+      safeLog_(`  컨디션: ${data[i][10]}`);
+      safeLog_(`  메모: ${data[i][11]}`);
 
       if (rowDate === testDate) {
-        Logger.log(`  ⭐ 대상 날짜와 일치!`);
+        safeLog_(`  ⭐ 대상 날짜와 일치!`);
         foundCount++;
       }
     }
   }
 
-  Logger.log(`\n${testDate} 날짜의 데이터: ${foundCount}개`);
+  safeLog_(`\n${testDate} 날짜의 데이터: ${foundCount}개`);
   if (foundCount > 1) {
-    Logger.log(`⚠️ 중복 데이터 발견! ${foundCount}개가 있습니다.`);
+    safeLog_(`⚠️ 중복 데이터 발견! ${foundCount}개가 있습니다.`);
   }
 }
 
@@ -2982,11 +2982,11 @@ function removeDuplicateSleepData() {
   const sheet = ss.getSheetByName("sleep");
 
   if (!sheet) {
-    Logger.log("❌ sleep 시트 없음");
+    safeLog_("❌ sleep 시트 없음");
     return;
   }
 
-  Logger.log("=== 중복 데이터 제거 시작 ===");
+  safeLog_("=== 중복 데이터 제거 시작 ===");
 
   const data = sheet.getDataRange().getValues();
   const seen = new Set();
@@ -3006,22 +3006,22 @@ function removeDuplicateSleepData() {
     const key = `${studentId}-${date}`;
 
     if (seen.has(key)) {
-      Logger.log(`중복 발견: Row ${i + 1} - ${key}`);
+      safeLog_(`중복 발견: Row ${i + 1} - ${key}`);
       rowsToDelete.push(i + 1);
     } else {
       seen.add(key);
     }
   }
 
-  Logger.log(`\n삭제할 행 수: ${rowsToDelete.length}`);
+  safeLog_(`\n삭제할 행 수: ${rowsToDelete.length}`);
 
   // 뒤에서부터 삭제 (인덱스 변화 방지)
   rowsToDelete.forEach(rowIndex => {
-    Logger.log(`Row ${rowIndex} 삭제`);
+    safeLog_(`Row ${rowIndex} 삭제`);
     sheet.deleteRow(rowIndex);
   });
 
-  Logger.log("✅ 중복 제거 완료");
+  safeLog_("✅ 중복 제거 완료");
 }
 
 // ============================================
@@ -3042,11 +3042,11 @@ function setCaffeinePublicAPIKey() {
   // 속성: CAFFEINE_PUBLIC_API_KEY / 값: 공공데이터 포털 API 키 를 직접 등록하세요.
   const apiKey = PropertiesService.getScriptProperties().getProperty("CAFFEINE_PUBLIC_API_KEY");
   if (!apiKey) {
-    Logger.log("❌ API 키가 스크립트 속성에 설정되지 않았습니다.");
-    Logger.log("   Apps Script → 프로젝트 설정 → 스크립트 속성에서 CAFFEINE_PUBLIC_API_KEY를 추가하세요.");
+    safeLog_("❌ API 키가 스크립트 속성에 설정되지 않았습니다.");
+    safeLog_("   Apps Script → 프로젝트 설정 → 스크립트 속성에서 CAFFEINE_PUBLIC_API_KEY를 추가하세요.");
     return;
   }
-  Logger.log("✅ 공공데이터 포털 카페인 DB API 키 확인 완료");
+  safeLog_("✅ 공공데이터 포털 카페인 DB API 키 확인 완료");
 }
 
 /**
@@ -3060,7 +3060,7 @@ function searchCaffeineDBAPI(foodName, numOfRows) {
     numOfRows = numOfRows || 10;
     const apiKey = PropertiesService.getScriptProperties().getProperty("CAFFEINE_PUBLIC_API_KEY");
     if (!apiKey) {
-      Logger.log("❌ 공공데이터 API 키 없음 → setCaffeinePublicAPIKey() 실행 필요");
+      safeLog_("❌ 공공데이터 API 키 없음 → setCaffeinePublicAPIKey() 실행 필요");
       return { success: false, error: "API 키 미설정", data: [] };
     }
 
@@ -3073,15 +3073,15 @@ function searchCaffeineDBAPI(foodName, numOfRows) {
       + "&numOfRows=" + numOfRows
       + "&food_Nm=" + encodedName;
 
-    Logger.log("📡 공공DB 호출: " + foodName);
+    safeLog_("📡 공공DB 호출: " + foodName);
 
     const response = UrlFetchApp.fetch(url, { method: "get", muteHttpExceptions: true });
     const responseCode = response.getResponseCode();
     const responseText = response.getContentText();
-    Logger.log("공공DB 응답코드: " + responseCode);
+    safeLog_("공공DB 응답코드: " + responseCode);
 
     if (responseCode !== 200) {
-      Logger.log("❌ 공공DB 오류: " + responseText.substring(0, 200));
+      safeLog_("❌ 공공DB 오류: " + responseText.substring(0, 200));
       return { success: false, error: "API 오류 " + responseCode, data: [] };
     }
 
@@ -3089,7 +3089,7 @@ function searchCaffeineDBAPI(foodName, numOfRows) {
     try {
       parsed = JSON.parse(responseText);
     } catch (e) {
-      Logger.log("공공DB JSON 파싱 실패: " + responseText.substring(0, 300));
+      safeLog_("공공DB JSON 파싱 실패: " + responseText.substring(0, 300));
       return { success: false, error: "응답 파싱 실패", data: [] };
     }
 
@@ -3099,7 +3099,7 @@ function searchCaffeineDBAPI(foodName, numOfRows) {
 
     const totalCount = parseInt(body.totalCount) || 0;
     if (totalCount === 0) {
-      Logger.log("공공DB 결과 없음: " + foodName);
+      safeLog_("공공DB 결과 없음: " + foodName);
       return { success: true, data: [], totalCount: 0 };
     }
 
@@ -3121,11 +3121,11 @@ function searchCaffeineDBAPI(foodName, numOfRows) {
       };
     });
 
-    Logger.log("✅ 공공DB " + results.length + "건 (전체 " + totalCount + "건)");
+    safeLog_("✅ 공공DB " + results.length + "건 (전체 " + totalCount + "건)");
     return { success: true, data: results, totalCount: totalCount };
 
   } catch (error) {
-    Logger.log("❌ searchCaffeineDBAPI 오류: " + error);
+    safeLog_("❌ searchCaffeineDBAPI 오류: " + error);
     return { success: false, error: error.toString(), data: [] };
   }
 }
@@ -3142,15 +3142,15 @@ function searchDrinkCaffeine(keyword) {
       return { success: true, results: [] };
     }
     keyword = keyword.trim();
-    Logger.log("검색 키워드: [" + keyword + "]");
+    safeLog_("검색 키워드: [" + keyword + "]");
 
     // 1차: Gemini AI 검색 (항상 실행 - 가장 빠르고 넓은 커버리지)
     var aiResults = [];
     try {
       aiResults = searchDrinkCaffeineWithAI(keyword) || [];
-      Logger.log("AI 결과: " + aiResults.length + "건");
+      safeLog_("AI 결과: " + aiResults.length + "건");
     } catch (aiErr) {
-      Logger.log("AI 검색 오류(무시): " + aiErr);
+      safeLog_("AI 검색 오류(무시): " + aiErr);
     }
 
     // 2차: 식약처 공공DB 검색 (성공하면 앞에 추가)
@@ -3158,7 +3158,7 @@ function searchDrinkCaffeine(keyword) {
     try {
       var dbResult = searchCaffeineDBAPI(keyword, 5);
       if (dbResult && dbResult.success && dbResult.data && dbResult.data.length > 0) {
-        Logger.log("공공DB 결과: " + dbResult.data.length + "건");
+        safeLog_("공공DB 결과: " + dbResult.data.length + "건");
         dbResults = dbResult.data.map(function(item) {
           var caffeine = item.caffeinePerServing > 0
             ? Math.round(item.caffeinePerServing)
@@ -3174,7 +3174,7 @@ function searchDrinkCaffeine(keyword) {
         });
       }
     } catch (dbErr) {
-      Logger.log("공공DB 오류(무시): " + dbErr);
+      safeLog_("공공DB 오류(무시): " + dbErr);
     }
 
     // DB 결과 먼저, AI 결과 뒤에 (중복 이름 제거)
@@ -3189,11 +3189,11 @@ function searchDrinkCaffeine(keyword) {
       if (key && !seen[key]) { seen[key] = true; merged.push(item); }
     });
 
-    Logger.log("최종: " + merged.length + "건 (DB:" + dbResults.length + " AI:" + aiResults.length + ")");
+    safeLog_("최종: " + merged.length + "건 (DB:" + dbResults.length + " AI:" + aiResults.length + ")");
     return { success: true, results: merged, fromDB: dbResults.length > 0 };
 
   } catch (error) {
-    Logger.log("searchDrinkCaffeine 오류: " + error);
+    safeLog_("searchDrinkCaffeine 오류: " + error);
     return { success: false, error: error.toString(), results: [] };
   }
 }
@@ -3207,7 +3207,7 @@ function searchDrinkCaffeineWithAI(keyword) {
   try {
     var apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
     if (!apiKey) {
-      Logger.log("Gemini API 키 없음");
+      safeLog_("Gemini API 키 없음");
       return [];
     }
 
@@ -3242,7 +3242,7 @@ function searchDrinkCaffeineWithAI(keyword) {
       }
     };
 
-    Logger.log("Gemini 검색 API 호출 (재시도 포함)...");
+    safeLog_("Gemini 검색 API 호출 (재시도 포함)...");
     var srchFetchResult   = fetchWithRetry(apiUrl, {
       method: "post",
       contentType: "application/json",
@@ -3252,22 +3252,22 @@ function searchDrinkCaffeineWithAI(keyword) {
 
     var srchFetchResponse = srchFetchResult.response;
     if (!srchFetchResponse || srchFetchResponse.getResponseCode() !== 200) {
-      Logger.log("Gemini 검색 실패: " + (srchFetchResult.errorCode || 'UNKNOWN'));
+      safeLog_("Gemini 검색 실패: " + (srchFetchResult.errorCode || 'UNKNOWN'));
       return [];
     }
 
     var responseCode = srchFetchResponse.getResponseCode();
     var responseText = srchFetchResponse.getContentText();
-    Logger.log("Gemini 응답코드: " + responseCode);
+    safeLog_("Gemini 응답코드: " + responseCode);
 
     var result = JSON.parse(responseText);
     if (!result.candidates || result.candidates.length === 0) {
-      Logger.log("Gemini 후보 없음");
+      safeLog_("Gemini 후보 없음");
       return [];
     }
 
     var aiText = result.candidates[0].content.parts[0].text.trim();
-    Logger.log("Gemini 응답 원문: " + aiText.substring(0, 500));
+    safeLog_("Gemini 응답 원문: " + aiText.substring(0, 500));
 
     // 코드블록 마크다운 제거
     aiText = aiText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
@@ -3280,15 +3280,15 @@ function searchDrinkCaffeineWithAI(keyword) {
       var match = aiText.match(/\[[\s\S]*\]/);
       if (match) {
         try { aiData = JSON.parse(match[0]); }
-        catch (e2) { Logger.log("배열 추출 실패"); return []; }
+        catch (e2) { safeLog_("배열 추출 실패"); return []; }
       } else {
-        Logger.log("JSON 파싱 실패: " + aiText.substring(0, 100));
+        safeLog_("JSON 파싱 실패: " + aiText.substring(0, 100));
         return [];
       }
     }
 
     if (!Array.isArray(aiData)) {
-      Logger.log("결과가 배열이 아님");
+      safeLog_("결과가 배열이 아님");
       return [];
     }
 
@@ -3307,15 +3307,15 @@ function searchDrinkCaffeineWithAI(keyword) {
       });
     }
 
-    Logger.log("AI 파싱 완료: " + cleaned.length + "건");
+    safeLog_("AI 파싱 완료: " + cleaned.length + "건");
     for (var j = 0; j < cleaned.length; j++) {
-      Logger.log("  [" + j + "] " + cleaned[j].name + " | " + cleaned[j].caffeine + "mg");
+      safeLog_("  [" + j + "] " + cleaned[j].name + " | " + cleaned[j].caffeine + "mg");
     }
     return cleaned;
 
   } catch (error) {
-    Logger.log("searchDrinkCaffeineWithAI 오류: " + error);
-    Logger.log(error.stack || "");
+    safeLog_("searchDrinkCaffeineWithAI 오류: " + error);
+    safeLog_(error.stack || "");
     return [];
   }
 }
@@ -3327,11 +3327,11 @@ function searchDrinkCaffeineWithAI(keyword) {
  */
 function analyzeDrinkImageWithAI(base64Image) {
   try {
-    Logger.log('=== AI 이미지 분석 시작 (공공DB 교차검증 포함) ===');
+    safeLog_('=== AI 이미지 분석 시작 (공공DB 교차검증 포함) ===');
 
     const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
     if (!apiKey) {
-      Logger.log("❌ Gemini API 키 없음");
+      safeLog_("❌ Gemini API 키 없음");
       return { success: false, error: "API 키가 설정되지 않았습니다" };
     }
 
@@ -3377,7 +3377,7 @@ function analyzeDrinkImageWithAI(base64Image) {
       generationConfig: { temperature: 0.1, topK: 10, topP: 0.8, maxOutputTokens: 400 }
     };
 
-    Logger.log('🔍 Gemini API 호출 (재시도 포함)...');
+    safeLog_('🔍 Gemini API 호출 (재시도 포함)...');
     const imgFetchResult   = fetchWithRetry(apiUrl, {
       method: "post",
       contentType: "application/json",
@@ -3392,7 +3392,7 @@ function analyzeDrinkImageWithAI(base64Image) {
       const errInfo = getApiErrorInfo(imgErrCode || 'UNKNOWN_ERROR');
       // ⭐ 실제 응답 본문을 로그에 기록 → 400/UNKNOWN_ERROR 원인 파악용
       const errBody = imgFetchResponse ? imgFetchResponse.getContentText().substring(0, 300) : '(응답 없음)';
-      Logger.log("❌ 이미지 분석 API 실패: HTTP " + (imgFetchResponse ? imgFetchResponse.getResponseCode() : 'null')
+      safeLog_("❌ 이미지 분석 API 실패: HTTP " + (imgFetchResponse ? imgFetchResponse.getResponseCode() : 'null')
                  + ", errorCode=" + (imgErrCode || 'UNKNOWN_ERROR')
                  + ", body=" + errBody);
       return {
@@ -3404,13 +3404,13 @@ function analyzeDrinkImageWithAI(base64Image) {
 
     const responseCode = imgFetchResponse.getResponseCode();
     const responseText = imgFetchResponse.getContentText();
-    Logger.log("Gemini 응답코드: " + responseCode);
+    safeLog_("Gemini 응답코드: " + responseCode);
 
     let geminiResult;
     try {
       geminiResult = JSON.parse(responseText);
     } catch (parseErr) {
-      Logger.log("❌ 응답 JSON 파싱 실패: " + responseText.substring(0, 200));
+      safeLog_("❌ 응답 JSON 파싱 실패: " + responseText.substring(0, 200));
       return { success: false, error: "AI 응답을 해석할 수 없습니다. 다시 시도해주세요.", errorCode: "PARSE_ERROR" };
     }
 
@@ -3419,7 +3419,7 @@ function analyzeDrinkImageWithAI(base64Image) {
       // promptFeedback 확인 (안전 필터 등)
       const feedback = geminiResult.promptFeedback;
       const blockReason = feedback && feedback.blockReason ? feedback.blockReason : null;
-      Logger.log("⚠️ candidates 없음. blockReason=" + blockReason + ", 원문=" + responseText.substring(0, 300));
+      safeLog_("⚠️ candidates 없음. blockReason=" + blockReason + ", 원문=" + responseText.substring(0, 300));
 
       if (blockReason === "SAFETY") {
         return { success: false, error: "이미지를 분석할 수 없습니다 (안전 정책).\n음료 라벨/영양성분표 사진을 다시 촬영해주세요.", errorCode: "SAFETY_BLOCK" };
@@ -3445,7 +3445,7 @@ function analyzeDrinkImageWithAI(base64Image) {
     try {
       aiData = JSON.parse(aiText);
     } catch (e) {
-      Logger.log("AI JSON 파싱 실패. aiText=" + aiText.substring(0, 300));
+      safeLog_("AI JSON 파싱 실패. aiText=" + aiText.substring(0, 300));
       // AI가 자연어로 답변한 경우 (이미지 품질 불량 등)
       if (aiText.length > 0) {
         const lower = aiText.toLowerCase();
@@ -3456,7 +3456,7 @@ function analyzeDrinkImageWithAI(base64Image) {
       return { success: false, error: "📸 성분표/영양성분표가 잘 보이도록 다시 촬영해주세요.\n(너무 어둡거나 흔들린 경우 재촬영 필요)", errorCode: "PARSE_FAIL" };
     }
 
-    Logger.log("AI 추출: " + JSON.stringify(aiData));
+    safeLog_("AI 추출: " + JSON.stringify(aiData));
 
     // ⭐ null 문자열 정규화: AI가 "null" 문자열을 반환하는 경우 빈 문자열로 치환
     function sanitizeNull(v) {
@@ -3469,7 +3469,7 @@ function analyzeDrinkImageWithAI(base64Image) {
 
     // ⭐ 음료/식품 아닌 이미지 감지: drinkName이 비어있고 confidence=low → 잘못된 사진
     if (!aiDrinkName && (aiData.confidence === "low" || !aiData.confidence)) {
-      Logger.log("⚠️ 제품 인식 실패 (drinkName 없음, confidence=low) → 재촬영 안내");
+      safeLog_("⚠️ 제품 인식 실패 (drinkName 없음, confidence=low) → 재촬영 안내");
       return {
         success:   false,
         error:     "음료나 식품 라벨이 인식되지 않았습니다.\n📸 음료의 영양성분표나 성분표가 잘 보이도록 촬영해주세요.",
@@ -3479,7 +3479,7 @@ function analyzeDrinkImageWithAI(base64Image) {
 
     // Step 2: 영양성분표 직독 (high/label) → 공공DB로 제조사 등 부가 정보만 보강
     if (aiData.confidence === "high" && aiData.source === "label" && aiData.caffeine !== null) {
-      Logger.log("✅ 영양성분표 직독 완료 - 공공DB 부가정보 조회");
+      safeLog_("✅ 영양성분표 직독 완료 - 공공DB 부가정보 조회");
       let makerInfo = "", servingInfo = "";
       if (aiData.searchKeyword) {
         const dbCheck = searchCaffeineDBAPI(aiData.searchKeyword, 3);
@@ -3509,7 +3509,7 @@ function analyzeDrinkImageWithAI(base64Image) {
     // Step 3: 제품명 기반 추정 → 공공DB 교차검증
     const searchTerm = sanitizeNull(aiData.searchKeyword) || aiDrinkName || "";
     if (searchTerm) {
-      Logger.log("📡 공공DB 교차검증: " + searchTerm);
+      safeLog_("📡 공공DB 교차검증: " + searchTerm);
       const dbResult = searchCaffeineDBAPI(searchTerm, 5);
 
       if (dbResult.success && dbResult.data.length > 0) {
@@ -3519,7 +3519,7 @@ function analyzeDrinkImageWithAI(base64Image) {
           : Math.round(best.caffeineAmount);
         const volumeStr = best.servingSize || aiVolume || "";
 
-        Logger.log("✅ 공공DB 매칭: " + best.foodName + " " + caffeine + "mg");
+        safeLog_("✅ 공공DB 매칭: " + best.foodName + " " + caffeine + "mg");
         return {
           success:    true,
           drinkName:  best.foodName,
@@ -3536,7 +3536,7 @@ function analyzeDrinkImageWithAI(base64Image) {
                       + " (식약처 공공DB 확인 ✅)"
         };
       }
-      Logger.log("공공DB 결과 없음 → AI 추정값 사용");
+      safeLog_("공공DB 결과 없음 → AI 추정값 사용");
     }
 
     // Step 4: DB도 없음 → AI 추정값 반환 (낮은 신뢰도 안내 포함)
@@ -3561,24 +3561,24 @@ function analyzeDrinkImageWithAI(base64Image) {
     };
 
   } catch (error) {
-    Logger.log('❌ analyzeDrinkImageWithAI 오류: ' + error);
-    Logger.log('스택: ' + error.stack);
+    safeLog_('❌ analyzeDrinkImageWithAI 오류: ' + error);
+    safeLog_('스택: ' + error.stack);
     return { success: false, error: error.toString() };
   }
 }
 
 // ── 공공DB API 연결 테스트 ─────────────────────────────────────
 function testCaffeineDBSearch() {
-  Logger.log("=== 공공DB 검색 테스트 ===");
+  safeLog_("=== 공공DB 검색 테스트 ===");
   ["아메리카노", "레드불", "몬스터", "콜라"].forEach(function(kw) {
-    Logger.log("\n🔍 " + kw);
+    safeLog_("\n🔍 " + kw);
     const r = searchDrinkCaffeine(kw);
     if (r.success && r.results.length > 0) {
       r.results.forEach(function(item) {
-        Logger.log("  ✅ " + item.name + " - " + item.caffeine + "mg" + (item.maker ? " (" + item.maker + ")" : "") + (item.serving ? " / " + item.serving : ""));
+        safeLog_("  ✅ " + item.name + " - " + item.caffeine + "mg" + (item.maker ? " (" + item.maker + ")" : "") + (item.serving ? " / " + item.serving : ""));
       });
     } else {
-      Logger.log("  결과 없음: " + JSON.stringify(r));
+      safeLog_("  결과 없음: " + JSON.stringify(r));
     }
   });
 }
@@ -3602,13 +3602,13 @@ function setGeminiAPIKey() {
     .getProperty("GEMINI_API_KEY");
 
   if (!apiKey) {
-    Logger.log("❌ API 키가 스크립트 속성에 설정되지 않았습니다!");
-    Logger.log("   Apps Script → 프로젝트 설정 → 스크립트 속성에서 GEMINI_API_KEY를 추가하세요.");
+    safeLog_("❌ API 키가 스크립트 속성에 설정되지 않았습니다!");
+    safeLog_("   Apps Script → 프로젝트 설정 → 스크립트 속성에서 GEMINI_API_KEY를 추가하세요.");
     return;
   }
-  Logger.log("✅ Gemini API 키가 설정되어 있습니다!");
-  Logger.log("확인된 키: " + apiKey.substring(0, 10) + "...");
-  Logger.log("모델: Gemini 2.5 Flash");
+  safeLog_("✅ Gemini API 키가 설정되어 있습니다!");
+  safeLog_("확인된 키: " + apiKey.substring(0, 10) + "...");
+  safeLog_("모델: Gemini 2.5 Flash");
 }
 
 /**
@@ -3619,12 +3619,12 @@ function checkGeminiAPIKey() {
     .getProperty("GEMINI_API_KEY");
 
   if (apiKey) {
-    Logger.log("✅ API 키가 설정되어 있습니다");
-    Logger.log("키 앞부분: " + apiKey.substring(0, 15) + "...");
-    Logger.log("키 길이: " + apiKey.length + " 문자");
+    safeLog_("✅ API 키가 설정되어 있습니다");
+    safeLog_("키 앞부분: " + apiKey.substring(0, 15) + "...");
+    safeLog_("키 길이: " + apiKey.length + " 문자");
   } else {
-    Logger.log("❌ API 키가 설정되지 않았습니다");
-    Logger.log("setGeminiAPIKey() 함수를 먼저 실행하세요");
+    safeLog_("❌ API 키가 설정되지 않았습니다");
+    safeLog_("setGeminiAPIKey() 함수를 먼저 실행하세요");
   }
 }
 
@@ -3635,27 +3635,27 @@ function deleteGeminiAPIKey() {
   PropertiesService.getScriptProperties()
     .deleteProperty("GEMINI_API_KEY");
 
-  Logger.log("🗑️ API 키가 삭제되었습니다");
+  safeLog_("🗑️ API 키가 삭제되었습니다");
 }
 
 function testWithRealStudentId() {
-  Logger.log('=== 실제 학번으로 테스트 ===');
+  safeLog_('=== 실제 학번으로 테스트 ===');
 
   // 여기에 실제 사용 중인 학번 입력
   const realStudentId = '0'; // 또는 본인의 실제 학번
 
   const result = getWeeklyDetailedData(realStudentId);
 
-  Logger.log('학번: ' + realStudentId);
-  Logger.log('반환 타입: ' + typeof result);
-  Logger.log('recordedDays: ' + result.recordedDays);
-  Logger.log('totalDays: ' + result.totalDays);
+  safeLog_('학번: ' + realStudentId);
+  safeLog_('반환 타입: ' + typeof result);
+  safeLog_('recordedDays: ' + result.recordedDays);
+  safeLog_('totalDays: ' + result.totalDays);
 
   if (result.recordedDays > 0) {
-    Logger.log('✅✅✅ 데이터 있음! 정상 작동!');
+    safeLog_('✅✅✅ 데이터 있음! 정상 작동!');
   } else {
-    Logger.log('⚠️ 이 학번에는 데이터가 없습니다');
-    Logger.log('스프레드시트에서 데이터가 있는 학번을 확인하세요');
+    safeLog_('⚠️ 이 학번에는 데이터가 없습니다');
+    safeLog_('스프레드시트에서 데이터가 있는 학번을 확인하세요');
   }
 }
 // ============================================================
@@ -3678,9 +3678,9 @@ function legacyDoPost_(e) {
     const action = body.action;   // 호출할 GAS 함수명
     const params = body.params || [];  // 인자 배열
 
-    Logger.log('=== doPost API 요청 ===');
-    Logger.log('action: ' + action);
-    Logger.log('params: ' + JSON.stringify(params));
+    safeLog_('=== doPost API 요청 ===');
+    safeLog_('action: ' + action);
+    safeLog_('params: ' + JSON.stringify(params));
 
     // ── 허용된 함수 화이트리스트 ────────────────────────────
     // 외부에서 호출 가능한 함수만 명시적으로 허용 (보안)
@@ -3786,14 +3786,14 @@ function legacyDoPost_(e) {
       result = fn(...params);
     }
 
-    Logger.log('doPost 결과: ' + JSON.stringify(result));
+    safeLog_('doPost 결과: ' + JSON.stringify(result));
 
     return ContentService
       .createTextOutput(JSON.stringify({ success: true, data: result }))
       .setMimeType(ContentService.MimeType.JSON);
 
   } catch (err) {
-    Logger.log('❌ doPost 오류: ' + err.message);
+    safeLog_('❌ doPost 오류: ' + err.message);
     return ContentService
       .createTextOutput(JSON.stringify({ success: false, error: err.message }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -3972,7 +3972,7 @@ function getTeacherData() {
       });
     }
 
-    Logger.log(`✅ getTeacherData 완료: 학생 ${students.length}명, 카페인 ${caffeine.length}건, 수면 ${sleep.length}건, 체중 ${info.length}건`);
+    safeLog_(`✅ getTeacherData 완료: 학생 ${students.length}명, 카페인 ${caffeine.length}건, 수면 ${sleep.length}건, 체중 ${info.length}건`);
 
     // ── teacher_awards (교사 수여 뱃지) ─────────────────
     // 교사 앱 localStorage를 GAS 시트 기준으로 동기화하기 위해 함께 반환
@@ -3988,7 +3988,7 @@ function getTeacherData() {
         // 구버전( 9열): B열='studentid' → B열(index1)=학번, C열(index2)=awardId
         const hdr1_2 = String(awardData[0][1] || '').toLowerCase();
         const isNew2 = (totalCols2 >= 12) && (hdr1_2 === '학년' || hdr1_2 === 'grade');
-        Logger.log('getTeacherData - 뱃지 포맷: ' + (isNew2 ? '신규(12+열)' : '구버전') + ', 컬럼=' + totalCols2 + ', B헤더="' + hdr1_2 + '"');
+        safeLog_('getTeacherData - 뱃지 포맷: ' + (isNew2 ? '신규(12+열)' : '구버전') + ', 컬럼=' + totalCols2 + ', B헤더="' + hdr1_2 + '"');
 
         for (let i = 1; i < awardData.length; i++) {
           const row = awardData[i];
@@ -4008,10 +4008,10 @@ function getTeacherData() {
             grantedBy : isNew2 ? String(row[12] || '') : String(row[8] || '')
           });
         }
-        Logger.log('getTeacherData - 뱃지 로드 완료: ' + Object.keys(manualAwards).length + '명');
+        safeLog_('getTeacherData - 뱃지 로드 완료: ' + Object.keys(manualAwards).length + '명');
       }
     } catch (awardErr) {
-      Logger.log('⚠️ teacher_awards 로드 실패 (계속 진행): ' + awardErr);
+      safeLog_('⚠️ teacher_awards 로드 실패 (계속 진행): ' + awardErr);
     }
 
     return {
@@ -4024,7 +4024,7 @@ function getTeacherData() {
     };
 
   } catch (err) {
-    Logger.log('❌ getTeacherData 오류: ' + err.message);
+    safeLog_('❌ getTeacherData 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -4059,14 +4059,14 @@ function handleAIReportForTeacher(payload) {
       ? `${startDate} ~ ${endDate}`
       : '최근 7일';
 
-    Logger.log(`=== handleAIReportForTeacher (교사용 전용 프롬프트) ===`);
-    Logger.log(`학생: ${name}(${studentId}), 조회기간: ${periodLabel}`);
-    Logger.log(`평균카페인: ${cafData.avgPerDay}mg, 평균수면: ${sleepDataP.avgHours}h`);
+    safeLog_(`=== handleAIReportForTeacher (교사용 전용 프롬프트) ===`);
+    safeLog_(`학생: ${name}(${studentId}), 조회기간: ${periodLabel}`);
+    safeLog_(`평균카페인: ${cafData.avgPerDay}mg, 평균수면: ${sleepDataP.avgHours}h`);
 
     // ── API 키 확인 ──────────────────────────────────
     const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
     if (!apiKey) {
-      Logger.log("❌ API 키 없음 → 교사용 대체 분석");
+      safeLog_("❌ API 키 없음 → 교사용 대체 분석");
       // API 키 없음 단계에서는 weeklyData가 아직 수집되지 않아 overDays=[] 로 처리
       return {
         success:   true,
@@ -4095,11 +4095,11 @@ function handleAIReportForTeacher(payload) {
     const recordedDays         = weeklyData.recordedDays;
     const totalDays            = weeklyData.totalDays || 7;  // 실제 조회 일수
 
-    Logger.log(`⭐ 카페인: ${caffeineRecordedDays}/${totalDays}일, 수면: ${sleepRecordedDays}/${totalDays}일`);
+    safeLog_(`⭐ 카페인: ${caffeineRecordedDays}/${totalDays}일, 수면: ${sleepRecordedDays}/${totalDays}일`);
 
     // 데이터 부족 시 조기 반환 (교사용 메시지) — 둘 다 부족할 때만 차단
     if (caffeineRecordedDays < 3 && sleepRecordedDays < 3) {
-      Logger.log(`⚠️ 데이터 부족 → 교사용 부족 메시지`);
+      safeLog_(`⚠️ 데이터 부족 → 교사용 부족 메시지`);
       return {
         success:  true,
         analysis: getTeacherInsufficientMessage(caffeineRecordedDays, sleepRecordedDays, totalDays, periodLabel),
@@ -4160,8 +4160,8 @@ function handleAIReportForTeacher(payload) {
     const realAvgCaffeine = totalDays > 0 ? realCafTotal / totalDays : 0;
     const realAvgSleep    = realSleepDays > 0 ? realSleepTotal / realSleepDays : 0;
 
-    Logger.log(`📊 통계 재계산: 카페인 총량=${realCafTotal}mg, 일평균=${Math.round(realAvgCaffeine)}mg`);
-    Logger.log(`📊 수면: 총량=${realSleepTotal.toFixed(1)}h, 평균=${realAvgSleep.toFixed(1)}h (${realSleepDays}일)`);
+    safeLog_(`📊 통계 재계산: 카페인 총량=${realCafTotal}mg, 일평균=${Math.round(realAvgCaffeine)}mg`);
+    safeLog_(`📊 수면: 총량=${realSleepTotal.toFixed(1)}h, 평균=${realAvgSleep.toFixed(1)}h (${realSleepDays}일)`);
 
     // ── 교사용 전용 Gemini 프롬프트 ─────────────────────
     const modelName = "gemini-2.0-flash";
@@ -4400,7 +4400,7 @@ ${priorityAction}
       muteHttpExceptions: true
     };
 
-    Logger.log('🚀 교사용 Gemini API 호출 중...');
+    safeLog_('🚀 교사용 Gemini API 호출 중...');
 
     try {
       const fetchResult   = fetchWithRetry(apiUrl, options, 3);
@@ -4409,21 +4409,21 @@ ${priorityAction}
 
       if (!fetchResponse || fetchResponse.getResponseCode() !== 200) {
         const errInfo = getApiErrorInfo(fetchErrCode || 'UNKNOWN_ERROR');
-        Logger.log('❌ 교사용 API 호출 실패: ' + (fetchErrCode || 'UNKNOWN_ERROR'));
+        safeLog_('❌ 교사용 API 호출 실패: ' + (fetchErrCode || 'UNKNOWN_ERROR'));
         throw new Error('[' + (fetchErrCode || 'UNKNOWN_ERROR') + '] ' + errInfo.desc);
       }
 
       const result    = JSON.parse(fetchResponse.getContentText());
       const candidate = result.candidates[0];
       const finishReason = candidate.finishReason;
-      Logger.log(`📊 생성 완료 이유: ${finishReason}`);
+      safeLog_(`📊 생성 완료 이유: ${finishReason}`);
 
       const analysis  = candidate.content.parts[0].text.trim();
       const isComplete = ['습니다', '합니다', '됩니다', '요구됩니다', '바랍니다', '합니다.', '.', '!', '?']
                           .some(e => analysis.endsWith(e));
 
       if (finishReason === "MAX_TOKENS" || !isComplete || analysis.length < 100) {
-        Logger.log('⚠️ 교사용 AI 분석 미완성 → 교사용 대체 분석');
+        safeLog_('⚠️ 교사용 AI 분석 미완성 → 교사용 대체 분석');
         return {
           success:      true,
           analysis:     getTeacherFallbackAnalysis(realAvgCaffeine, realAvgSleep, limit, caffeineRecordedDays, sleepRecordedDays, periodLabel, overDays, periodForHeader, lifeAdvice),
@@ -4433,8 +4433,8 @@ ${priorityAction}
         };
       }
 
-      Logger.log(`✅ 교사용 AI 분석 성공! (${analysis.length}자)`);
-      Logger.log(analysis);
+      safeLog_(`✅ 교사용 AI 분석 성공! (${analysis.length}자)`);
+      safeLog_(analysis);
 
       return {
         success:      true,
@@ -4444,7 +4444,7 @@ ${priorityAction}
       };
 
     } catch (apiError) {
-      Logger.log('❌ 교사용 API 오류: ' + apiError.message);
+      safeLog_('❌ 교사용 API 오류: ' + apiError.message);
       const ecMatch = apiError.message.match(/^\[([A-Z_]+)\]/);
       const ec      = ecMatch ? ecMatch[1] : 'UNKNOWN_ERROR';
       return {
@@ -4458,7 +4458,7 @@ ${priorityAction}
     }
 
   } catch (err) {
-    Logger.log('❌ handleAIReportForTeacher 오류: ' + err.message);
+    safeLog_('❌ handleAIReportForTeacher 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -4674,10 +4674,10 @@ function submitInquiry(data) {
       ""                       // K: 응답시간
     ]);
 
-    Logger.log(`✅ 문의 저장 완료: ${data.studentId} - ${data.title}`);
+    safeLog_(`✅ 문의 저장 완료: ${data.studentId} - ${data.title}`);
     return { success: true };
   } catch (error) {
-    Logger.log('❌ 문의 저장 오류: ' + error.message);
+    safeLog_('❌ 문의 저장 오류: ' + error.message);
     return { success: false, error: error.message };
   }
 }
@@ -4716,7 +4716,7 @@ function getInquiries() {
     inquiries.reverse();
     return { success: true, data: inquiries };
   } catch (error) {
-    Logger.log('❌ 문의 조회 오류: ' + error.message);
+    safeLog_('❌ 문의 조회 오류: ' + error.message);
     return { success: false, error: error.message };
   }
 }
@@ -4736,10 +4736,10 @@ function replyToInquiry(rowIndex, replyContent) {
     sheet.getRange(rowIndex, 10).setValue(replyContent); // J열
     sheet.getRange(rowIndex, 11).setValue(replyTime);    // K열
 
-    Logger.log(`✅ 문의 응답 완료: 행 ${rowIndex}`);
+    safeLog_(`✅ 문의 응답 완료: 행 ${rowIndex}`);
     return { success: true };
   } catch (error) {
-    Logger.log('❌ 문의 응답 오류: ' + error.message);
+    safeLog_('❌ 문의 응답 오류: ' + error.message);
     return { success: false, error: error.message };
   }
 }
@@ -4757,10 +4757,10 @@ function deleteInquiry(rowIndex) {
       return { success: false, error: '유효하지 않은 행 번호: ' + rowIndex };
     }
     sheet.deleteRow(rowIndex);
-    Logger.log('✅ 문의 삭제 완료: 행 ' + rowIndex);
+    safeLog_('✅ 문의 삭제 완료: 행 ' + rowIndex);
     return { success: true };
   } catch (err) {
-    Logger.log('❌ deleteInquiry 오류: ' + err.message);
+    safeLog_('❌ deleteInquiry 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -4792,7 +4792,7 @@ function getUnreadInquiries() {
     }
     return { success: true, data: result };
   } catch (err) {
-    Logger.log('❌ getUnreadInquiries 오류: ' + err.message);
+    safeLog_('❌ getUnreadInquiries 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -4808,7 +4808,7 @@ function markInquiryNotified(rowIndex) {
     sheet.getRange(rowIndex, 12).setValue('확인');
     return { success: true };
   } catch (err) {
-    Logger.log('❌ markInquiryNotified 오류: ' + err.message);
+    safeLog_('❌ markInquiryNotified 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -4843,7 +4843,7 @@ function getMyInquiries(studentId) {
     inquiries.reverse();
     return { success: true, data: inquiries };
   } catch (error) {
-    Logger.log('❌ 내 문의 조회 오류: ' + error.message);
+    safeLog_('❌ 내 문의 조회 오류: ' + error.message);
     return { success: false, error: error.message };
   }
 }
@@ -4857,7 +4857,7 @@ function getCaffeineDB() {
     var ss = getSpreadsheet_();
     var ws = ss.getSheetByName('caffeine_db');
     if (!ws) {
-      Logger.log('getCaffeineDB: caffeine_db 시트 없음');
+      safeLog_('getCaffeineDB: caffeine_db 시트 없음');
       return { success: false, data: [], error: 'caffeine_db 시트를 찾을 수 없습니다.' };
     }
 
@@ -4918,11 +4918,11 @@ function getCaffeineDB() {
       });
     }
 
-    Logger.log('getCaffeineDB: ' + result.length + '건 반환');
+    safeLog_('getCaffeineDB: ' + result.length + '건 반환');
     return { success: true, data: result };
 
   } catch (error) {
-    Logger.log('getCaffeineDB 오류: ' + error);
+    safeLog_('getCaffeineDB 오류: ' + error);
     return { success: false, data: [], error: error.toString() };
   }
 }
@@ -4954,7 +4954,7 @@ function fetchWithRetry(apiUrl, options, maxRetry) {
     try {
       var response = UrlFetchApp.fetch(apiUrl, options);
       var code     = response.getResponseCode();
-      Logger.log('[fetchWithRetry] 시도 ' + attempt + '/' + maxRetry + ' → HTTP ' + code);
+      safeLog_('[fetchWithRetry] 시도 ' + attempt + '/' + maxRetry + ' → HTTP ' + code);
 
       if (code === 200) {
         return { response: response, errorCode: null }; // ✅ 성공
@@ -4976,7 +4976,7 @@ function fetchWithRetry(apiUrl, options, maxRetry) {
           } catch (e) { /* 헤더 없을 수 있음 */ }
         }
 
-        Logger.log('[fetchWithRetry] HTTP ' + code + ' → ' + (waitMs / 1000) + 's 대기 후 재시도...');
+        safeLog_('[fetchWithRetry] HTTP ' + code + ' → ' + (waitMs / 1000) + 's 대기 후 재시도...');
         Utilities.sleep(waitMs);
         continue;
       }
@@ -4984,7 +4984,7 @@ function fetchWithRetry(apiUrl, options, maxRetry) {
       break; // 재시도 불필요한 오류 (401, 403, 400 등)
 
     } catch (networkErr) {
-      Logger.log('[fetchWithRetry] 네트워크 오류 (시도 ' + attempt + '): ' + networkErr);
+      safeLog_('[fetchWithRetry] 네트워크 오류 (시도 ' + attempt + '): ' + networkErr);
       if (attempt < maxRetry) {
         Utilities.sleep(Math.min(Math.pow(2, attempt) * 1000, 20000));
       } else {
@@ -5000,7 +5000,7 @@ function fetchWithRetry(apiUrl, options, maxRetry) {
     else if (lastCode === 401 || lastCode === 403)     errorCode = 'AUTH_ERROR';
   }
 
-  Logger.log('[fetchWithRetry] 최종 실패. code=' + lastCode + ', errorCode=' + errorCode);
+  safeLog_('[fetchWithRetry] 최종 실패. code=' + lastCode + ', errorCode=' + errorCode);
   return { response: lastResponse, errorCode: errorCode };
 }
 
@@ -5054,20 +5054,20 @@ function getTeacherAwardsForStudent(studentId) {
     const sheet = _getOrCreateAwardSheet_(ss);
 
     const data = sheet.getDataRange().getValues();
-    Logger.log('=== getTeacherAwardsForStudent ===');
-    Logger.log('요청 학번(원본): "' + studentId + '"');
-    Logger.log('시트 전체 행 수: ' + data.length + ' (헤더 포함)');
+    safeLog_('=== getTeacherAwardsForStudent ===');
+    safeLog_('요청 학번(원본): "' + studentId + '"');
+    safeLog_('시트 전체 행 수: ' + data.length + ' (헤더 포함)');
 
     if (data.length <= 1) {
-      Logger.log('⚠️ 데이터 없음 (헤더만 존재)');
+      safeLog_('⚠️ 데이터 없음 (헤더만 존재)');
       return { success: true, awards: [] };
     }
 
     const totalCols = data[0] ? data[0].length : 0;
     const targetId  = normalizeId(studentId);
-    Logger.log('헤더 컬럼 수: ' + totalCols);
-    Logger.log('헤더: ' + JSON.stringify(data[0]));
-    Logger.log('정규화된 학번: "' + targetId + '"');
+    safeLog_('헤더 컬럼 수: ' + totalCols);
+    safeLog_('헤더: ' + JSON.stringify(data[0]));
+    safeLog_('정규화된 학번: "' + targetId + '"');
 
     // ──────────────────────────────────────────────────────
     // 컬럼 레이아웃 자동 감지
@@ -5081,13 +5081,13 @@ function getTeacherAwardsForStudent(studentId) {
     const hdr1 = String(data[0][1] || '').toLowerCase();
     const isNewFormat = (totalCols >= 12) && (hdr1 === '학년' || hdr1 === 'grade');
 
-    Logger.log('포맷: ' + (isNewFormat ? '신규(12+열, B=학년)' : '구버전(B=학번)'));
+    safeLog_('포맷: ' + (isNewFormat ? '신규(12+열, B=학년)' : '구버전(B=학번)'));
 
     // 데이터 샘플 로그 (최대 3행)
     for (var si = 1; si < Math.min(4, data.length); si++) {
       var sRow = data[si];
       var sId  = isNewFormat ? normalizeId(sRow[4]) : normalizeId(sRow[1]);
-      Logger.log('  ' + si + '행 학번="' + sId + '" | 원본E="' + sRow[4] + '" | A열ts="' + sRow[0] + '"');
+      safeLog_('  ' + si + '행 학번="' + sId + '" | 원본E="' + sRow[4] + '" | A열ts="' + sRow[0] + '"');
     }
 
     const awards = [];
@@ -5097,7 +5097,7 @@ function getTeacherAwardsForStudent(studentId) {
 
       if (rowSid !== targetId) continue;
 
-      Logger.log('✅ 매칭 행 ' + (i+1) + ': 학번=' + rowSid + ', 뱃지=' + (isNewFormat ? row[7] : row[3]));
+      safeLog_('✅ 매칭 행 ' + (i+1) + ': 학번=' + rowSid + ', 뱃지=' + (isNewFormat ? row[7] : row[3]));
 
       if (isNewFormat) {
         awards.push({
@@ -5133,12 +5133,12 @@ function getTeacherAwardsForStudent(studentId) {
       }
     }
 
-    Logger.log('결과: ' + awards.length + '개 뱃지 반환');
+    safeLog_('결과: ' + awards.length + '개 뱃지 반환');
     awards.sort((a, b) => b.grantedAt.localeCompare(a.grantedAt));
     return { success: true, awards: awards };
 
   } catch (err) {
-    Logger.log('❌ getTeacherAwardsForStudent 오류: ' + err.message);
+    safeLog_('❌ getTeacherAwardsForStudent 오류: ' + err.message);
     return { success: false, awards: [], error: err.message };
   }
 }
@@ -5213,13 +5213,13 @@ function markTeacherAwardsSeen(studentId, studentName, awardKeys) {
       }
     }
 
-    Logger.log('✅ 학생 뱃지 확인 저장: 학번=' + targetId + ', ' + updated + '건');
+    safeLog_('✅ 학생 뱃지 확인 저장: 학번=' + targetId + ', ' + updated + '건');
     return { success: true, updated: updated };
     } finally {
       lock.releaseLock();
     }
   } catch (err) {
-    Logger.log('❌ markTeacherAwardsSeen 오류: ' + err.message);
+    safeLog_('❌ markTeacherAwardsSeen 오류: ' + err.message);
     return { success: false, updated: 0, error: err.message };
   }
 }
@@ -5273,7 +5273,7 @@ function grantTeacherAwards(params) {
         }
       }
     } catch (mapErr) {
-      Logger.log('⚠️ 학생 정보 조회 실패 (계속 진행): ' + mapErr);
+      safeLog_('⚠️ 학생 정보 조회 실패 (계속 진행): ' + mapErr);
     }
 
     // 중복 수여 방지: 시트에서 기존 수여 내역 읽기 (학번+뱃지ID 조합)
@@ -5288,7 +5288,7 @@ function grantTeacherAwards(params) {
           if (sid && aid) existingSet.add(sid + '|' + aid);
         });
       }
-    } catch(e) { Logger.log('⚠️ 중복 체크 조회 실패 (계속 진행): ' + e); }
+    } catch(e) { safeLog_('⚠️ 중복 체크 조회 실패 (계속 진행): ' + e); }
 
     const rows = [];
     studentIds.forEach(sid => {
@@ -5297,7 +5297,7 @@ function grantTeacherAwards(params) {
       awards.forEach(a => {
         const awardId = String(a.awardId || '');
         if (existingSet.has(normSid + '|' + awardId)) {
-          Logger.log('⏭️ 중복 수여 건너뜀: ' + normSid + ' / ' + awardId);
+          safeLog_('⏭️ 중복 수여 건너뜀: ' + normSid + ' / ' + awardId);
           return;
         }
         rows.push([
@@ -5328,11 +5328,11 @@ function grantTeacherAwards(params) {
            .setNumberFormat('@STRING@');
     }
 
-    Logger.log('✅ 뱃지 수여 완료: ' + studentIds.length + '명 × ' + awards.length + '개 = ' + rows.length + '행');
+    safeLog_('✅ 뱃지 수여 완료: ' + studentIds.length + '명 × ' + awards.length + '개 = ' + rows.length + '행');
     return { success: true, count: rows.length, grantedAt: grantedAt };
 
   } catch (err) {
-    Logger.log('❌ grantTeacherAwards 오류: ' + err.message);
+    safeLog_('❌ grantTeacherAwards 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5363,8 +5363,8 @@ function revokeTeacherAward(studentId, grantedAt, awardId) {
     const hdr1 = String(data[0] ? (data[0][1] || '') : '').toLowerCase();
     const isNewFormat = (totalCols >= 12) && (hdr1 === '학년' || hdr1 === 'grade');
 
-    Logger.log('revokeTeacherAward: 학번=' + studentId + ', grantedAt=' + grantedAt + ', awardId=' + awardId);
-    Logger.log('포맷: ' + (isNewFormat ? '신규(12+열)' : '구버전') + ', 컬럼수=' + totalCols + ', B헤더="' + hdr1 + '"');
+    safeLog_('revokeTeacherAward: 학번=' + studentId + ', grantedAt=' + grantedAt + ', awardId=' + awardId);
+    safeLog_('포맷: ' + (isNewFormat ? '신규(12+열)' : '구버전') + ', 컬럼수=' + totalCols + ', B헤더="' + hdr1 + '"');
 
     function getRowSid(row) {
       return isNewFormat ? normalizeId(row[4]) : normalizeId(row[1]);
@@ -5385,7 +5385,7 @@ function revokeTeacherAward(studentId, grantedAt, awardId) {
       if (aidTarget && rowAid !== aidTarget) continue;
 
       sheet.deleteRow(i + 1);
-      Logger.log('✅ 뱃지 취소(완전매칭): 학번=' + studentId + ', ts=' + rowTs + ', aid=' + aidTarget);
+      safeLog_('✅ 뱃지 취소(완전매칭): 학번=' + studentId + ', ts=' + rowTs + ', aid=' + aidTarget);
       return { success: true };
     }
 
@@ -5401,7 +5401,7 @@ function revokeTeacherAward(studentId, grantedAt, awardId) {
       if (aidTarget && rowAid !== aidTarget) continue;
 
       sheet.deleteRow(i + 1);
-      Logger.log('✅ 뱃지 취소(날짜+id 매칭): 학번=' + studentId + ', date=' + targetDate);
+      safeLog_('✅ 뱃지 취소(날짜+id 매칭): 학번=' + studentId + ', date=' + targetDate);
       return { success: true };
     }
 
@@ -5416,16 +5416,16 @@ function revokeTeacherAward(studentId, grantedAt, awardId) {
         if (rowTs.substring(0, 10) !== targetDate) continue;
 
         sheet.deleteRow(i + 1);
-        Logger.log('⚠️ 뱃지 취소(날짜만 매칭): 학번=' + studentId);
+        safeLog_('⚠️ 뱃지 취소(날짜만 매칭): 학번=' + studentId);
         return { success: true };
       }
     }
 
-    Logger.log('❌ revokeTeacherAward 매칭 실패: 학번=' + studentId + ', grantedAt=' + grantedAt + ', awardId=' + awardId + ', isNewFormat=' + isNewFormat + ', totalCols=' + totalCols);
+    safeLog_('❌ revokeTeacherAward 매칭 실패: 학번=' + studentId + ', grantedAt=' + grantedAt + ', awardId=' + awardId + ', isNewFormat=' + isNewFormat + ', totalCols=' + totalCols);
     return { success: false, error: '해당 뱃지 기록을 찾을 수 없습니다.' };
 
   } catch (err) {
-    Logger.log('❌ revokeTeacherAward 오류: ' + err.message);
+    safeLog_('❌ revokeTeacherAward 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5443,13 +5443,13 @@ function getAllTeacherAwards() {
     const sheet = _getOrCreateAwardSheet_(ss);
     const data  = sheet.getDataRange().getValues();
 
-    Logger.log('=== getAllTeacherAwards === 행 수: ' + data.length);
+    safeLog_('=== getAllTeacherAwards === 행 수: ' + data.length);
     if (data.length <= 1) return { success: true, byStudent: {} };
 
     const totalCols = data[0] ? data[0].length : 0;
     const hdr1      = String(data[0][1] || '').toLowerCase();
     const isNew     = (totalCols >= 12) && (hdr1 === '학년' || hdr1 === 'grade');
-    Logger.log('포맷: ' + (isNew ? '신규' : '구버전') + ', 컬럼수=' + totalCols);
+    safeLog_('포맷: ' + (isNew ? '신규' : '구버전') + ', 컬럼수=' + totalCols);
 
     const byStudent = {};
     for (var i = 1; i < data.length; i++) {
@@ -5492,11 +5492,11 @@ function getAllTeacherAwards() {
       byStudent[sid].sort(function(a, b) { return b.grantedAt.localeCompare(a.grantedAt); });
     });
 
-    Logger.log('getAllTeacherAwards 완료: ' + Object.keys(byStudent).length + '명 데이터 반환');
+    safeLog_('getAllTeacherAwards 완료: ' + Object.keys(byStudent).length + '명 데이터 반환');
     return { success: true, byStudent: byStudent };
 
   } catch (err) {
-    Logger.log('❌ getAllTeacherAwards 오류: ' + err.message);
+    safeLog_('❌ getAllTeacherAwards 오류: ' + err.message);
     return { success: false, byStudent: {}, error: err.message };
   }
 }
@@ -5535,7 +5535,7 @@ function _getOrCreateAwardSheet_(ss) {
     sheet.setColumnWidth(12, 200); // 코멘트
     sheet.setColumnWidth(13, 100); // 수여교사
     sheet.setColumnWidth(14, 140); // 학생확인일시
-    Logger.log('✅ teacher_awards 시트 자동 생성 (신규 14컬럼)');
+    safeLog_('✅ teacher_awards 시트 자동 생성 (신규 14컬럼)');
   } else {
     const awardData = sheet.getDataRange().getValues();
     const hdrVals = awardData[0] || [];
@@ -5552,7 +5552,7 @@ function _getOrCreateAwardSheet_(ss) {
         const latestHeader1 = String(latestHeader[1] || '').trim().toLowerCase();
         if (latestHeader.length <= 10 && ['studentid', 'student_id', '학번'].includes(latestHeader1)) {
           _migrateLegacyAwardSheet_(sheet, latestData);
-          Logger.log('✅ teacher_awards 구버전 시트를 14열 형식으로 변환했습니다.');
+          safeLog_('✅ teacher_awards 구버전 시트를 14열 형식으로 변환했습니다.');
         }
       } finally {
         migrationLock.releaseLock();
@@ -5689,7 +5689,7 @@ function exportDataToNewSheet(params) {
       });
     }
 
-    Logger.log('✅ exportDataToNewSheet 완료: ' + sheetName + ' (' + (rows.length - 1) + '행)');
+    safeLog_('✅ exportDataToNewSheet 완료: ' + sheetName + ' (' + (rows.length - 1) + '행)');
     return {
       success   : true,
       sheetName : sheetName,
@@ -5697,7 +5697,7 @@ function exportDataToNewSheet(params) {
     };
 
   } catch (err) {
-    Logger.log('❌ exportDataToNewSheet 오류: ' + err.message);
+    safeLog_('❌ exportDataToNewSheet 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5724,7 +5724,7 @@ function sendTeacherMessage(data) {
     sheet.appendRow([ts, String(data.studentId), String(data.studentName), String(data.title), String(data.content), '미읽음', '', '', '', '']);
     return { success: true };
   } catch (err) {
-    Logger.log('❌ sendTeacherMessage 오류: ' + err.message);
+    safeLog_('❌ sendTeacherMessage 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5758,7 +5758,7 @@ function getSentTeacherMessages() {
     result.reverse();
     return { success: true, data: result };
   } catch (err) {
-    Logger.log('❌ getSentTeacherMessages 오류: ' + err.message);
+    safeLog_('❌ getSentTeacherMessages 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5792,7 +5792,7 @@ function getTeacherMessages(studentId) {
     result.reverse();
     return { success: true, data: result };
   } catch (err) {
-    Logger.log('❌ getTeacherMessages 오류: ' + err.message);
+    safeLog_('❌ getTeacherMessages 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5811,7 +5811,7 @@ function markTeacherMessageRead(rowIndex) {
     sheet.getRange(rowIndex, 7).setValue(ts);
     return { success: true };
   } catch (err) {
-    Logger.log('❌ markTeacherMessageRead 오류: ' + err.message);
+    safeLog_('❌ markTeacherMessageRead 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5828,7 +5828,7 @@ function deleteTeacherMessage(rowIndex) {
     sheet.deleteRow(rowIndex);
     return { success: true };
   } catch (err) {
-    Logger.log('❌ deleteTeacherMessage 오류: ' + err.message);
+    safeLog_('❌ deleteTeacherMessage 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5848,7 +5848,7 @@ function deleteBulkTeacherMessages(rowIndices) {
     sorted.forEach(r => sheet.deleteRow(r));
     return { success: true, deleted: sorted.length };
   } catch (err) {
-    Logger.log('❌ deleteBulkTeacherMessages 오류: ' + err.message);
+    safeLog_('❌ deleteBulkTeacherMessages 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5869,7 +5869,7 @@ function replyToTeacherMessage(rowIndex, replyContent) {
     sheet.getRange(rowIndex, 10).setValue('미확인');              // J열: 교사 확인 여부
     return { success: true };
   } catch (err) {
-    Logger.log('❌ replyToTeacherMessage 오류: ' + err.message);
+    safeLog_('❌ replyToTeacherMessage 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5902,7 +5902,7 @@ function getUnreadStudentReplies() {
     }
     return { success: true, data: result };
   } catch (err) {
-    Logger.log('❌ getUnreadStudentReplies 오류: ' + err.message);
+    safeLog_('❌ getUnreadStudentReplies 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5918,7 +5918,7 @@ function markStudentReplyRead(rowIndex) {
     sheet.getRange(rowIndex, 10).setValue('확인');
     return { success: true };
   } catch (err) {
-    Logger.log('❌ markStudentReplyRead 오류: ' + err.message);
+    safeLog_('❌ markStudentReplyRead 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }
@@ -5971,12 +5971,12 @@ function analyzeSleepMemoWords(words) {
     const json = JSON.parse(response.getContentText());
 
     if (!json.candidates || !json.candidates[0]) {
-      Logger.log('Gemini 응답: ' + JSON.stringify(json));
+      safeLog_('Gemini 응답: ' + JSON.stringify(json));
       return { success: false, error: 'Gemini 응답을 받지 못했습니다.' };
     }
 
     const text = json.candidates[0].content.parts[0].text.trim();
-    Logger.log('Gemini 단어 분류 응답: ' + text);
+    safeLog_('Gemini 단어 분류 응답: ' + text);
 
     // 마크다운 코드블록 안의 JSON 추출
     const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -5986,7 +5986,7 @@ function analyzeSleepMemoWords(words) {
     return { success: true, data: categories };
 
   } catch (err) {
-    Logger.log('❌ analyzeSleepMemoWords 오류: ' + err.message);
+    safeLog_('❌ analyzeSleepMemoWords 오류: ' + err.message);
     return { success: false, error: err.message };
   }
 }

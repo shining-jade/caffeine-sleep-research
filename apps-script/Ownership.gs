@@ -26,11 +26,26 @@ function requireOwnedRecord_(sheetName, recordId, subject) {
   var ownerColumn = findHeaderColumn_(headers, ['전체학번', '학번', 'studentId']);
   var nameColumn = findHeaderColumn_(headers, ['성명', '이름', 'name']);
   if (idColumn < 0 || ownerColumn < 0 || nameColumn < 0) throw new Error('REQUEST_REJECTED');
+  var found = false;
   for (var row = 1; row < rows.length; row++) {
-    if (String(rows[row][idColumn]) === String(recordId)
-        && ownerMatchesSubject_(rows[row][ownerColumn], rows[row][nameColumn], subject)) return;
+    if (String(rows[row][idColumn]) !== String(recordId)) continue;
+    found = true;
+    if (!ownerMatchesSubject_(rows[row][ownerColumn], rows[row][nameColumn], subject)) {
+      throw new Error('REQUEST_REJECTED');
+    }
   }
+  if (found) return;
   throw new Error('REQUEST_REJECTED');
+}
+
+function withScriptLock_(callback) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    return callback();
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function requireOwnedRow_(sheetName, rowIndex, subject) {

@@ -505,6 +505,7 @@
         .pdf-award-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:12px;font-size:9px;font-weight:600;border:1px solid rgba(0,0,0,0.1);}
     </style>
   <script src="/public/js/api-bridge.js"></script>
+  <script src="/public/js/safe-render.js"></script>
   <script src="/public/js/teacher-auth.js"></script>
 </head>
 <body>
@@ -1549,6 +1550,8 @@
 
 <script>
 let studentsData=[],caffeineData=[],sleepData=[],infoData=[];
+const escapeHtml=window.safeRender.escapeHtml;
+const sanitizeRichHtml=window.safeRender.sanitizeRichHtml;
 let currentStudentId=null;
 const charts={};
 
@@ -2557,7 +2560,7 @@ function updateCaffeineTab(){
         const hasSymptomPct = 100 - noSymptomPct;
         if (summaryEl) {
             summaryEl.style.display = 'block';
-            summaryEl.innerHTML = `총 <b>${symptomTotalRecords}건</b> 기록 중 부작용 <b style="color:#ef4444;">${hasSymptomPct}%</b> · 없음 <b style="color:#10b981;">${noSymptomPct}%</b> &nbsp;|&nbsp; 가장 흔한 증상: <b>${symptomEntries[0] ? symptomEntries[0][0] : '-'}</b>`;
+            summaryEl.innerHTML = `총 <b>${symptomTotalRecords}건</b> 기록 중 부작용 <b style="color:#ef4444;">${hasSymptomPct}%</b> · 없음 <b style="color:#10b981;">${noSymptomPct}%</b> &nbsp;|&nbsp; 가장 흔한 증상: <b>${escapeHtml(symptomEntries[0] ? symptomEntries[0][0] : '-')}</b>`;
         }
 
         const symColors = ['#ef4444','#f97316','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#3b82f6'];
@@ -2709,8 +2712,8 @@ function updateSleepTab(){
             const size   = Math.round(minPx + ((cnt / maxCnt) * (maxPx - minPx)));
             const weight = cnt > 1 ? 700 : 500;
             const opacity = 0.75 + (cnt / maxCnt) * 0.25;
-            return `<span title="${word}: ${cnt}회" style="font-size:${size}px;font-weight:${weight};color:${getColor(word)};opacity:${opacity.toFixed(2)};line-height:1.4;cursor:default;transition:transform .15s;display:inline-block;padding:1px 3px;"
-                onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform=''">${word}</span>`;
+            return `<span title="${escapeHtml(word)}: ${cnt}회" style="font-size:${size}px;font-weight:${weight};color:${getColor(word)};opacity:${opacity.toFixed(2)};line-height:1.4;cursor:default;transition:transform .15s;display:inline-block;padding:1px 3px;"
+                onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform=''">${escapeHtml(word)}</span>`;
         }).join('');
     }
 }
@@ -3304,8 +3307,8 @@ function renderStudentGrid(students){
         const card=document.createElement('div');card.className='student-card';card.onclick=()=>openStudentModal(s.학번);
         const awardChipsHtml = renderAwardChips(s.학번, d7, filterDate, false);
         card.innerHTML=`
-<div class="student-id">${s.학년}학년 ${s.반}반 ${s.번호}번 &nbsp;|&nbsp; ${s.학번}</div>
-<div class="student-name">${s.이름}</div>
+<div class="student-id">${escapeHtml(s.학년)}학년 ${escapeHtml(s.반)}반 ${escapeHtml(s.번호)}번 &nbsp;|&nbsp; ${escapeHtml(s.학번)}</div>
+<div class="student-name">${escapeHtml(s.이름)}</div>
 <div class="student-info">
   <div class="info-row">
     <span class="info-label">☕ 카페인</span>
@@ -3440,11 +3443,11 @@ function refreshModalData(){
                 <td colspan="5" style="padding:10px 16px;">
                     <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${hasSymptom?'8px':'0'};">
                         <span style="font-size:13px;font-weight:700;color:#f59e0b;flex-shrink:0;">☕ 섭취 이유</span>
-                        <span style="font-size:13px;color:#374151;line-height:1.6;">${hasReason?r.이유:'<span style="color:#9ca3af;">입력되지 않았습니다.</span>'}</span>
+                        <span style="font-size:13px;color:#374151;line-height:1.6;">${hasReason?escapeHtml(r.이유):'<span style="color:#9ca3af;">입력되지 않았습니다.</span>'}</span>
                     </div>
                     ${hasSymptom?`<div style="display:flex;align-items:flex-start;gap:8px;">
                         <span style="font-size:13px;font-weight:700;color:#ef4444;flex-shrink:0;">⚠️ 부작용</span>
-                        <span style="font-size:13px;color:#374151;line-height:1.6;">${r.부작용}</span>
+                        <span style="font-size:13px;color:#374151;line-height:1.6;">${escapeHtml(r.부작용)}</span>
                     </div>`:''}
                 </td>
             </tr>`;
@@ -3455,7 +3458,7 @@ function refreshModalData(){
                 :`<strong>${timeStr.substring(0,16)}</strong>`;
             const mainRow=`<tr style="cursor:pointer;" onclick="(()=>{const m=document.getElementById('${reasonId}');m.style.display=m.style.display==='none'?'table-row':'none';})()" title="클릭하여 섭취 이유·부작용 보기">
                 <td style="white-space:nowrap;">${timeDisplay}</td>
-                <td>${r.음료명}${hasReason||hasSymptom?' <span style="font-size:10px;color:#d1d5db;">▼</span>':''}</td>
+                <td>${escapeHtml(r.음료명)}${hasReason||hasSymptom?' <span style="font-size:10px;color:#d1d5db;">▼</span>':''}</td>
                 <td><strong>${r.함량}mg</strong></td>
                 <td style="color:#6b7280;font-size:13px;white-space:nowrap;">${cumul}mg / ${Math.round(lim)}mg</td>
                 <td>${statusCell}</td>
@@ -3473,7 +3476,7 @@ function refreshModalData(){
             const hasBehavior=r.스마트폰||r.활동||r.잠들기||r.각성||r.낮졸림;
             const hasDetail=hasMemo||hasBehavior;
             const detailId=`sleepDetail_${i}`;
-            const chip=(icon,type,val,color)=>val?`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:${color}15;border:1px solid ${color}30;font-size:12px;color:#374151;"><span style="color:${color};font-size:11px;">${icon}</span>${sleepBehaviorLabel(type,val)}</span>`:'';
+            const chip=(icon,type,val,color)=>val?`<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;background:${color}15;border:1px solid ${color}30;font-size:12px;color:#374151;"><span style="color:${color};font-size:11px;">${icon}</span>${escapeHtml(sleepBehaviorLabel(type,val))}</span>`:'';
             const behaviorChips=[
                 chip('📱','phone',r.스마트폰,'#6366f1'),
                 chip('🏃','activity',r.활동,'#10b981'),
@@ -3485,7 +3488,7 @@ function refreshModalData(){
                 <td colspan="7" style="padding:12px 16px;">
                     ${hasMemo?`<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:${hasBehavior?'10px':'0'};">
                         <span style="font-size:13px;font-weight:700;color:#6366f1;flex-shrink:0;">📓 수면 일기</span>
-                        <span style="font-size:13px;color:#374151;line-height:1.6;">${r.메모}</span>
+                        <span style="font-size:13px;color:#374151;line-height:1.6;">${escapeHtml(r.메모)}</span>
                     </div>`:''}
                     ${hasBehavior?`<div style="display:flex;flex-wrap:wrap;gap:6px;">${behaviorChips}</div>`:''}
                     ${!hasDetail?'<span style="font-size:13px;color:#9ca3af;">추가 기록 없음</span>':''}
@@ -3493,17 +3496,17 @@ function refreshModalData(){
             </tr>`;
             const mainRow=`<tr style="cursor:pointer;" onclick="(()=>{const m=document.getElementById('${detailId}');m.style.display=m.style.display==='none'?'table-row':'none';})()" title="클릭하여 상세 보기">
                 <td style="white-space:nowrap;">
-                    <div style="font-weight:700;">${r.날짜.substring(5)}</div>
+                    <div style="font-weight:700;">${escapeHtml(r.날짜.substring(5))}</div>
                     <div style="margin-top:3px;display:flex;flex-direction:column;gap:2px;align-items:flex-start;">
-                        <span style="display:inline-flex;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:800;background:${timing.bg};color:${timing.color};">${timing.label}</span>
-                        <span style="font-size:10px;color:#6366f1;font-weight:700;">${timing.graphText}</span>
+                        <span style="display:inline-flex;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:800;background:${timing.bg};color:${timing.color};">${escapeHtml(timing.label)}</span>
+                        <span style="font-size:10px;color:#6366f1;font-weight:700;">${escapeHtml(timing.graphText)}</span>
                     </div>
                 </td>
-                <td style="white-space:nowrap;">${formatSleepTime(r.취침)}</td>
-                <td style="white-space:nowrap;">${(r.기상날짜||'').substring(5)||'-'}</td>
-                <td style="white-space:nowrap;">${formatSleepTime(r.기상)}</td>
-                <td><strong style="color:${si.color}">${r.시간}h</strong></td>
-                <td><span style="font-size:18px;">${r.컨디션}</span>${r.컨디션?` <span style="font-size:12px;color:#6b7280;font-weight:500;">${getConditionLabel(r.컨디션)}</span>`:''}</td>
+                <td style="white-space:nowrap;">${escapeHtml(formatSleepTime(r.취침))}</td>
+                <td style="white-space:nowrap;">${escapeHtml((r.기상날짜||'').substring(5)||'-')}</td>
+                <td style="white-space:nowrap;">${escapeHtml(formatSleepTime(r.기상))}</td>
+                <td><strong style="color:${si.color}">${escapeHtml(r.시간)}h</strong></td>
+                <td><span style="font-size:18px;">${escapeHtml(r.컨디션)}</span>${r.컨디션?` <span style="font-size:12px;color:#6b7280;font-weight:500;">${escapeHtml(getConditionLabel(r.컨디션))}</span>`:''}</td>
                 <td>
                     <span class="status-badge ${si.cls}">${si.text}</span>
                     ${hasDetail?'<span style="font-size:10px;color:#c4b5fd;margin-left:4px;">▼</span>':''}
@@ -3610,9 +3613,9 @@ function refreshModalData(){
         if(mDrinkL){
             mDrinkL.style.display='none';
             mDrinkL.innerHTML=drinkKeys.map((k,i)=>`
-                <span title="${k}" style="display:inline-flex;align-items:flex-start;gap:5px;max-width:100%;min-width:0;">
+                <span title="${escapeHtml(k)}" style="display:inline-flex;align-items:flex-start;gap:5px;max-width:100%;min-width:0;">
                     <span style="width:10px;height:10px;border-radius:2px;background:${drinkCategoryColor(k,i)};margin-top:2px;flex-shrink:0;"></span>
-                    <span style="white-space:normal;word-break:keep-all;overflow-wrap:anywhere;">${k} (${drinkMap[k]})</span>
+                    <span style="white-space:normal;word-break:keep-all;overflow-wrap:anywhere;">${escapeHtml(k)} (${drinkMap[k]})</span>
                 </span>
             `).join('');
         }
@@ -3918,7 +3921,7 @@ async function requestAIAnalysis(){
     google.script.run
         .withSuccessHandler(function(result){
             if(result.success&&result.analysis&&result.analysis.length>50){
-                aiContent.innerHTML=formatAIReportHTML(result.analysis);
+                aiContent.innerHTML=sanitizeRichHtml(formatAIReportHTML(result.analysis));
                 const isFallback=result.source&&result.source.includes('Fallback');
                 badge.classList.toggle('ai-fallback-badge',!!isFallback);
                 if(isFallback){
@@ -3927,7 +3930,7 @@ async function requestAIAnalysis(){
                     badge.textContent='(분석 완료 ✓)';badge.style.color='#10b981';
                 }
             }else{
-                aiContent.innerHTML=generateFallbackAnalysis(promptData,avgCaf,avgSlp,lim);
+                aiContent.innerHTML=sanitizeRichHtml(generateFallbackAnalysis(promptData,avgCaf,avgSlp,lim));
                 badge.textContent='(분석 완료 ✓)';badge.style.color='#10b981';
                 badge.classList.add('ai-fallback-badge');
             }
@@ -3935,7 +3938,7 @@ async function requestAIAnalysis(){
             showAITools();
         })
         .withFailureHandler(function(err){
-            aiContent.innerHTML=generateFallbackAnalysis(promptData,avgCaf,avgSlp,lim);
+            aiContent.innerHTML=sanitizeRichHtml(generateFallbackAnalysis(promptData,avgCaf,avgSlp,lim));
             badge.textContent='(분석 완료 ✓)';badge.style.color='#10b981';
             badge.classList.add('ai-fallback-badge');
             btn.disabled=false;btn.textContent='📊 건강분석';
@@ -3963,7 +3966,7 @@ function loadSavedAIReport(){
         .withSuccessHandler(function(res){
             if(res&&res.success&&res.content){
                 const aiContent=document.getElementById('aiContent');
-                aiContent.innerHTML=res.content.includes('<')?res.content:formatAIReportHTML(res.content);
+                aiContent.innerHTML=sanitizeRichHtml(res.content.includes('<')?res.content:formatAIReportHTML(res.content));
                 document.getElementById('aiStatusBadge').textContent='(저장된 분석 ✓)';
                 document.getElementById('aiStatusBadge').style.color='#10b981';
                 document.getElementById('aiBoxBody').classList.add('open');
@@ -4474,13 +4477,13 @@ function exportPDF(options){
             const statusCell=isLastOfDay
                 ?`<span class="status-badge ${si.cls}">${si.text}</span>`
                 :`<span style="color:#d1d5db;font-size:12px;">-</span>`;
-            return `<tr><td>${r.섭취시간}</td><td>${r.음료명}</td><td><strong>${r.함량}mg</strong></td><td>${cumul}mg / ${Math.round(lim)}mg</td><td>${statusCell}</td></tr>`;
+            return `<tr><td>${escapeHtml(r.섭취시간)}</td><td>${escapeHtml(r.음료명)}</td><td><strong>${escapeHtml(r.함량)}mg</strong></td><td>${cumul}mg / ${Math.round(lim)}mg</td><td>${statusCell}</td></tr>`;
         }).join(''), cafHiddenCount, 5);
 
     const slpRecs=sleepData.filter(sl=>sl.학번===currentStudentId&&dates.includes(sl.날짜)).sort(compareSleepRecordsDesc);
     const slpRows = pdfOptions.maxRecordRows > 0 ? slpRecs.slice(0, pdfOptions.maxRecordRows) : slpRecs;
     const slpHiddenCount = Math.max(0, slpRecs.length - slpRows.length);
-    document.getElementById('pdf_sleepTable').innerHTML=slpRecs.length===0?'<tr><td colspan="7" style="text-align:center;color:#9ca3af;">기록 없음</td></tr>':appendPDFMoreRow(slpRows.map(r=>{const si=getSleepStatusInfo(r.시간);const conditionText=r.컨디션?`${r.컨디션} ${getConditionLabel(r.컨디션)}`:'-';return `<tr><td>${r.날짜}</td><td>${r.취침}</td><td>${r.기상날짜||'-'}</td><td>${r.기상}</td><td><strong>${r.시간}h</strong></td><td>${conditionText}</td><td><span class="status-badge ${si.cls}">${si.text}</span></td></tr>`;}).join(''), slpHiddenCount, 7);
+    document.getElementById('pdf_sleepTable').innerHTML=slpRecs.length===0?'<tr><td colspan="7" style="text-align:center;color:#9ca3af;">기록 없음</td></tr>':appendPDFMoreRow(slpRows.map(r=>{const si=getSleepStatusInfo(r.시간);const conditionText=r.컨디션?`${r.컨디션} ${getConditionLabel(r.컨디션)}`:'-';return `<tr><td>${escapeHtml(r.날짜)}</td><td>${escapeHtml(r.취침)}</td><td>${escapeHtml(r.기상날짜||'-')}</td><td>${escapeHtml(r.기상)}</td><td><strong>${escapeHtml(r.시간)}h</strong></td><td>${escapeHtml(conditionText)}</td><td><span class="status-badge ${si.cls}">${si.text}</span></td></tr>`;}).join(''), slpHiddenCount, 7);
 
     // 🏅 뱃지 섹션 PDF 렌더
     const pdfAwardSection = document.getElementById('pdf_awardSection');
@@ -4856,33 +4859,34 @@ function renderInquiries(type) {
             <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
                 <div style="flex:1;">
                     <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-                        <span style="font-size:16px;font-weight:700;color:#1f2937;">${item.title}</span>
-                        <span style="padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;background:${isUnanswered ? '#fef3c7' : '#d1fae5'};color:${isUnanswered ? '#92400e' : '#065f46'};">${item.status}</span>
+                        <span style="font-size:16px;font-weight:700;color:#1f2937;">${escapeHtml(item.title)}</span>
+                        <span style="padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;background:${isUnanswered ? '#fef3c7' : '#d1fae5'};color:${isUnanswered ? '#92400e' : '#065f46'};">${escapeHtml(item.status)}</span>
                     </div>
-                    <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">${item.name} (${item.studentId}) · ${formatTimestamp(item.timestamp)}</div>
-                    <div style="font-size:14px;color:#374151;background:#f9fafb;padding:10px;border-radius:8px;line-height:1.6;">${item.content}</div>
+                    <div style="font-size:13px;color:#6b7280;margin-bottom:8px;">${escapeHtml(item.name)} (${escapeHtml(item.studentId)}) · ${escapeHtml(formatTimestamp(item.timestamp))}</div>
+                    <div style="font-size:14px;color:#374151;background:#f9fafb;padding:10px;border-radius:8px;line-height:1.6;">${escapeHtml(item.content)}</div>
                     ${!isUnanswered && item.reply ? `
                         <div style="margin-top:12px;padding:10px 14px;background:#eff6ff;border-radius:8px;border-left:4px solid #6366f1;">
                             <div style="font-size:12px;font-weight:700;color:#4f46e5;margin-bottom:4px;">✏️ 선생님 응답</div>
-                            <div style="font-size:13px;color:#374151;">${item.reply}</div>
+                            <div style="font-size:13px;color:#374151;">${escapeHtml(item.reply)}</div>
                             <div style="font-size:11px;color:#9ca3af;margin-top:4px;">${formatTimestamp(item.replyTime)}</div>
                         </div>
                     ` : ''}
                 </div>
                 <div style="margin-left:16px;flex-shrink:0;display:flex;gap:6px;align-items:center;">
-                    ${isUnanswered ? `<button onclick="openReplyModal(${item.rowIndex}, '${item.title.replace(/'/g,"\'")}', '${item.content.replace(/'/g,"\'").replace(/\n/g,' ')}')" class="btn btn-primary btn-sm">응답하기</button>` :
-                    `<button onclick="openReplyModal(${item.rowIndex}, '${item.title.replace(/'/g,"\'")}', '${item.content.replace(/'/g,"\'").replace(/\n/g,' ')}')" class="btn btn-sm" style="background:#f3f4f6;color:#6b7280;">수정</button>`}
-                    <button onclick="confirmDeleteInquiry(${item.rowIndex}, '${item.title.replace(/'/g,"\'")}')" class="btn btn-sm" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;">삭제</button>
+                    <button type="button" class="btn btn-sm inquiry-reply-btn" style="${isUnanswered?'background:#6366f1;color:white;':'background:#f3f4f6;color:#6b7280;'}">${isUnanswered?'응답하기':'수정'}</button>
+                    <button type="button" class="btn btn-sm inquiry-delete-btn" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5;">삭제</button>
                 </div>
             </div>
         `;
+        card.querySelector('.inquiry-reply-btn').addEventListener('click', () => openReplyModal(item.rowIndex, item.title, item.content));
+        card.querySelector('.inquiry-delete-btn').addEventListener('click', () => confirmDeleteInquiry(item.rowIndex, item.title));
         list.appendChild(card);
     });
 }
 
 function openReplyModal(rowIndex, title, content) {
     document.getElementById('replyRowIndex').value = rowIndex;
-    document.getElementById('replyInquiryContent').innerHTML = '<strong>' + title + '</strong><br>' + content;
+    document.getElementById('replyInquiryContent').innerHTML = '<strong>' + escapeHtml(title) + '</strong><br>' + escapeHtml(content);
     document.getElementById('replyContent').value = '';
     document.getElementById('replyModal').style.display = 'block';
 }
@@ -5032,7 +5036,7 @@ function loadSentMessages() {
                 const replySection = m.studentReply
                     ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-top:10px;">
                            <div style="font-size:11px;color:#3b82f6;font-weight:700;margin-bottom:4px;">💬 학생 답장</div>
-                           <div style="font-size:13px;color:#1e40af;white-space:pre-wrap;">${m.studentReply}</div>
+                           <div style="font-size:13px;color:#1e40af;white-space:pre-wrap;">${escapeHtml(m.studentReply)}</div>
                            <div style="font-size:10px;color:#93c5fd;margin-top:4px;">${formatMsgDate(m.studentReplyTime)}</div>
                        </div>`
                     : '';
@@ -5049,8 +5053,8 @@ function loadSentMessages() {
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
                             <div>
-                                <span style="font-weight:700;font-size:14px;color:#1f2937;">${m.title}</span>
-                                <span style="font-size:12px;color:#6366f1;font-weight:600;margin-left:8px;">→ ${m.studentName} (${m.studentId})</span>
+                                <span style="font-weight:700;font-size:14px;color:#1f2937;">${escapeHtml(m.title)}</span>
+                                <span style="font-size:12px;color:#6366f1;font-weight:600;margin-left:8px;">→ ${escapeHtml(m.studentName)} (${escapeHtml(m.studentId)})</span>
                             </div>
                             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
                                 ${replyBadge}
@@ -5120,10 +5124,10 @@ function showInquiryPopup(inquiries) {
 
     const itemsHtml = inquiries.map((q, idx) => `
         <div style="border:1px solid #fde68a;border-radius:12px;padding:14px;margin-bottom:10px;background:#fffbeb;">
-            <div style="font-size:12px;color:#d97706;font-weight:700;margin-bottom:2px;">${q.name} (${q.studentId})</div>
+            <div style="font-size:12px;color:#d97706;font-weight:700;margin-bottom:2px;">${escapeHtml(q.name)} (${escapeHtml(q.studentId)})</div>
             <div style="font-size:11px;color:#9ca3af;margin-bottom:6px;">${formatTimestamp(q.timestamp)}</div>
-            <div style="font-size:14px;color:#92400e;font-weight:600;margin-bottom:4px;">${q.title}</div>
-            <div style="font-size:13px;color:#374151;white-space:pre-wrap;line-height:1.6;margin-bottom:10px;">${q.content}</div>
+            <div style="font-size:14px;color:#92400e;font-weight:600;margin-bottom:4px;">${escapeHtml(q.title)}</div>
+            <div style="font-size:13px;color:#374151;white-space:pre-wrap;line-height:1.6;margin-bottom:10px;">${escapeHtml(q.content)}</div>
             <button data-idx="${idx}" class="inquiry-popup-reply-btn" style="width:100%;padding:9px;background:#f59e0b;color:white;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;">✏️ 바로 답장하기</button>
         </div>`).join('');
 
@@ -5194,9 +5198,9 @@ function showStudentReplyPopup(replies) {
 
     const repliesHtml = replies.map(r => `
         <div style="border:1px solid #bfdbfe;border-radius:12px;padding:14px;margin-bottom:10px;background:#eff6ff;">
-            <div style="font-size:12px;color:#3b82f6;font-weight:700;margin-bottom:2px;">${r.studentName} (${r.studentId})</div>
-            <div style="font-size:11px;color:#9ca3af;margin-bottom:6px;">"${r.title}" 에 대한 답장 · ${formatMsgDate(r.studentReplyTime)}</div>
-            <div style="font-size:14px;color:#1e40af;white-space:pre-wrap;line-height:1.6;">${r.studentReply}</div>
+            <div style="font-size:12px;color:#3b82f6;font-weight:700;margin-bottom:2px;">${escapeHtml(r.studentName)} (${escapeHtml(r.studentId)})</div>
+            <div style="font-size:11px;color:#9ca3af;margin-bottom:6px;">"${escapeHtml(r.title)}" 에 대한 답장 · ${escapeHtml(formatMsgDate(r.studentReplyTime))}</div>
+            <div style="font-size:14px;color:#1e40af;white-space:pre-wrap;line-height:1.6;">${escapeHtml(r.studentReply)}</div>
         </div>`).join('');
 
     overlay.innerHTML = `
@@ -5234,7 +5238,7 @@ function showTeacherConfirm(emoji, title, message, onConfirm) {
                 <div style="font-size:20px;font-weight:700;color:white;">${title}</div>
             </div>
             <div style="padding:20px 24px 24px;text-align:center;">
-                <p style="font-size:15px;color:#374151;line-height:1.6;margin-bottom:20px;">${message}</p>
+                <div style="font-size:15px;color:#374151;line-height:1.6;margin-bottom:20px;">${sanitizeRichHtml(String(message).replace(/\n/g,'<br>'))}</div>
                 <div style="display:flex;gap:10px;justify-content:center;">
                     <button id="_confirmCancelBtn"
                         style="background:#f3f4f6;color:#374151;border:none;border-radius:10px;padding:11px 28px;font-size:15px;font-weight:700;cursor:pointer;"
@@ -5268,14 +5272,14 @@ function showTeacherModal(emoji, title, message, type, onConfirmCb, opts) {
         overlay.innerHTML = `
             <div style="background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:340px;overflow:hidden;animation:modalPop 0.25s ease-out;">
                 <div style="background:${headerBg};padding:24px 24px 18px;text-align:center;">
-                    <div style="font-size:44px;margin-bottom:8px;line-height:1;">${emoji}</div>
-                    <div style="font-size:19px;font-weight:700;color:white;">${title}</div>
+                    <div style="font-size:44px;margin-bottom:8px;line-height:1;">${escapeHtml(emoji)}</div>
+                    <div style="font-size:19px;font-weight:700;color:white;">${escapeHtml(title)}</div>
                 </div>
                 <div style="padding:18px 24px 22px;text-align:center;">
-                    <p style="font-size:14px;color:#374151;line-height:1.8;margin-bottom:18px;">${message}</p>
+                    <div style="font-size:14px;color:#374151;line-height:1.8;margin-bottom:18px;">${sanitizeRichHtml(String(message).replace(/\n/g,'<br>'))}</div>
                     <div style="display:flex;gap:10px;">
                         <button id="_tmCancelBtn" style="flex:1;background:#f3f4f6;color:#374151;border:none;border-radius:10px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;">취소</button>
-                        <button id="_tmOkBtn" style="flex:1;background:${btnColor};color:white;border:none;border-radius:10px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;">${btnText}</button>
+                        <button id="_tmOkBtn" style="flex:1;background:${btnColor};color:white;border:none;border-radius:10px;padding:11px;font-size:14px;font-weight:700;cursor:pointer;">${escapeHtml(btnText)}</button>
                     </div>
                 </div>
             </div>`;
@@ -5299,11 +5303,11 @@ function showTeacherModal(emoji, title, message, type, onConfirmCb, opts) {
     overlay.innerHTML = `
         <div style="background:white;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,0.25);width:340px;overflow:hidden;animation:modalPop 0.25s ease-out;">
             <div style="background:${c.bg};padding:28px 24px 20px;text-align:center;">
-                <div style="font-size:48px;margin-bottom:10px;line-height:1;">${emoji}</div>
-                <div style="font-size:20px;font-weight:700;color:white;">${title}</div>
+                <div style="font-size:48px;margin-bottom:10px;line-height:1;">${escapeHtml(emoji)}</div>
+                <div style="font-size:20px;font-weight:700;color:white;">${escapeHtml(title)}</div>
             </div>
             <div style="padding:20px 24px 24px;text-align:center;">
-                <p style="font-size:15px;color:#374151;line-height:1.6;margin-bottom:20px;">${message}</p>
+                <div style="font-size:15px;color:#374151;line-height:1.6;margin-bottom:20px;">${sanitizeRichHtml(String(message).replace(/\n/g,'<br>'))}</div>
                 <button onclick="document.getElementById('teacherAlertModal').remove()"
                     style="background:${c.bg};color:white;border:none;border-radius:10px;padding:11px 40px;font-size:15px;font-weight:700;cursor:pointer;transition:opacity 0.2s;"
                     onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">

@@ -73,6 +73,18 @@ test('teacher API rejects missing and wrong password generically', async () => {
   }
 });
 
+test('teacher login is rate limited before password verification', async () => {
+  let verified = 0;
+  const handler = createLoginHandler({
+    verifyPassword: async () => { verified += 1; return false; },
+    checkRateLimit: () => ({ allowed: false, retryAfter: 60 }),
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ password: 'guess' })), res);
+  assert.equal(res.statusCode, 429);
+  assert.equal(verified, 0);
+});
+
 test('teacher API issues cookie after correct password without forwarding it', async () => {
   let seenCandidate;
   const handler = createLoginHandler({

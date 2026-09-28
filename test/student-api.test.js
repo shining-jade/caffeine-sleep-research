@@ -84,6 +84,18 @@ test('student API returns generic invalid login response', async () => {
   assert.equal(res.getHeader('set-cookie'), undefined);
 });
 
+test('student login is rate limited before checking the roster', async () => {
+  let calls = 0;
+  const handler = createLoginHandler({
+    callGas: async () => { calls += 1; },
+    checkRateLimit: () => ({ allowed: false, retryAfter: 60 }),
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ studentId: '1101', name: '학생' })), res);
+  assert.equal(res.statusCode, 429);
+  assert.equal(calls, 0);
+});
+
 test('student API issues secure cookie after valid login', async () => {
   let forwarded;
   const handler = createLoginHandler({

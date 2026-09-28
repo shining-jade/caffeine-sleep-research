@@ -18,7 +18,9 @@
 
 - Generate the teacher password salt/hash locally with `npm run hash:teacher`; never paste the password into source or chat.
 - Configure `GAS_API_URL`, `GAS_SHARED_SECRET`, `SESSION_SECRET`, `TEACHER_PASSWORD_SALT`, and `TEACHER_PASSWORD_HASH` for Preview first, then Production.
+- Configure Vercel Firewall rate limits for `/api/student/login` and `/api/teacher/login`; the function-level limiter is defense in depth and is not a durable distributed counter.
 - Deploy Preview and verify student login, an own-record save/read, teacher login, and teacher data read.
+- Verify `/api/health` returns only `{ "ok": true, "service": "caffeine-sleep" }`.
 - Promote the verified commit to Production.
 
 ## 4. Live acceptance

@@ -30,6 +30,23 @@ var TEACHER_ACTIONS_ = {
   saveSleepSettings: true
 };
 
+var STUDENT_MUTATIONS_ = {
+  saveCaffeineData: true, deleteCaffeineData: true, updateCaffeineData: true,
+  saveSleepData: true, deleteSleepData: true, updateSleepData: true,
+  saveInitialSetup: true, markTeacherAwardsSeen: true, submitInquiry: true,
+  markTeacherMessageRead: true, replyToTeacherMessage: true
+};
+
+var TEACHER_MUTATIONS_ = {
+  grantTeacherAwards: true, revokeTeacherAward: true, replyToInquiry: true,
+  deleteInquiry: true, markInquiryNotified: true, exportDataToNewSheet: true,
+  sendTeacherMessage: true, saveTeacherPdfAndSendMessage: true,
+  deleteTeacherMessage: true, deleteBulkTeacherMessages: true,
+  markStudentReplyRead: true, saveBadgeConfig: true, saveChallengeBadgeConfig: true,
+  savePendingBadgesData: true, saveDismissedBadgesData: true,
+  saveAwardSettingsData: true, saveAIReport: true, saveSleepSettings: true
+};
+
 function jsonOutput_(value) {
   return ContentService.createTextOutput(JSON.stringify(value))
     .setMimeType(ContentService.MimeType.JSON);
@@ -59,6 +76,10 @@ function handleApiRequest_(request) {
     if (request.action !== 'checkLogin') throw new Error('REQUEST_REJECTED');
     return invokeAction_(request.action, request.params);
   }
+  if (request.role === 'health') {
+    if (request.action !== 'testConnection') throw new Error('REQUEST_REJECTED');
+    return invokeAction_(request.action, []);
+  }
   if (request.role === 'student') {
     return dispatchStudentAction_(request.action, request.params, requireSubject_(request.subject));
   }
@@ -76,17 +97,23 @@ function dispatchStudentAction_(action, params, subject) {
     if (!safeParams[0] || typeof safeParams[0] !== 'object' || Array.isArray(safeParams[0])) throw new Error('REQUEST_REJECTED');
     safeParams[0] = Object.assign({}, safeParams[0], { studentId: subject.studentId, name: subject.name });
   }
-  if (rule === 'caffeineRecord') requireOwnedRecord_('caffeine', safeParams[0], subject);
-  if (rule === 'sleepRecord') requireOwnedRecord_('sleep', safeParams[0], subject);
-  if (rule === 'caffeinePayload') requireOwnedRecord_('caffeine', safeParams[0].id, subject);
-  if (rule === 'sleepPayload') requireOwnedRecord_('sleep', safeParams[0].id, subject);
-  if (rule === 'messageRow') requireOwnedRow_('teacher_messages', safeParams[0], subject);
-  return invokeAction_(action, safeParams);
+  if (action === 'saveCaffeineData' || action === 'saveSleepData') safeParams[0].id = Utilities.getUuid();
+  var execute = function() {
+    if (rule === 'caffeineRecord') requireOwnedRecord_('caffeine', safeParams[0], subject);
+    if (rule === 'sleepRecord') requireOwnedRecord_('sleep', safeParams[0], subject);
+    if (rule === 'caffeinePayload') requireOwnedRecord_('caffeine', safeParams[0].id, subject);
+    if (rule === 'sleepPayload') requireOwnedRecord_('sleep', safeParams[0].id, subject);
+    if (rule === 'messageRow') requireOwnedRow_('teacher_messages', safeParams[0], subject);
+    return invokeAction_(action, safeParams);
+  };
+  return STUDENT_MUTATIONS_[action] ? withScriptLock_(execute) : execute();
 }
 
 function dispatchTeacherAction_(action, params) {
   if (!TEACHER_ACTIONS_[action]) throw new Error('REQUEST_REJECTED');
-  return invokeAction_(action, params.slice());
+  var safeParams = params.slice();
+  var execute = function() { return invokeAction_(action, safeParams); };
+  return TEACHER_MUTATIONS_[action] ? withScriptLock_(execute) : execute();
 }
 
 function invokeAction_(action, params) {

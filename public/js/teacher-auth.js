@@ -1,5 +1,6 @@
 (function installTeacherAuth() {
   'use strict';
+  var enteredDashboard = false;
 
   document.documentElement.classList.add('teacher-auth-pending');
   var style = document.createElement('style');
@@ -47,6 +48,7 @@
   }
 
   function enterDashboard() {
+    enteredDashboard = true;
     document.getElementById('teacherAuthOverlay')?.remove();
     document.documentElement.classList.remove('teacher-auth-pending');
     addLogoutButton();
@@ -82,6 +84,10 @@
   document.addEventListener('DOMContentLoaded', async function() {
     ensureOverlay();
     window.appAuth.onSessionExpired(function() {
+      if (enteredDashboard) {
+        window.location.replace('/teacher');
+        return;
+      }
       document.documentElement.classList.add('teacher-auth-pending');
       ensureOverlay();
     });

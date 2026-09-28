@@ -53,6 +53,14 @@ test('public role permits only login', async () => {
   assert.equal(outputJson(call(context, 'doPost(deniedEvent)')).error, 'REQUEST_REJECTED');
 });
 
+test('health role permits only the connection probe', async () => {
+  const { context } = await gateway({ testConnection() { return { success: true, private: 'not returned by Vercel' }; } });
+  context.healthEvent = event({ secret, role: 'health', action: 'testConnection', params: ['ignored'] });
+  context.healthDenied = event({ secret, role: 'health', action: 'getTeacherData', params: [] });
+  assert.equal(outputJson(call(context, 'doPost(healthEvent)')).data.success, true);
+  assert.equal(outputJson(call(context, 'doPost(healthDenied)')).error, 'REQUEST_REJECTED');
+});
+
 test('student and teacher roles use distinct allowlists', async () => {
   const { context } = await gateway();
   context.studentEvent = event({

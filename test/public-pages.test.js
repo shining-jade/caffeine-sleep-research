@@ -21,14 +21,26 @@ test('student page uses the same-origin secure bridge and server session auth', 
 test('teacher page is gated by server-side authentication before dashboard start', async () => {
   const html = await read('teacher/index.html');
   const auth = await read('public/js/teacher-auth.js');
+  const safeRender = await read('public/js/safe-render.js');
 
   assert.match(html, /<html[^>]+data-app-role="teacher"/);
   assert.match(html, /<script src="\/public\/js\/api-bridge\.js"><\/script>/);
   assert.match(html, /<script src="\/public\/js\/teacher-auth\.js"><\/script>/);
+  assert.match(html, /<script src="\/public\/js\/safe-render\.js"><\/script>/);
   assert.match(html, /window\.startTeacherApp\s*=/);
   assert.match(auth, /appAuth\.loginTeacher/);
   assert.match(auth, /appAuth\.getSession/);
   assert.match(auth, /startTeacherApp/);
+  assert.match(auth, /location\.replace\('\/teacher'\)/);
+  assert.match(safeRender, /escapeHtml/);
+  assert.match(safeRender, /sanitizeRichHtml/);
+});
+
+test('teacher renders student-controlled fields through safe render helpers', async () => {
+  const html = await read('teacher/index.html');
+  assert.doesNotMatch(html, /\$\{r\.메모\}|\$\{r\.이유\}|\$\{item\.content\}|\$\{item\.title\}/);
+  assert.match(html, /safeRender\.escapeHtml/);
+  assert.match(html, /safeRender\.sanitizeRichHtml/);
 });
 
 test('public pages contain no Apps Script deployment address or secret configuration', async () => {

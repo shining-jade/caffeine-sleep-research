@@ -1,6 +1,7 @@
 import { callGas as defaultCallGas } from '../_lib/gas.js';
 import { readJson, sendJson } from '../_lib/http.js';
 import { createSession, setSessionCookie } from '../_lib/session.js';
+import { checkLoginRateLimit } from '../_lib/rate-limit.js';
 
 const SESSION_SECONDS = 8 * 60 * 60;
 
@@ -12,11 +13,19 @@ function sendKnownError(res, error) {
 
 export function createLoginHandler({
   callGas = defaultCallGas,
+  checkRateLimit = (req) => checkLoginRateLimit(req, 'student-login', { max: 12 }),
   now = () => Math.floor(Date.now() / 1000),
 } = {}) {
   return async function loginHandler(req, res) {
     if (req.method !== 'POST') {
       sendJson(res, 405, { success: false, error: 'METHOD_NOT_ALLOWED' });
+      return;
+    }
+
+    const rate = checkRateLimit(req);
+    if (!rate.allowed) {
+      res.setHeader('Retry-After', String(rate.retryAfter));
+      sendJson(res, 429, { success: false, error: 'TOO_MANY_REQUESTS' });
       return;
     }
 

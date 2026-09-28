@@ -3,6 +3,11 @@ import { readdir, readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 
+test('legacy business code does not emit identifiable records to Apps Script logs', async () => {
+  const source = await readFile(new URL('../Code.gs', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /Logger\.log\(/);
+});
+
 test('tracked Apps Script source has one secure spreadsheet provider and no active binding', async () => {
   const directory = new URL('../', import.meta.url);
   const files = (await readdir(directory)).filter((name) => name.endsWith('.gs'));
