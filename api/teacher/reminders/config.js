@@ -1,7 +1,11 @@
 import { getPushRuntimeConfig } from '../../_lib/env.js';
 import { callGas as defaultCallGas } from '../../_lib/gas.js';
 import { readJson, sendJson } from '../../_lib/http.js';
-import { getNextReminderTimes, normalizeReminderConfig } from '../../_lib/reminder-policy.js';
+import {
+  getNextReminderTimes,
+  normalizeReminderConfig,
+  normalizeStoredReminderConfig,
+} from '../../_lib/reminder-policy.js';
 import { normalizeTeacherRequest } from '../../_lib/teacher-policy.js';
 import { requireTeacherSession, sendReminderError } from './_shared.js';
 
@@ -24,34 +28,6 @@ function safeLastRun(value) {
     expired: nonnegative(value?.expired),
     failed: nonnegative(value?.failed),
   };
-}
-
-function normalizeStoredConfig(value) {
-  try {
-    return normalizeReminderConfig(value);
-  } catch (error) {
-    const periods = Array.isArray(value?.classPeriods) ? value.classPeriods : [];
-    const isInitialDisabledConfig = value?.enabled !== true && periods.length > 0
-      && periods.every((period) => period?.startDate === '' && period?.endDate === '');
-    if (!isInitialDisabledConfig) throw error;
-
-    const normalized = normalizeReminderConfig({
-      ...value,
-      classPeriods: periods.map((period) => ({
-        ...period,
-        startDate: '2000-01-01',
-        endDate: '2000-01-01',
-      })),
-    });
-    return {
-      ...normalized,
-      classPeriods: normalized.classPeriods.map((period) => ({
-        ...period,
-        startDate: '',
-        endDate: '',
-      })),
-    };
-  }
 }
 
 export function createReminderConfigHandler({
@@ -88,7 +64,7 @@ export function createReminderConfigHandler({
     try {
       const request = normalizeTeacherRequest('getReminderAdminConfig', []);
       const data = await callGas({ role: 'teacher', ...request });
-      const normalized = normalizeStoredConfig(data?.config);
+      const normalized = normalizeStoredReminderConfig(data?.config);
       sendJson(res, 200, {
         success: true,
         publicKey: getPushConfig().publicKey,

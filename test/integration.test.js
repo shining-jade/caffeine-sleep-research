@@ -145,3 +145,20 @@ test('integration: Vercel config applies clean URLs, function duration and secur
   assert.equal(headers['X-Content-Type-Options'], 'nosniff');
   assert.equal(headers['Referrer-Policy'], 'no-referrer');
 });
+
+test('integration: Vercel config schedules 24 unique once-daily UTC reminder slots', async () => {
+  const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
+  assert.equal(config.crons.length, 24);
+  assert.deepEqual(config.crons.map(({ path }) => path), Array.from(
+    { length: 24 }, (_, hour) => `/api/reminders/run?slot=${String(hour).padStart(2, '0')}`,
+  ));
+  assert.deepEqual(config.crons.map(({ schedule }) => schedule), Array.from(
+    { length: 24 }, (_, hour) => `0 ${hour} * * *`,
+  ));
+  assert.equal(new Set(config.crons.map(({ path }) => path)).size, 24);
+  assert.ok(config.crons.every(({ schedule }) => /^0 (?:[0-9]|1[0-9]|2[0-3]) \* \* \*$/.test(schedule)));
+  assert.deepEqual(config.rewrites, [
+    { source: '/', destination: '/index.html' },
+    { source: '/teacher', destination: '/teacher/index.html' },
+  ]);
+});

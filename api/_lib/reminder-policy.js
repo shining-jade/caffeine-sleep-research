@@ -88,6 +88,34 @@ export function normalizeReminderConfig(value) {
   };
 }
 
+export function normalizeStoredReminderConfig(value) {
+  try {
+    return normalizeReminderConfig(value);
+  } catch (error) {
+    const periods = Array.isArray(value?.classPeriods) ? value.classPeriods : [];
+    const isInitialDisabledConfig = value?.enabled !== true && periods.length > 0
+      && periods.every((period) => period?.startDate === '' && period?.endDate === '');
+    if (!isInitialDisabledConfig) throw error;
+
+    const normalized = normalizeReminderConfig({
+      ...value,
+      classPeriods: periods.map((period) => ({
+        ...period,
+        startDate: '2000-01-01',
+        endDate: '2000-01-01',
+      })),
+    });
+    return {
+      ...normalized,
+      classPeriods: normalized.classPeriods.map((period) => ({
+        ...period,
+        startDate: '',
+        endDate: '',
+      })),
+    };
+  }
+}
+
 export function deliveryKey({ referenceDate, type, subscriptionId }) {
   return `${referenceDate}:${type}:${subscriptionId}`;
 }
