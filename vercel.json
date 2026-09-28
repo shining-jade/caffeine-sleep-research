@@ -5,6 +5,10 @@
       "maxDuration": 30
     }
   },
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/teacher", "destination": "/teacher/index.html" }
+  ],
   "headers": [
     {
       "source": "/(.*)",

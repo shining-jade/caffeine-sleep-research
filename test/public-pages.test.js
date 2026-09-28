@@ -55,3 +55,11 @@ test('public pages contain no Apps Script deployment address or secret configura
   assert.doesNotMatch(combined, /GAS_API_URL/);
   assert.doesNotMatch(combined, /SPREADSHEET_ID|TEACHER_PASSWORD|SHARED_SECRET/);
 });
+
+test('Vercel routes the public student and teacher URLs to their HTML entry points', async () => {
+  const config = JSON.parse(await read('vercel.json'));
+  const routes = new Map((config.rewrites || []).map(({ source, destination }) => [source, destination]));
+
+  assert.equal(routes.get('/'), '/index.html');
+  assert.equal(routes.get('/teacher'), '/teacher/index.html');
+});
