@@ -142,6 +142,25 @@
         .caf-level-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
         .settings-save-row{grid-column:1/-1;display:flex;align-items:center;gap:16px;}
         .settings-toast{display:none;padding:10px 18px;background:#10b981;color:white;border-radius:8px;font-size:13px;font-weight:600;}
+        .reminder-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start;}
+        .reminder-wide{grid-column:1/-1;}
+        .reminder-toggle{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid #f3f4f6;}
+        .reminder-toggle:last-child{border-bottom:none;}
+        .reminder-toggle input[type=checkbox]{width:20px;height:20px;accent-color:#6366f1;cursor:pointer;flex-shrink:0;}
+        .reminder-time-row{display:grid;grid-template-columns:1fr 120px;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid #f3f4f6;}
+        .reminder-select,.reminder-date{width:100%;padding:9px 10px;border:2px solid #e5e7eb;border-radius:8px;background:white;font:inherit;color:#374151;}
+        .reminder-select:focus,.reminder-date:focus{outline:none;border-color:#6366f1;}
+        .reminder-copy{margin-top:8px;padding:12px 14px;background:#f9fafb;border-radius:10px;color:#4b5563;font-size:13px;line-height:1.6;}
+        .reminder-period-table{width:100%;border-collapse:collapse;font-size:13px;}
+        .reminder-period-table th,.reminder-period-table td{padding:9px 8px;border-bottom:1px solid #e5e7eb;text-align:left;}
+        .reminder-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+        .reminder-metric{padding:16px;background:#f9fafb;border-radius:12px;}
+        .reminder-metric-label{font-size:12px;color:#6b7280;margin-bottom:6px;}
+        .reminder-metric-value{font-size:18px;font-weight:700;color:#1f2937;}
+        .reminder-class-counts{font-size:12px;color:#6b7280;margin-top:12px;display:flex;gap:14px;flex-wrap:wrap;}
+        .reminder-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+        .reminder-status{font-size:13px;color:#4f46e5;font-weight:600;}
+        .reminder-error{font-size:13px;color:#dc2626;font-weight:600;min-height:20px;margin-top:8px;}
 
         .modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);}
         .modal.active{display:flex;align-items:center;justify-content:center;}
@@ -434,6 +453,10 @@
             .modal-content{overflow-y:auto;-webkit-overflow-scrolling:touch;}
             /* 설정탭 저장버튼 풀너비 */
             #tab-settings .btn-primary{width:100%;}
+            .reminder-grid{grid-template-columns:1fr;}
+            .reminder-wide{grid-column:auto;}
+            .reminder-metrics{grid-template-columns:1fr;}
+            .reminder-time-row{grid-template-columns:1fr;}
         }
 
         .rec-badge{display:inline-block;padding:1px 7px;border-radius:8px;font-size:11px;font-weight:600;margin-left:4px;}
@@ -508,6 +531,7 @@
   <script src="/public/js/badge-journey.js"></script>
   <script src="/public/js/safe-render.js"></script>
   <script src="/public/js/teacher-auth.js"></script>
+  <script type="module" src="/public/js/teacher-reminders.js"></script>
 </head>
 <body>
 
@@ -655,6 +679,7 @@
             <button class="tab-button" onclick="switchTab('sleep',this)">😴 수면 분석</button>
             <button class="tab-button" onclick="switchTab('students',this)">👥 학생 목록</button>
             <button class="tab-button" onclick="switchTab('awards',this)">🏅 뱃지 현황</button>
+            <button class="tab-button" onclick="switchTab('reminders',this)">🔔 알림 설정</button>
             <button class="tab-button" onclick="switchTab('settings',this)">⚙️ 설정</button>
             <button class="tab-button" onclick="switchTab('inquiries',this)">📩 학생 문의</button>
         </div>
@@ -1117,6 +1142,84 @@
         </div>
     </div>
 </div>
+
+    <div id="tab-reminders" class="tab-content">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+            <div>
+                <div class="settings-page-title" style="margin-bottom:6px;">🔔 카페인·수면 기록 알림</div>
+                <div id="teacherReminderStatus" class="reminder-status">설정을 불러오는 중입니다…</div>
+                <div id="teacherReminderError" class="reminder-error" role="alert"></div>
+            </div>
+            <button class="btn btn-primary" onclick="teacherReminders.saveConfig()">💾 알림 설정 저장</button>
+        </div>
+
+        <div class="reminder-grid">
+            <section class="settings-card">
+                <div class="settings-card-title">운영 설정</div>
+                <label class="reminder-toggle">
+                    <span><strong>전체 학생 알림</strong><br><small style="color:#9ca3af;">저장 후 켜지며, 끄면 모든 학생 알림이 중지됩니다.</small></span>
+                    <input id="teacherReminderEnabled" type="checkbox">
+                </label>
+                <label class="reminder-toggle">
+                    <span><strong>주말에도 알림 보내기</strong><br><small style="color:#9ca3af;">토요일과 일요일을 운영일에 포함합니다.</small></span>
+                    <input id="teacherReminderIncludeWeekends" type="checkbox">
+                </label>
+            </section>
+
+            <section class="settings-card">
+                <div class="settings-card-title">시간 및 문구</div>
+                <div class="reminder-time-row">
+                    <label style="display:flex;align-items:center;gap:9px;"><input id="teacherReminderSleepEnabled" type="checkbox" style="width:18px;height:18px;accent-color:#6366f1;"><strong>아침 수면 기록</strong></label>
+                    <select id="teacherReminderSleepTime" class="reminder-select" aria-label="수면 기록 알림 시간"></select>
+                </div>
+                <div class="reminder-copy">어젯밤 수면 기록을 간단히 남겨보세요.</div>
+                <div class="reminder-time-row" style="margin-top:10px;">
+                    <label style="display:flex;align-items:center;gap:9px;"><input id="teacherReminderCaffeineEnabled" type="checkbox" style="width:18px;height:18px;accent-color:#6366f1;"><strong>저녁 카페인 기록</strong></label>
+                    <select id="teacherReminderCaffeineTime" class="reminder-select" aria-label="카페인 기록 알림 시간"></select>
+                </div>
+                <div class="reminder-copy">오늘의 카페인 기록을 확인해 주세요. 마시지 않았다면 ‘섭취 안 함’을 선택하면 돼요.</div>
+                <p style="font-size:12px;color:#6b7280;margin-top:12px;">※ 기기와 네트워크 상태에 따라 선택한 시간대 안에서 발송될 수 있습니다.</p>
+            </section>
+
+            <section class="settings-card reminder-wide">
+                <div class="settings-card-title">반별 알림 운영 기간</div>
+                <div style="overflow-x:auto;">
+                    <table class="reminder-period-table">
+                        <thead><tr><th>반</th><th>시작일</th><th>종료일</th><th>알림 기기</th></tr></thead>
+                        <tbody>
+                            <tr><th>1반</th><td><input id="teacherReminderClass1Start" class="reminder-date" type="date"></td><td><input id="teacherReminderClass1End" class="reminder-date" type="date"></td><td id="teacherReminderClass1Count">0대</td></tr>
+                            <tr><th>2반</th><td><input id="teacherReminderClass2Start" class="reminder-date" type="date"></td><td><input id="teacherReminderClass2End" class="reminder-date" type="date"></td><td id="teacherReminderClass2Count">0대</td></tr>
+                            <tr><th>3반</th><td><input id="teacherReminderClass3Start" class="reminder-date" type="date"></td><td><input id="teacherReminderClass3End" class="reminder-date" type="date"></td><td id="teacherReminderClass3Count">0대</td></tr>
+                            <tr><th>4반</th><td><input id="teacherReminderClass4Start" class="reminder-date" type="date"></td><td><input id="teacherReminderClass4End" class="reminder-date" type="date"></td><td id="teacherReminderClass4Count">0대</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="settings-card reminder-wide">
+                <div class="settings-card-title">구독 및 실행 현황</div>
+                <div class="reminder-metrics">
+                    <div class="reminder-metric"><div class="reminder-metric-label">알림을 켠 학생</div><div id="teacherReminderStudentCount" class="reminder-metric-value">0명</div></div>
+                    <div class="reminder-metric"><div class="reminder-metric-label">등록 기기</div><div id="teacherReminderDeviceCount" class="reminder-metric-value">0대</div></div>
+                    <div class="reminder-metric"><div class="reminder-metric-label">최근 실행</div><div id="teacherReminderLastAt" class="reminder-metric-value" style="font-size:15px;">-</div><div id="teacherReminderLastMetrics" style="font-size:11px;color:#6b7280;margin-top:6px;">대상 0 · 성공 0 · 만료 0 · 실패 0</div></div>
+                </div>
+                <div class="reminder-class-counts">
+                    <span>다음 수면 알림: <strong id="teacherReminderNextSleep">-</strong></span>
+                    <span>다음 카페인 알림: <strong id="teacherReminderNextCaffeine">-</strong></span>
+                </div>
+            </section>
+
+            <section class="settings-card reminder-wide">
+                <div class="settings-card-title">현재 교사 브라우저 알림 확인</div>
+                <p style="font-size:13px;color:#6b7280;line-height:1.7;margin-bottom:14px;">학생에게 보내지 않고 지금 사용 중인 이 브라우저에서 문구와 동작을 확인합니다.</p>
+                <div class="reminder-actions">
+                    <button class="btn btn-blue" onclick="teacherReminders.registerTestDevice()">🔔 이 기기 등록</button>
+                    <button class="btn" style="background:#eef2ff;color:#4338ca;" onclick="teacherReminders.sendTest('sleep')">수면 알림 미리보기</button>
+                    <button class="btn" style="background:#fff7ed;color:#c2410c;" onclick="teacherReminders.sendTest('caffeine')">카페인 알림 미리보기</button>
+                </div>
+            </section>
+        </div>
+    </div>
 
     <div id="tab-settings" class="tab-content">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
@@ -2366,7 +2469,7 @@ function initFilters(){
     ['cafEndDate','sleepEndDate','studentEndDate','overviewEndDate'].forEach(id=>{const el=document.getElementById(id);if(el){if(!el.value)el.value=today;el.max=today;}});
     ['cafStartDate','sleepStartDate','studentStartDate','overviewStartDate','modalStartDate'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=weekAgo;});
 }
-function switchTab(n,el){document.querySelectorAll('.tab-button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));if(el)el.classList.add('active');document.getElementById('tab-'+n).classList.add('active');if(n==='inquiries'){inquiryFilter='unanswered';loadInquiries();loadSentMessages();}if(n==='awards'){renderAwardsTab();renderPendingBadges();}if(n==='settings'){renderChallengeBadgeList();}}
+function switchTab(n,el){document.querySelectorAll('.tab-button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));if(el)el.classList.add('active');document.getElementById('tab-'+n).classList.add('active');if(n==='inquiries'){inquiryFilter='unanswered';loadInquiries();loadSentMessages();}if(n==='awards'){renderAwardsTab();renderPendingBadges();}if(n==='settings'){renderChallengeBadgeList();}if(n==='reminders'&&window.teacherReminders){window.teacherReminders.initialize();}}
 
 function updateDashboard(){
     const g=msGet('gradeFilter'), c=msGet('classFilter');
@@ -4754,6 +4857,7 @@ window.startTeacherApp = function startTeacherApp(){
     // 화면 비율 복원
     try{const z=localStorage.getItem('dashZoom');if(z){const sl=document.getElementById('zoomSlider');if(sl)sl.value=z;applyZoom(z);}}catch(e){}
     loadDataFromSheet();
+    if(window.teacherReminders)window.teacherReminders.initialize();
     // 학생 답장 알림 체크 (로드 후 3초, 이후 2분마다)
     setTimeout(checkStudentReplies, 3000);
     setInterval(checkStudentReplies, 120000);
