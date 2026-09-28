@@ -431,7 +431,63 @@ function recordReminderDeliveryResults_(results) {
 }
 
 function getReminderAdminConfig_() {
-  return { config: getReminderConfig_() };
+  var spreadsheet = ensureReminderSheets_();
+  var subscriptionSheet = spreadsheet.getSheetByName(REMINDER_SHEETS_.subscriptions.name);
+  var subscriptionRows = subscriptionSheet.getLastRow() < 2 ? []
+    : subscriptionSheet.getRange(2, 1, subscriptionSheet.getLastRow() - 1, REMINDER_SHEETS_.subscriptions.headers.length).getValues();
+  var activeStudents = {};
+  var activeRows = subscriptionRows.filter(function(row) {
+    var active = String(row[1]) === 'student' && row[8] === true;
+    if (active) activeStudents[normalizeOwnerId_(row[2])] = true;
+    return active;
+  });
+
+  var classByStudent = {};
+  var rosterSheet = spreadsheet.getSheetByName('students');
+  if (rosterSheet && rosterSheet.getLastRow() >= 1) {
+    var roster = reminderRows_(rosterSheet);
+    var idColumn = findHeaderColumn_(roster.headers, ['학번ID', '전체학번', '학번', 'studentId']);
+    var classColumn = findHeaderColumn_(roster.headers, ['반', 'classId']);
+    if (idColumn >= 0 && classColumn >= 0) {
+      roster.values.forEach(function(row) {
+        classByStudent[normalizeOwnerId_(row[idColumn])] = String(row[classColumn] || '').trim();
+      });
+    }
+  }
+  var byClass = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  activeRows.forEach(function(row) {
+    var classId = classByStudent[normalizeOwnerId_(row[2])];
+    if (Object.prototype.hasOwnProperty.call(byClass, classId)) byClass[classId] += 1;
+  });
+
+  var lastRun = { at: '', targeted: 0, sent: 0, expired: 0, failed: 0 };
+  var deliverySheet = spreadsheet.getSheetByName(REMINDER_SHEETS_.deliveries.name);
+  if (deliverySheet.getLastRow() >= 2) {
+    var deliveryRows = deliverySheet.getRange(
+      2, 1, deliverySheet.getLastRow() - 1, REMINDER_SHEETS_.deliveries.headers.length
+    ).getValues();
+    deliveryRows.forEach(function(row) {
+      var timestamp = String(row[5] || '');
+      if (timestamp > lastRun.at) lastRun.at = timestamp;
+    });
+    deliveryRows.filter(function(row) { return String(row[5] || '') === lastRun.at; }).forEach(function(row) {
+      lastRun.targeted += 1;
+      var status = String(row[6] || '');
+      if (status === 'success') lastRun.sent += 1;
+      if (status === 'expired') lastRun.expired += 1;
+      if (status === 'failed') lastRun.failed += 1;
+    });
+  }
+
+  return {
+    config: getReminderConfig_(),
+    subscriberCounts: {
+      students: Object.keys(activeStudents).length,
+      devices: activeRows.length,
+      byClass: byClass
+    },
+    lastRun: lastRun
+  };
 }
 
 function getReminderStudentConfig_() {

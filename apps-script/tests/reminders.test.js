@@ -261,3 +261,43 @@ test('recording delivery results writes final-only logs and deactivates expired 
   assert.equal(log.includes('https://push.example/device-a'), false);
   assert.equal(rows(spreadsheet, '푸시구독')[1][8], false);
 });
+
+test('teacher reminder admin summary returns aggregate subscribers and latest run only', async () => {
+  const initial = {
+    students: [
+      ['학년', '반', '번호', '이름', '학번ID'],
+      [1, 1, 1, '홍길동', 1101],
+      [1, 2, 1, '김학생', 1201],
+    ],
+    알림발송로그: [
+      DELIVERY_HEADERS,
+      ['old', '2026-09-08', 'sleep', 1101, 'old-device', '2026-09-09T08:10:00+09:00', 'success', ''],
+      ['a', '2026-09-09', 'sleep', 1101, 'device-a', '2026-09-10T08:15:00+09:00', 'success', ''],
+      ['b', '2026-09-09', 'sleep', 1101, 'device-b', '2026-09-10T08:15:00+09:00', 'expired', 'PUSH_SUBSCRIPTION_EXPIRED'],
+      ['c', '2026-09-09', 'sleep', 1201, 'device-c', '2026-09-10T08:15:00+09:00', 'failed', 'PUSH_SERVER_ERROR'],
+    ],
+  };
+  const { context } = await reminders(initial);
+  context.config = enabledConfig();
+  call(context, "saveReminderConfig_(config, 'teacher')");
+  context.deviceA = pushRecord('https://push.example/device-a');
+  context.deviceB = pushRecord('https://push.example/device-b');
+  context.inactive = pushRecord('https://push.example/device-c', { studentId: '1201' });
+  call(context, 'upsertPushSubscription_(deviceA)');
+  call(context, 'upsertPushSubscription_(deviceB)');
+  const inactive = call(context, 'upsertPushSubscription_(inactive)');
+  call(context, `deactivatePushSubscription_('${inactive.subscriptionId}', {studentId:'1201',name:'김학생'})`);
+  context.teacherDevice = pushRecord('https://push.example/teacher', { role: 'teacher-test', studentId: '' });
+  call(context, 'saveTeacherTestSubscription_(teacherDevice)');
+
+  const result = JSON.parse(JSON.stringify(call(context, 'getReminderAdminConfig_()')));
+  assert.deepEqual(result.subscriberCounts, {
+    students: 1,
+    devices: 2,
+    byClass: { 1: 2, 2: 0, 3: 0, 4: 0 },
+  });
+  assert.deepEqual(result.lastRun, {
+    at: '2026-09-10T08:15:00+09:00', targeted: 3, sent: 1, expired: 1, failed: 1,
+  });
+  assert.doesNotMatch(JSON.stringify(result), /1101|1201|push\.example|auth-key/);
+});

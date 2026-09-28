@@ -92,6 +92,43 @@ export function deliveryKey({ referenceDate, type, subscriptionId }) {
   return `${referenceDate}:${type}:${subscriptionId}`;
 }
 
+function addCalendarDays(dateText, offset) {
+  const [year, month, day] = dateText.split('-').map(Number);
+  const value = new Date(Date.UTC(year, month - 1, day + offset));
+  return [
+    String(value.getUTCFullYear()).padStart(4, '0'),
+    String(value.getUTCMonth() + 1).padStart(2, '0'),
+    String(value.getUTCDate()).padStart(2, '0'),
+  ].join('-');
+}
+
+function weekdayForCalendarDate(dateText) {
+  const [year, month, day] = dateText.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+
+export function getNextReminderTimes({ config, nowMs }) {
+  const clock = getKstClock(nowMs);
+  const result = { sleep: null, caffeine: null };
+  for (const type of ['sleep', 'caffeine']) {
+    if (!config?.[`${type}Enabled`]) continue;
+    const hour = Number(config[`${type}Time`]?.slice(0, 2));
+    if (!Number.isInteger(hour)) continue;
+    for (let offset = 0; offset <= 370; offset += 1) {
+      const date = addCalendarDays(clock.date, offset);
+      const weekday = weekdayForCalendarDate(date);
+      if (!config.includeWeekends && (weekday === 0 || weekday === 6)) continue;
+      const active = (config.classPeriods || []).some((period) => (
+        period.startDate <= date && date <= period.endDate
+      ));
+      if (!active || (offset === 0 && hour < clock.hour)) continue;
+      result[type] = `${date}T${String(hour).padStart(2, '0')}:00:00+09:00`;
+      break;
+    }
+  }
+  return result;
+}
+
 export function selectReminderCandidates({
   type,
   nowMs,
