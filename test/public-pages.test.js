@@ -60,6 +60,7 @@ test('Vercel routes the public student and teacher URLs to their HTML entry poin
   const config = JSON.parse(await read('vercel.json'));
   const routes = new Map((config.rewrites || []).map(({ source, destination }) => [source, destination]));
 
+  assert.equal(config.outputDirectory, '.');
   assert.equal(routes.get('/'), '/index.html');
   assert.equal(routes.get('/teacher'), '/teacher/index.html');
 });
