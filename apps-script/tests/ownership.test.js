@@ -1,0 +1,119 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { call, loadAppsScript } from './harness.js';
+
+function sheet(rows) {
+  return {
+    getDataRange() { return { getValues() { return rows; } }; },
+    getLastRow() { return rows.length; },
+    getLastColumn() { return rows[0]?.length || 0; },
+    getRange(row, column, rowCount, columnCount) {
+      return {
+        getValues() {
+          return rows.slice(row - 1, row - 1 + rowCount)
+            .map((values) => values.slice(column - 1, column - 1 + columnCount));
+        },
+      };
+    },
+  };
+}
+
+function spreadsheet(sheets) {
+  return { getSheetByName(name) { return sheets[name] || null; } };
+}
+
+async function ownership(sheets = {}, globals = {}) {
+  return loadAppsScript({
+    properties: { GAS_SHARED_SECRET: 'secret', SPREADSHEET_ID: 'sheet' },
+    globals: {
+      __spreadsheet: spreadsheet(sheets),
+      deleteCaffeineData(id) { return { deleted: id }; },
+      updateSleepData(payload) { return payload; },
+      markTeacherMessageRead(row) { return { row }; },
+      replyToTeacherMessage(row, reply) { return { row, reply }; },
+      markTeacherAwardsSeen(id, name, awards) { return { id, name, awards }; },
+      ...globals,
+    },
+  });
+}
+
+test('numeric student owns only matching caffeine record IDs', async () => {
+  const { context } = await ownership({
+    caffeine: sheet([
+      ['타임스탬프', '전체학번', '성명', '고유ID'],
+      ['t', 1101, '학생', 'caf-own'],
+      ['t', 1102, '다른학생', 'caf-other'],
+    ]),
+  });
+  context.subject = { studentId: '1101', name: '학생' };
+  context.ownParams = ['caf-own'];
+  context.otherParams = ['caf-other'];
+  assert.equal(call(context, "dispatchStudentAction_('deleteCaffeineData', ownParams, subject)").deleted, 'caf-own');
+  assert.throws(() => call(context, "dispatchStudentAction_('deleteCaffeineData', otherParams, subject)"), /REQUEST_REJECTED/);
+});
+
+test('nonnumeric student requires both normalized ID and matching name', async () => {
+  const { context } = await ownership({
+    caffeine: sheet([
+      ['전체학번', '성명', '고유ID'],
+      ['교직원', '김교사', 'own'],
+      ['교직원', '이교사', 'wrong-name'],
+    ]),
+  });
+  context.subject = { studentId: '교직원_김교사', name: '김교사' };
+  assert.doesNotThrow(() => call(context, "requireOwnedRecord_('caffeine','own',subject)"));
+  assert.throws(() => call(context, "requireOwnedRecord_('caffeine','wrong-name',subject)"), /REQUEST_REJECTED/);
+});
+
+test('missing owner columns and unknown records fail closed', async () => {
+  const { context } = await ownership({
+    sleep: sheet([['날짜', '고유ID'], ['2026-01-01', 'sleep-1']]),
+  });
+  context.subject = { studentId: '1101', name: '학생' };
+  assert.throws(() => call(context, "requireOwnedRecord_('sleep','sleep-1',subject)"), /REQUEST_REJECTED/);
+  assert.throws(() => call(context, "requireOwnedRecord_('sleep','missing',subject)"), /REQUEST_REJECTED/);
+});
+
+test('sleep update overwrites identity only after ownership check', async () => {
+  const { context } = await ownership({
+    sleep: sheet([
+      ['전체학번', '성명', '고유ID'],
+      ['1101', '학생', 'sleep-1'],
+    ]),
+  });
+  context.subject = { studentId: '1101', name: '학생' };
+  context.params = [{ id: 'sleep-1', studentId: '1102', name: '위조', hours: 8 }];
+  const result = call(context, "dispatchStudentAction_('updateSleepData',params,subject)");
+  assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+    id: 'sleep-1', studentId: '1101', name: '학생', hours: 8,
+  });
+});
+
+test('teacher-message row operations validate row bounds and owner', async () => {
+  const { context } = await ownership({
+    teacher_messages: sheet([
+      ['타임스탬프', '학번', '이름', '내용'],
+      ['t', '1101', '학생', 'own'],
+      ['t', '1102', '다른학생', 'other'],
+    ]),
+  });
+  context.subject = { studentId: '1101', name: '학생' };
+  context.ownRead = [2];
+  context.ownReply = [2, '확인했습니다'];
+  context.other = [3];
+  context.invalid = [1];
+  assert.equal(call(context, "dispatchStudentAction_('markTeacherMessageRead',ownRead,subject)").row, 2);
+  assert.equal(call(context, "dispatchStudentAction_('replyToTeacherMessage',ownReply,subject)").reply, '확인했습니다');
+  assert.throws(() => call(context, "dispatchStudentAction_('markTeacherMessageRead',other,subject)"), /REQUEST_REJECTED/);
+  assert.throws(() => call(context, "dispatchStudentAction_('markTeacherMessageRead',invalid,subject)"), /REQUEST_REJECTED/);
+});
+
+test('badge acknowledgement identity is always replaced by the session subject', async () => {
+  const { context } = await ownership();
+  context.subject = { studentId: '1101', name: '학생' };
+  context.params = ['1102', '위조', [{ awardId: 'a' }]];
+  const result = call(context, "dispatchStudentAction_('markTeacherAwardsSeen',params,subject)");
+  assert.equal(result.id, '1101');
+  assert.equal(result.name, '학생');
+  assert.equal(result.awards[0].awardId, 'a');
+});
