@@ -1,5 +1,7 @@
 import { getRuntimeConfig } from './env.js';
 
+export const GAS_TIMEOUT_MS = 50_000;
+
 export class GasGatewayError extends Error {
   constructor(status, code, message) {
     super(message);
@@ -15,7 +17,7 @@ export async function callGas({
   params,
   subject,
   fetchImpl = fetch,
-  timeoutMs = 20_000,
+  timeoutMs = GAS_TIMEOUT_MS,
 }) {
   const config = getRuntimeConfig();
   const controller = new AbortController();

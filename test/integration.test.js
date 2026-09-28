@@ -3,7 +3,7 @@ import { Readable } from 'node:stream';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
-import { GasGatewayError } from '../api/_lib/gas.js';
+import { GAS_TIMEOUT_MS, GasGatewayError } from '../api/_lib/gas.js';
 import { createActionHandler as studentAction } from '../api/student/action.js';
 import { createLoginHandler as studentLogin } from '../api/student/login.js';
 import { createLogoutHandler as studentLogout } from '../api/student/logout.js';
@@ -138,7 +138,9 @@ test('integration: student own save/read, cross-student denial, teacher read, lo
 test('integration: Vercel config applies clean URLs, function duration and security headers', async () => {
   const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
   assert.equal(config.cleanUrls, true);
-  assert.equal(config.functions['api/**/*.js'].maxDuration, 30);
+  assert.equal(config.functions['api/**/*.js'].maxDuration, 60);
+  assert.equal(GAS_TIMEOUT_MS, 50_000);
+  assert.ok(GAS_TIMEOUT_MS <= (config.functions['api/**/*.js'].maxDuration * 1000) - 5_000);
   const headers = Object.fromEntries(config.headers[0].headers.map(({ key, value }) => [key, value]));
   assert.equal(headers['X-Content-Type-Options'], 'nosniff');
   assert.equal(headers['Referrer-Policy'], 'no-referrer');
