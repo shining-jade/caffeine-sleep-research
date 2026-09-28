@@ -434,6 +434,15 @@ function getReminderAdminConfig_() {
   return { config: getReminderConfig_() };
 }
 
+function getReminderStudentConfig_() {
+  var config = getReminderConfig_();
+  return {
+    sleepTime: config.sleepTime,
+    caffeineTime: config.caffeineTime,
+    globallyEnabled: config.enabled
+  };
+}
+
 function saveReminderAdminConfig_(config) {
   return saveReminderConfig_(config, 'teacher');
 }

@@ -14,6 +14,7 @@ var STUDENT_ACTIONS_ = {
   getChallengeBadgeConfig: 'passthrough', getSleepSettings: 'passthrough'
   , savePushSubscription: 'pushSubscription', getPushPreferences: 'subscriptionOwned'
   , savePushPreferences: 'subscriptionOwned', deactivatePushSubscription: 'subscriptionOwned'
+  , getReminderStudentConfig: 'passthrough'
 };
 
 var TEACHER_ACTIONS_ = {
@@ -197,6 +198,7 @@ function invokeAction_(action, params) {
     case 'getPushPreferences': return getPushPreferences_.apply(null, params);
     case 'savePushPreferences': return setPushPreferences_.apply(null, params);
     case 'deactivatePushSubscription': return deactivatePushSubscription_.apply(null, params);
+    case 'getReminderStudentConfig': return getReminderStudentConfig_.apply(null, params);
     case 'getTeacherData': return getTeacherData.apply(null, params);
     case 'handleAIReportForTeacher': return handleAIReportForTeacher.apply(null, params);
     case 'grantTeacherAwards': return grantTeacherAwards.apply(null, params);

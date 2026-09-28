@@ -17,6 +17,7 @@ async function gateway(extra = {}) {
       claimReminderDeliveries_(keys) { return keys; },
       recordReminderDeliveryResults_(results) { return { recorded: results.length }; },
       getReminderAdminConfig_() { return { enabled: false }; },
+      getReminderStudentConfig_() { return { sleepTime: '08:00', caffeineTime: '20:00', globallyEnabled: false }; },
       ...extra,
     },
   });
@@ -124,4 +125,19 @@ test('student teacher and public roles cannot call another reminder role actions
     context.crossRoleEvent = event({ secret, ...request });
     assert.equal(outputJson(call(context, 'doPost(crossRoleEvent)')).error, 'REQUEST_REJECTED');
   }
+});
+
+test('student role can read only the limited reminder config action', async () => {
+  const { context } = await gateway();
+  context.studentReminderConfig = event({
+    secret,
+    role: 'student',
+    action: 'getReminderStudentConfig',
+    params: [],
+    subject: { studentId: '1101', name: '학생' },
+  });
+  const result = outputJson(call(context, 'doPost(studentReminderConfig)'));
+  assert.deepEqual(JSON.parse(JSON.stringify(result.data)), {
+    sleepTime: '08:00', caffeineTime: '20:00', globallyEnabled: false,
+  });
 });

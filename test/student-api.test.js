@@ -198,7 +198,48 @@ test('student API session inspection never returns token', async () => {
 
 test('student API logout clears the session cookie', async () => {
   const res = response();
-  await createLogoutHandler()(request('POST'), res);
+  await createLogoutHandler({ now: () => NOW })(request('POST'), res);
   assert.equal(res.statusCode, 200);
+  assert.match(res.getHeader('set-cookie'), /Max-Age=0/);
+});
+
+test('student API logout deactivates the current device with session identity', async () => {
+  let forwarded;
+  const handler = createLogoutHandler({
+    now: () => NOW,
+    callGas: async (input) => { forwarded = input; },
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ endpoint: 'https://push.example/device-a' }), studentCookie()), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(forwarded.action, 'deactivatePushSubscription');
+  assert.deepEqual(forwarded.subject, { studentId: '1101', name: '테스트학생' });
+  assert.match(forwarded.params[0], /^[a-f0-9]{64}$/);
+  assert.match(res.getHeader('set-cookie'), /Max-Age=0/);
+});
+
+test('student API logout clears its cookie when deactivation fails', async () => {
+  const handler = createLogoutHandler({
+    now: () => NOW,
+    callGas: async () => { throw new Error('private gateway failure'); },
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ endpoint: 'https://push.example/device-a' }), studentCookie()), res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.json(), { success: true });
+  assert.match(res.getHeader('set-cookie'), /Max-Age=0/);
+  assert.doesNotMatch(res.body, /private gateway failure|push\.example/);
+});
+
+test('student API logout without a valid session never calls the gateway', async () => {
+  let calls = 0;
+  const handler = createLogoutHandler({
+    now: () => NOW,
+    callGas: async () => { calls += 1; },
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ endpoint: 'https://push.example/device-a' })), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(calls, 0);
   assert.match(res.getHeader('set-cookie'), /Max-Age=0/);
 });

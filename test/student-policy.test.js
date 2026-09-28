@@ -17,6 +17,7 @@ const EXPECTED_ACTIONS = [
   'getSleepSettings',
   'savePushSubscription', 'getPushPreferences', 'savePushPreferences',
   'deactivatePushSubscription',
+  'getReminderStudentConfig',
 ];
 
 test('student policy contains every student UI action and no login action', () => {
