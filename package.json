@@ -13,5 +13,8 @@
     "build:apps-script": "node scripts/build-apps-script.mjs",
     "hash:teacher": "node scripts/hash-teacher-password.mjs",
     "verify": "node scripts/verify.mjs"
+  },
+  "dependencies": {
+    "web-push": "3.6.7"
   }
 }

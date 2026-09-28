@@ -15,3 +15,12 @@ export function getRuntimeConfig() {
     teacherPasswordHash: requireEnv('TEACHER_PASSWORD_HASH'),
   };
 }
+
+export function getPushRuntimeConfig() {
+  return {
+    publicKey: requireEnv('WEB_PUSH_VAPID_PUBLIC_KEY'),
+    privateKey: requireEnv('WEB_PUSH_VAPID_PRIVATE_KEY'),
+    subject: requireEnv('WEB_PUSH_SUBJECT'),
+    cronSecret: requireEnv('CRON_SECRET'),
+  };
+}
