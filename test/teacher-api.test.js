@@ -1,0 +1,161 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { Readable } from 'node:stream';
+
+import { createActionHandler } from '../api/teacher/action.js';
+import { createLoginHandler } from '../api/teacher/login.js';
+import { createLogoutHandler } from '../api/teacher/logout.js';
+import { createSessionHandler } from '../api/teacher/session.js';
+import { TEACHER_ACTIONS } from '../api/_lib/teacher-policy.js';
+import { createSession } from '../api/_lib/session.js';
+
+process.env.SESSION_SECRET = 'teacher-api-test-session-secret';
+process.env.GAS_API_URL = 'https://example.invalid/gas';
+process.env.GAS_SHARED_SECRET = 'gateway-secret';
+process.env.TEACHER_PASSWORD_SALT = '00'.repeat(16);
+process.env.TEACHER_PASSWORD_HASH = '11'.repeat(64);
+
+const NOW = 1_800_000_000;
+const EXPECTED_ACTIONS = [
+  'getTeacherData', 'handleAIReportForTeacher', 'grantTeacherAwards',
+  'revokeTeacherAward', 'getInquiries', 'replyToInquiry', 'deleteInquiry',
+  'getUnreadInquiries', 'markInquiryNotified', 'exportDataToNewSheet',
+  'sendTeacherMessage', 'saveTeacherPdfAndSendMessage', 'getSentTeacherMessages',
+  'deleteTeacherMessage', 'deleteBulkTeacherMessages', 'getUnreadStudentReplies',
+  'markStudentReplyRead', 'saveBadgeConfig', 'getChallengeBadgeConfig',
+  'saveChallengeBadgeConfig', 'getPendingBadges', 'savePendingBadgesData',
+  'getDismissedBadges', 'saveDismissedBadgesData', 'getAwardSettings',
+  'saveAwardSettingsData', 'saveAIReport', 'getAIReport', 'saveSleepSettings',
+];
+
+function request(method, body, cookie = '') {
+  const req = Readable.from(body === undefined ? [] : [Buffer.from(body)]);
+  req.method = method;
+  req.headers = cookie ? { cookie } : {};
+  return req;
+}
+
+function response() {
+  const headers = new Map();
+  return {
+    statusCode: 0,
+    body: '',
+    setHeader(name, value) { headers.set(name.toLowerCase(), value); },
+    getHeader(name) { return headers.get(name.toLowerCase()); },
+    end(value = '') { this.body = value; },
+    json() { return JSON.parse(this.body); },
+  };
+}
+
+function roleCookie(role = 'teacher', exp = NOW + 3600) {
+  const payload = role === 'teacher'
+    ? { role, exp }
+    : { role, studentId: '1101', name: '테스트학생', exp };
+  const token = createSession(payload, Math.min(NOW, exp - 1));
+  return `caffeine_session=${encodeURIComponent(token)}`;
+}
+
+test('teacher API policy contains only current teacher UI actions', () => {
+  assert.deepEqual([...TEACHER_ACTIONS].sort(), EXPECTED_ACTIONS.sort());
+  assert.equal(TEACHER_ACTIONS.has('saveCaffeineData'), false);
+});
+
+test('teacher API rejects missing and wrong password generically', async () => {
+  const verifyPassword = async (candidate) => candidate === 'correct-password';
+  const handler = createLoginHandler({ verifyPassword, now: () => NOW });
+
+  for (const body of [{}, { password: 'wrong-password' }]) {
+    const res = response();
+    await handler(request('POST', JSON.stringify(body)), res);
+    assert.equal(res.statusCode, 401);
+    assert.deepEqual(res.json(), { success: false, error: 'INVALID_CREDENTIALS' });
+    assert.equal(res.body.includes('wrong-password'), false);
+  }
+});
+
+test('teacher API issues cookie after correct password without forwarding it', async () => {
+  let seenCandidate;
+  const handler = createLoginHandler({
+    verifyPassword: async (candidate) => { seenCandidate = candidate; return true; },
+    now: () => NOW,
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ password: 'correct-password' })), res);
+
+  assert.equal(seenCandidate, 'correct-password');
+  assert.equal(res.statusCode, 200);
+  assert.match(res.getHeader('set-cookie'), /HttpOnly; Secure; SameSite=Lax/);
+  assert.deepEqual(res.json(), { success: true, authenticated: true, role: 'teacher' });
+});
+
+test('teacher API rejects unsupported methods and malformed or oversized JSON', async () => {
+  const login = createLoginHandler({ verifyPassword: async () => false, now: () => NOW });
+  const method = response();
+  await login(request('GET'), method);
+  assert.equal(method.statusCode, 405);
+
+  const malformed = response();
+  await login(request('POST', '{bad'), malformed);
+  assert.equal(malformed.statusCode, 400);
+  assert.equal(malformed.json().error, 'INVALID_JSON');
+
+  const oversized = response();
+  await login(request('POST', JSON.stringify({ value: 'x'.repeat(256 * 1024) })), oversized);
+  assert.equal(oversized.statusCode, 413);
+});
+
+test('teacher API denies missing wrong-role tampered and expired sessions', async () => {
+  let calls = 0;
+  const handler = createActionHandler({ callGas: async () => { calls += 1; }, now: () => NOW });
+  const valid = roleCookie();
+  const cookies = ['', roleCookie('student'), `${valid}x`, roleCookie('teacher', NOW - 1)];
+
+  for (const cookie of cookies) {
+    const res = response();
+    await handler(request('POST', JSON.stringify({ action: 'getTeacherData', params: [] }), cookie), res);
+    assert.equal(res.statusCode, 401);
+  }
+  assert.equal(calls, 0);
+});
+
+test('teacher API denies unknown and student-only actions', async () => {
+  let calls = 0;
+  const handler = createActionHandler({ callGas: async () => { calls += 1; }, now: () => NOW });
+  for (const action of ['unknownAction', 'saveCaffeineData']) {
+    const res = response();
+    await handler(request('POST', JSON.stringify({ action, params: [] }), roleCookie()), res);
+    assert.equal(res.statusCode, 403);
+  }
+  assert.equal(calls, 0);
+});
+
+test('teacher API forwards allowed action without password or session data', async () => {
+  let forwarded;
+  const handler = createActionHandler({
+    callGas: async (input) => { forwarded = input; return [{ id: 'redacted' }]; },
+    now: () => NOW,
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({
+    action: 'getTeacherData', params: ['2026-09-01', '2026-09-07'], password: 'do-not-forward',
+  }), roleCookie()), res);
+
+  assert.deepEqual(forwarded, {
+    role: 'teacher',
+    action: 'getTeacherData',
+    params: ['2026-09-01', '2026-09-07'],
+    subject: null,
+  });
+  assert.equal(JSON.stringify(forwarded).includes('password'), false);
+  assert.equal(res.statusCode, 200);
+});
+
+test('teacher API session inspection and logout are role-safe', async () => {
+  const sessionRes = response();
+  await createSessionHandler({ now: () => NOW })(request('GET', undefined, roleCookie()), sessionRes);
+  assert.deepEqual(sessionRes.json(), { authenticated: true, role: 'teacher' });
+
+  const logoutRes = response();
+  await createLogoutHandler()(request('POST'), logoutRes);
+  assert.match(logoutRes.getHeader('set-cookie'), /Max-Age=0/);
+});
