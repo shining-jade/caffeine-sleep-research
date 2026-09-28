@@ -1,12 +1,12 @@
-import { getPushRuntimeConfig } from '../../_lib/env.js';
-import { callGas as defaultCallGas } from '../../_lib/gas.js';
-import { readJson, sendJson } from '../../_lib/http.js';
+import { getPushRuntimeConfig } from '../../env.js';
+import { callGas as defaultCallGas } from '../../gas.js';
+import { readJson, sendJson } from '../../http.js';
 import {
   getNextReminderTimes,
   normalizeReminderConfig,
   normalizeStoredReminderConfig,
-} from '../../_lib/reminder-policy.js';
-import { normalizeTeacherRequest } from '../../_lib/teacher-policy.js';
+} from '../../reminder-policy.js';
+import { normalizeTeacherRequest } from '../../teacher-policy.js';
 import { requireTeacherSession, sendReminderError } from './_shared.js';
 
 function nonnegative(value) {

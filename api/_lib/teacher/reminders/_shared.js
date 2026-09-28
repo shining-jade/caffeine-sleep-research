@@ -1,5 +1,5 @@
-import { sendJson } from '../../_lib/http.js';
-import { readSessionCookie, verifySession } from '../../_lib/session.js';
+import { sendJson } from '../../http.js';
+import { readSessionCookie, verifySession } from '../../session.js';
 
 export function requireTeacherSession(req, nowSeconds) {
   return verifySession(readSessionCookie(req), 'teacher', nowSeconds);

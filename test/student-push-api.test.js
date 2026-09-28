@@ -4,10 +4,10 @@ import test from 'node:test';
 
 import { createSession } from '../api/_lib/session.js';
 import { normalizePushSubscription, subscriptionIdForEndpoint } from '../api/_lib/push-subscription.js';
-import { createConfigHandler } from '../api/student/push/config.js';
-import { createPreferencesHandler } from '../api/student/push/preferences.js';
-import { createSubscribeHandler } from '../api/student/push/subscribe.js';
-import { createUnsubscribeHandler } from '../api/student/push/unsubscribe.js';
+import { createConfigHandler } from '../api/_lib/student/push/config.js';
+import { createPreferencesHandler } from '../api/_lib/student/push/preferences.js';
+import { createSubscribeHandler } from '../api/_lib/student/push/subscribe.js';
+import { createUnsubscribeHandler } from '../api/_lib/student/push/unsubscribe.js';
 
 process.env.SESSION_SECRET = 'student-push-session-secret';
 process.env.WEB_PUSH_VAPID_PUBLIC_KEY = 'public-vapid-key';

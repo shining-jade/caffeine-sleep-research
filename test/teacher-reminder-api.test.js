@@ -4,9 +4,9 @@ import test from 'node:test';
 
 import { createSession } from '../api/_lib/session.js';
 import { subscriptionIdForEndpoint } from '../api/_lib/push-subscription.js';
-import { createReminderConfigHandler } from '../api/teacher/reminders/config.js';
-import { createTestSendHandler } from '../api/teacher/reminders/test-send.js';
-import { createTestSubscribeHandler } from '../api/teacher/reminders/test-subscribe.js';
+import { createReminderConfigHandler } from '../api/_lib/teacher/reminders/config.js';
+import { createTestSendHandler } from '../api/_lib/teacher/reminders/test-send.js';
+import { createTestSubscribeHandler } from '../api/_lib/teacher/reminders/test-subscribe.js';
 
 process.env.SESSION_SECRET = 'teacher-reminder-session-secret';
 

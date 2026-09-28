@@ -1,7 +1,7 @@
-import { getPushRuntimeConfig } from '../../_lib/env.js';
-import { callGas as defaultCallGas } from '../../_lib/gas.js';
-import { sendJson } from '../../_lib/http.js';
-import { normalizeStudentRequest } from '../../_lib/student-policy.js';
+import { getPushRuntimeConfig } from '../../env.js';
+import { callGas as defaultCallGas } from '../../gas.js';
+import { sendJson } from '../../http.js';
+import { normalizeStudentRequest } from '../../student-policy.js';
 import { readStudentSession, sendGatewayError } from './_shared.js';
 
 export function createConfigHandler({

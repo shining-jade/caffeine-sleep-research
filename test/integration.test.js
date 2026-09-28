@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 
 import { GAS_TIMEOUT_MS, GasGatewayError } from '../api/_lib/gas.js';
 import { createActionHandler as studentAction } from '../api/student/action.js';
@@ -187,4 +187,14 @@ test('integration: reminder browser APIs are same-origin and initial delivery re
   assert.match(appScriptSource, /enabled:\s*false/);
   assert.match(appScriptSource, /sleepTime:\s*'08:00'/);
   assert.match(appScriptSource, /caffeineTime:\s*'20:00'/);
+});
+
+test('integration: Hobby deployment stays within twelve serverless entrypoints', async () => {
+  const entries = await readdir(new URL('../api', import.meta.url), { recursive: true });
+  const functions = entries
+    .map((path) => path.replaceAll('\\', '/'))
+    .filter((path) => path.endsWith('.js') && !path.startsWith('_lib'));
+  assert.ok(functions.length <= 12, `found ${functions.length} serverless entrypoints`);
+  assert.ok(functions.includes('student/push/[...path].js'));
+  assert.ok(functions.includes('teacher/reminders/[...path].js'));
 });

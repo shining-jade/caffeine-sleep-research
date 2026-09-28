@@ -1,7 +1,7 @@
-import { callGas as defaultCallGas } from '../../_lib/gas.js';
-import { readJson, sendJson } from '../../_lib/http.js';
-import { normalizeSubscriptionId } from '../../_lib/push-subscription.js';
-import { normalizeStudentRequest } from '../../_lib/student-policy.js';
+import { callGas as defaultCallGas } from '../../gas.js';
+import { readJson, sendJson } from '../../http.js';
+import { normalizeSubscriptionId } from '../../push-subscription.js';
+import { normalizeStudentRequest } from '../../student-policy.js';
 import { readStudentSession, sendGatewayError, sendPushError } from './_shared.js';
 
 function preferenceResponse(data, subscriptionId) {

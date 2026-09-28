@@ -1,9 +1,9 @@
-import { callGas as defaultCallGas } from '../../_lib/gas.js';
-import { readJson, sendJson } from '../../_lib/http.js';
-import { getKstClock, previousKstDate } from '../../_lib/reminder-policy.js';
-import { normalizePushSubscription, subscriptionIdForEndpoint } from '../../_lib/push-subscription.js';
-import { normalizeTeacherRequest } from '../../_lib/teacher-policy.js';
-import { buildNotificationPayload, createPushSender } from '../../_lib/web-push.js';
+import { callGas as defaultCallGas } from '../../gas.js';
+import { readJson, sendJson } from '../../http.js';
+import { getKstClock, previousKstDate } from '../../reminder-policy.js';
+import { normalizePushSubscription, subscriptionIdForEndpoint } from '../../push-subscription.js';
+import { normalizeTeacherRequest } from '../../teacher-policy.js';
+import { buildNotificationPayload, createPushSender } from '../../web-push.js';
 import { requireTeacherSession, sendReminderError } from './_shared.js';
 
 export function createTestSendHandler({

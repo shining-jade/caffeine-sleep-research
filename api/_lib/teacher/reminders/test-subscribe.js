@@ -1,7 +1,7 @@
-import { callGas as defaultCallGas } from '../../_lib/gas.js';
-import { readJson, sendJson } from '../../_lib/http.js';
-import { normalizePushSubscription, subscriptionIdForEndpoint } from '../../_lib/push-subscription.js';
-import { normalizeTeacherRequest } from '../../_lib/teacher-policy.js';
+import { callGas as defaultCallGas } from '../../gas.js';
+import { readJson, sendJson } from '../../http.js';
+import { normalizePushSubscription, subscriptionIdForEndpoint } from '../../push-subscription.js';
+import { normalizeTeacherRequest } from '../../teacher-policy.js';
 import { requireTeacherSession, sendReminderError } from './_shared.js';
 
 export function createTestSubscribeHandler({
