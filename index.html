@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
-  <title>카페인·수면 건강일지</title>
+  <title>카페인·수면 기록</title>
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="카페인·수면">
+  <link rel="manifest" href="/public/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/public/icons/apple-touch-icon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -172,6 +178,7 @@
   </style>
   <script src="/public/js/api-bridge.js"></script>
   <script src="/public/js/badge-journey.js"></script>
+  <script type="module" src="/public/js/install-guide.js"></script>
 </head>
 <body class="pb-24">
 
@@ -180,7 +187,7 @@
     <div class="w-full max-w-sm text-center">
       <div class="mb-10">
         <span class="text-6xl">☕</span>
-        <h1 class="text-3xl font-bold mt-4 text-gray-800">카페인·수면 건강일지</h1>
+        <h1 class="text-3xl font-bold mt-4 text-gray-800">카페인·수면 기록</h1>
         <p class="text-gray-400 text-sm mt-2">카페인과 수면 습관을 함께 기록해요</p>
       </div>
       <div class="space-y-4">
@@ -196,6 +203,9 @@
         </button>
         <p id="loginMsg" class="text-center text-xs text-red-500 font-bold h-4"></p>
       </div>
+
+      <button id="installGuideBtn" type="button" onclick="window.installGuide.open()"
+        class="mt-4 w-full border-2 border-indigo-100 bg-indigo-50 text-indigo-700 p-3 rounded-2xl font-bold text-sm active:scale-95 transition-transform">📲 앱 설치·알림 설정 방법</button>
 
       <!-- 튜토리얼 버튼 -->
       <button id="tutLoginBtn" onclick="startTutorial()"
