@@ -5,6 +5,7 @@ const sources = [
   'apps-script/Spreadsheet.gs',
   'apps-script/Security.gs',
   'apps-script/Ownership.gs',
+  'apps-script/Reminders.gs',
   'apps-script/Api.gs',
   'apps-script/Code.gs',
 ];
