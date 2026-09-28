@@ -113,11 +113,53 @@
     getSession: function getSession() {
       return requestJson('/api/' + role + '/session', { method: 'GET' });
     },
-    logout: function logout() {
-      return requestJson('/api/' + role + '/logout', { method: 'POST' });
+    logout: function logout(endpoint) {
+      var body = role === 'student' && typeof endpoint === 'string' && endpoint.length > 0
+        ? { endpoint: endpoint }
+        : {};
+      return requestJson('/api/' + role + '/logout', {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
     },
     onSessionExpired: function onSessionExpired(handler) {
       expiredHandler = typeof handler === 'function' ? handler : null;
     },
   };
+
+  if (role === 'student') {
+    window.appPush = {
+      getConfig: function getConfig() {
+        return requestJson('/api/student/push/config', { method: 'GET' });
+      },
+      subscribe: function subscribe(subscription, preferences) {
+        return requestJson('/api/student/push/subscribe', {
+          method: 'POST',
+          body: JSON.stringify({
+            subscription: subscription,
+            sleepEnabled: preferences.sleepEnabled,
+            caffeineEnabled: preferences.caffeineEnabled,
+          }),
+        });
+      },
+      getPreferences: function getPreferences(subscriptionId) {
+        return requestJson('/api/student/push/preferences', {
+          method: 'GET',
+          headers: { 'X-Push-Subscription-Id': subscriptionId },
+        });
+      },
+      savePreferences: function savePreferences(value) {
+        return requestJson('/api/student/push/preferences', {
+          method: 'POST',
+          body: JSON.stringify(value),
+        });
+      },
+      unsubscribe: function unsubscribe(value) {
+        return requestJson('/api/student/push/unsubscribe', {
+          method: 'POST',
+          body: JSON.stringify(value),
+        });
+      },
+    };
+  }
 }());

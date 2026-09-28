@@ -20,8 +20,12 @@ test('student page uses the same-origin secure bridge and server session auth', 
   assert.match(html, /rel="apple-touch-icon" href="\/public\/icons\/apple-touch-icon\.png"/);
   assert.match(html, /name="apple-mobile-web-app-capable" content="yes"/);
   assert.match(html, /<script type="module" src="\/public\/js\/install-guide\.js"><\/script>/);
+  assert.match(html, /<script type="module" src="\/public\/js\/push-reminders\.js"><\/script>/);
   assert.match(html, /id="installGuideBtn"[^>]*>[^<]*📲 앱 설치·알림 설정 방법/s);
   assert.match(html, /installGuide\.open/);
+  assert.match(html, /카페인·수면 기록 알림 받기/);
+  assert.match(html, /알림은 언제든 설정에서 끌 수 있어요\./);
+  assert.match(html, /pushReminders\.initialize/);
 });
 
 test('teacher page is gated by server-side authentication before dashboard start', async () => {

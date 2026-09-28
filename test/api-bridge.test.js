@@ -123,6 +123,30 @@ test('API bridge auth helpers use login session and logout routes', async () => 
   assert.equal(calls[2].options.method, 'POST');
 });
 
+test('student push bridge uses same-origin endpoints and logout can include the current endpoint', async () => {
+  const calls = [];
+  const { window } = loadBridge({
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url, options });
+      return response({ success: true, subscriptionId: 'a'.repeat(64) });
+    },
+  });
+  const subscription = { endpoint: 'https://push.example/device', keys: { p256dh: 'p', auth: 'a' } };
+  await window.appPush.getConfig();
+  await window.appPush.subscribe(subscription, { sleepEnabled: true, caffeineEnabled: false });
+  await window.appPush.getPreferences('a'.repeat(64));
+  await window.appPush.savePreferences({ subscriptionId: 'a'.repeat(64), sleepEnabled: false, caffeineEnabled: true });
+  await window.appPush.unsubscribe({ endpoint: subscription.endpoint });
+  await window.appAuth.logout(subscription.endpoint);
+
+  assert.deepEqual(calls.map(({ url }) => url), [
+    '/api/student/push/config', '/api/student/push/subscribe', '/api/student/push/preferences',
+    '/api/student/push/preferences', '/api/student/push/unsubscribe', '/api/student/logout',
+  ]);
+  assert.equal(calls[2].options.headers['X-Push-Subscription-Id'], 'a'.repeat(64));
+  assert.deepEqual(JSON.parse(calls[5].options.body), { endpoint: subscription.endpoint });
+});
+
 test('API bridge student login sends only student credentials', async () => {
   let captured;
   const { window } = loadBridge({

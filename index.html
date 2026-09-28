@@ -179,6 +179,7 @@
   <script src="/public/js/api-bridge.js"></script>
   <script src="/public/js/badge-journey.js"></script>
   <script type="module" src="/public/js/install-guide.js"></script>
+  <script type="module" src="/public/js/push-reminders.js"></script>
 </head>
 <body class="pb-24">
 
@@ -827,6 +828,37 @@
           </div>
         </div>
 
+        <div class="bg-white p-5 rounded-[2rem] shadow-sm" id="pushReminderSettings">
+          <h4 class="font-bold text-lg mb-2 flex items-center gap-2">
+            <span aria-hidden="true">🔔</span> 카페인·수면 기록 알림 받기
+          </h4>
+          <p class="text-xs text-gray-500 leading-relaxed mb-3">
+            아침에는 어젯밤 수면 기록을, 저녁에는 오늘의 카페인 기록을 확인하도록 알려드려요. 이미 기록했다면 알림을 보내지 않아요.
+          </p>
+          <div class="p-3 bg-indigo-50 border border-indigo-100 rounded-2xl mb-3">
+            <p id="pushPermissionStatus" class="text-xs font-bold text-indigo-700" aria-live="polite">알림 설정을 확인하는 중이에요.</p>
+          </div>
+          <button id="pushEnableBtn" type="button"
+            class="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold active:scale-95 transition-transform">
+            알림 켜기
+          </button>
+          <div id="pushPreferenceControls" class="space-y-3 mt-3" hidden>
+            <label class="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-xl">
+              <span><b class="block text-sm text-gray-800">☀️ 아침 수면 기록</b><span class="text-xs text-gray-500"><span id="pushSleepTime">08:00</span> 알림</span></span>
+              <input id="pushSleepEnabled" type="checkbox" class="w-5 h-5 accent-indigo-600" aria-label="아침 수면 기록 알림">
+            </label>
+            <label class="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-xl">
+              <span><b class="block text-sm text-gray-800">🌙 저녁 카페인 기록</b><span class="text-xs text-gray-500"><span id="pushCaffeineTime">20:00</span> 알림</span></span>
+              <input id="pushCaffeineEnabled" type="checkbox" class="w-5 h-5 accent-indigo-600" aria-label="저녁 카페인 기록 알림">
+            </label>
+            <button id="pushDisableBtn" type="button" class="w-full py-2.5 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold">이 기기 알림 끄기</button>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <p class="text-[11px] text-gray-400">알림은 언제든 설정에서 끌 수 있어요.</p>
+            <button type="button" onclick="window.installGuide.open()" class="text-[11px] text-indigo-600 font-bold underline">설치 방법 보기</button>
+          </div>
+        </div>
+
         <div class="bg-white p-5 rounded-[2rem] shadow-sm">
           <h4 class="font-bold text-lg mb-4 flex items-center gap-2">
             <i class="fa-solid fa-sliders text-indigo-600"></i> 건강 목표 설정
@@ -1267,6 +1299,7 @@
       if(mainApp) { mainApp.style.display = ''; mainApp.classList.remove('hidden'); }
       if(userTitle) userTitle.textContent = `${res.name} 님`;
       if (typeof hideTutFab === 'function') hideTutFab();
+      if (window.pushReminders) window.pushReminders.initialize(res);
 
       // ⭐ 세션 복구(카메라 복귀) 시: 화면만 보여주고 끝
       //    탭 전환·데이터 로드는 하지 않음 → onchange(analyzeDrinkImage)가 즉시 발화되도록
@@ -2375,7 +2408,11 @@
     }
 
     async function executeLogout() {
-      try { await window.appAuth.logout(); } catch(e) {}
+      let pushEndpoint = null;
+      try {
+        if (window.pushReminders) pushEndpoint = await window.pushReminders.unsubscribeCurrentDevice();
+      } catch(e) {}
+      try { await window.appAuth.logout(pushEndpoint); } catch(e) {}
       user = null;
       clearSession(); // ⭐ 세션 삭제
       window._weightLoaded = false; // ⭐ 체중 로드 플래그 초기화
