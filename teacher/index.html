@@ -3454,8 +3454,8 @@ function refreshModalData(){
             const timeStr=r.섭취시간||'';
             const timeParts=timeStr.split(' ');
             const timeDisplay=timeParts.length>=2
-                ?`<span style="font-size:11px;color:#9ca3af;">${timeParts[0].substring(5)}</span> <strong>${timeParts[1].substring(0,5)}</strong>`
-                :`<strong>${timeStr.substring(0,16)}</strong>`;
+                ?`<span style="font-size:11px;color:#9ca3af;">${escapeHtml(timeParts[0].substring(5))}</span> <strong>${escapeHtml(timeParts[1].substring(0,5))}</strong>`
+                :`<strong>${escapeHtml(timeStr.substring(0,16))}</strong>`;
             const mainRow=`<tr style="cursor:pointer;" onclick="(()=>{const m=document.getElementById('${reasonId}');m.style.display=m.style.display==='none'?'table-row':'none';})()" title="클릭하여 섭취 이유·부작용 보기">
                 <td style="white-space:nowrap;">${timeDisplay}</td>
                 <td>${escapeHtml(r.음료명)}${hasReason||hasSymptom?' <span style="font-size:10px;color:#d1d5db;">▼</span>':''}</td>

@@ -47,6 +47,26 @@ var TEACHER_MUTATIONS_ = {
   saveAwardSettingsData: true, saveAIReport: true, saveSleepSettings: true
 };
 
+function normalizeCaffeineTime_(value) {
+  if (value === null || value === undefined || value === '') return '';
+  var match = String(value).trim().match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) throw new Error('REQUEST_REJECTED');
+  var year = Number(match[1]);
+  var month = Number(match[2]);
+  var day = Number(match[3]);
+  var hour = Number(match[4]);
+  var minute = Number(match[5]);
+  var second = Number(match[6] || '0');
+  var date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day
+      || date.getUTCHours() !== hour || date.getUTCMinutes() !== minute || date.getUTCSeconds() !== second) {
+    throw new Error('REQUEST_REJECTED');
+  }
+  function two(number) { return String(number).padStart(2, '0'); }
+  return String(year).padStart(4, '0') + '-' + two(month) + '-' + two(day)
+    + ' ' + two(hour) + ':' + two(minute) + ':' + two(second);
+}
+
 function jsonOutput_(value) {
   return ContentService.createTextOutput(JSON.stringify(value))
     .setMimeType(ContentService.MimeType.JSON);
@@ -96,6 +116,9 @@ function dispatchStudentAction_(action, params, subject) {
   if (rule === 'identityPayload' || rule === 'caffeinePayload' || rule === 'sleepPayload') {
     if (!safeParams[0] || typeof safeParams[0] !== 'object' || Array.isArray(safeParams[0])) throw new Error('REQUEST_REJECTED');
     safeParams[0] = Object.assign({}, safeParams[0], { studentId: subject.studentId, name: subject.name });
+  }
+  if (action === 'saveCaffeineData' || action === 'updateCaffeineData') {
+    safeParams[0].time = normalizeCaffeineTime_(safeParams[0].time);
   }
   if (action === 'saveCaffeineData' || action === 'saveSleepData') safeParams[0].id = Utilities.getUuid();
   var execute = function() {

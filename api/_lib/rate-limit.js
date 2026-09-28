@@ -10,14 +10,13 @@ function clientKey(req, scope) {
 
 export function checkLoginRateLimit(req, scope, { max = 10, windowMs = 10 * 60 * 1000, now = Date.now() } = {}) {
   const key = clientKey(req, scope);
+  for (const [storedKey, stored] of buckets) if (stored.resetAt <= now) buckets.delete(storedKey);
+  while (!buckets.has(key) && buckets.size >= 1000) buckets.delete(buckets.keys().next().value);
   const current = buckets.get(key);
   const bucket = !current || current.resetAt <= now ? { count: 0, resetAt: now + windowMs } : current;
   bucket.count += 1;
   buckets.set(key, bucket);
 
-  if (buckets.size > 1000) {
-    for (const [storedKey, stored] of buckets) if (stored.resetAt <= now) buckets.delete(storedKey);
-  }
   return {
     allowed: bucket.count <= max,
     retryAfter: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
