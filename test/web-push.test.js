@@ -39,6 +39,25 @@ test('push runtime config reads server-only environment variables', () => {
   }
 });
 
+test('push runtime config rejects a subject without the required URL scheme', () => {
+  const previous = Object.fromEntries(ENV_NAMES.map((name) => [name, process.env[name]]));
+  process.env.WEB_PUSH_VAPID_PUBLIC_KEY = config.publicKey;
+  process.env.WEB_PUSH_VAPID_PRIVATE_KEY = config.privateKey;
+  process.env.WEB_PUSH_SUBJECT = 'teacher@example.invalid';
+  process.env.CRON_SECRET = config.cronSecret;
+  try {
+    assert.throws(
+      () => getPushRuntimeConfig(),
+      /WEB_PUSH_SUBJECT must start with mailto: or https:\/\//,
+    );
+  } finally {
+    for (const name of ENV_NAMES) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+});
+
 test('sleep notification payload uses the approved copy and deep link', () => {
   assert.deepEqual(JSON.parse(buildNotificationPayload({
     type: 'sleep', referenceDate: '2026-09-09',
