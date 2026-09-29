@@ -79,6 +79,29 @@ function nonnegative(value) {
   return Number.isFinite(number) && number >= 0 ? Math.floor(number) : 0;
 }
 
+function safeTestResult(value) {
+  if (!value || typeof value !== 'object') return null;
+  return {
+    targeted: nonnegative(value.targeted),
+    sent: nonnegative(value.sent),
+    expired: nonnegative(value.expired),
+    failed: nonnegative(value.failed),
+  };
+}
+
+function safeTestStudentState(value = {}) {
+  const sendingType = REMINDER_TYPES.has(value.sendingType) ? value.sendingType : null;
+  return {
+    status: typeof value.status === 'string' ? value.status : 'idle',
+    name: '테스트',
+    sleepDevices: nonnegative(value.sleepDevices),
+    caffeineDevices: nonnegative(value.caffeineDevices),
+    sendingType,
+    result: safeTestResult(value.result),
+    error: typeof value.error === 'string' ? value.error : '',
+  };
+}
+
 function safeDashboardState(payload, extra = {}) {
   const byClass = {};
   for (const classId of CLASS_IDS) byClass[classId] = nonnegative(payload?.subscriberCounts?.byClass?.[classId]);
@@ -102,6 +125,7 @@ function safeDashboardState(payload, extra = {}) {
     },
     status: typeof extra.status === 'string' ? extra.status : 'ready',
     testRegistered: extra.testRegistered === true,
+    testStudent: safeTestStudentState(extra.testStudent),
   };
 }
 
@@ -131,6 +155,8 @@ export function createTeacherReminders({
   let state = null;
   let subscription = null;
   let initializing = null;
+  let testStudentRefreshing = null;
+  let testStudentSending = null;
 
   function emit(extra = {}) {
     state = safeDashboardState(payload, { ...state, ...extra });
@@ -142,7 +168,8 @@ export function createTeacherReminders({
     if (initializing) return initializing;
     initializing = (async () => {
       payload = await api.getConfig();
-      return emit({ status: 'ready' });
+      emit({ status: 'ready' });
+      return refreshTestStudent();
     })();
     try { return await initializing; } finally { initializing = null; }
   }
@@ -199,7 +226,90 @@ export function createTeacherReminders({
     return emit({ status: 'test-sent', testRegistered: true });
   }
 
-  return { initialize, saveConfig, registerTestDevice, sendTest, getState: () => state };
+  function refreshTestStudent() {
+    if (testStudentRefreshing) return testStudentRefreshing;
+    const previous = safeTestStudentState(state?.testStudent);
+    emit({ testStudent: { ...previous, status: 'loading', error: '' } });
+    testStudentRefreshing = (async () => {
+      try {
+        const loaded = await api.getTestStudent();
+        return emit({
+          testStudent: {
+            ...previous,
+            status: 'ready',
+            name: '테스트',
+            sleepDevices: nonnegative(loaded?.sleepDevices),
+            caffeineDevices: nonnegative(loaded?.caffeineDevices),
+            sendingType: null,
+            error: '',
+          },
+        });
+      } catch {
+        return emit({
+          testStudent: {
+            ...previous,
+            status: 'error',
+            sendingType: null,
+            error: '테스트 학생 연결 상태를 확인하지 못했습니다.',
+          },
+        });
+      } finally {
+        testStudentRefreshing = null;
+      }
+    })();
+    return testStudentRefreshing;
+  }
+
+  function sendTestStudent(type) {
+    if (!REMINDER_TYPES.has(type)) return Promise.reject(new Error('시험 알림 종류가 올바르지 않습니다.'));
+    if (testStudentSending) {
+      if (testStudentSending.type === type) return testStudentSending.promise;
+      return Promise.reject(new Error('다른 시험 알림 전송이 진행 중입니다.'));
+    }
+    const previous = safeTestStudentState(state?.testStudent);
+    const deviceCount = type === 'sleep' ? previous.sleepDevices : previous.caffeineDevices;
+    if (deviceCount < 1) return Promise.reject(new Error('이 알림 유형에 등록된 기기가 없습니다.'));
+
+    const promise = (async () => {
+      emit({ testStudent: { ...previous, status: 'sending', sendingType: type, error: '' } });
+      try {
+        const result = safeTestResult(await api.sendTestStudent(type));
+        let latest = previous;
+        try {
+          const loaded = await api.getTestStudent();
+          latest = {
+            ...previous,
+            sleepDevices: nonnegative(loaded?.sleepDevices),
+            caffeineDevices: nonnegative(loaded?.caffeineDevices),
+          };
+        } catch { /* Preserve the last known counts after a successful send. */ }
+        return emit({
+          testStudent: {
+            ...latest, status: 'sent', sendingType: null, result, error: '',
+          },
+        });
+      } catch {
+        emit({
+          testStudent: {
+            ...previous,
+            status: 'error',
+            sendingType: null,
+            error: '테스트 학생 알림 요청을 처리하지 못했습니다.',
+          },
+        });
+        throw new Error('테스트 학생 알림 요청을 처리하지 못했습니다.');
+      } finally {
+        testStudentSending = null;
+      }
+    })();
+    testStudentSending = { type, promise };
+    return promise;
+  }
+
+  return {
+    initialize, saveConfig, registerTestDevice, sendTest,
+    refreshTestStudent, sendTestStudent, getState: () => state,
+  };
 }
 
 function requestJson(url, options = {}) {
@@ -221,6 +331,8 @@ function browserApi() {
     saveConfig: (config) => requestJson('/api/teacher/reminders/config', { method: 'POST', body: JSON.stringify(config) }),
     testSubscribe: (subscription) => requestJson('/api/teacher/reminders/test-subscribe', { method: 'POST', body: JSON.stringify({ subscription }) }),
     testSend: (type, subscription) => requestJson('/api/teacher/reminders/test-send', { method: 'POST', body: JSON.stringify({ type, subscription }) }),
+    getTestStudent: () => requestJson('/api/teacher/reminders/test-student'),
+    sendTestStudent: (type) => requestJson('/api/teacher/reminders/test-student', { method: 'POST', body: JSON.stringify({ type }) }),
   };
 }
 
@@ -301,6 +413,31 @@ function renderBrowserState(state) {
     'test-sent': '이 브라우저로 시험 알림을 보냈습니다.',
   };
   setText('teacherReminderStatus', messages[state.status] || '');
+
+  const testStudent = state.testStudent;
+  setText('teacherTestStudentSummary', `${testStudent.name} · 수면 가능 기기 ${testStudent.sleepDevices}대 · 카페인 가능 기기 ${testStudent.caffeineDevices}대`);
+  const testMessages = {
+    idle: '연결 상태를 확인해 주세요.',
+    loading: '테스트 학생의 알림 연결 상태를 확인하는 중입니다…',
+    ready: (testStudent.sleepDevices + testStudent.caffeineDevices) > 0
+      ? '유형별로 등록된 기기에만 시험 알림을 보냅니다.'
+      : '학생 화면에서 앱 설치, 알림 켜기, 브라우저 알림 허용을 완료해 주세요.',
+    sending: `${testStudent.sendingType === 'sleep' ? '수면' : '카페인'} 시험 알림을 보내는 중입니다…`,
+    sent: '시험 알림 전송을 마쳤습니다.',
+    error: testStudent.error,
+  };
+  setText('teacherTestStudentGuide', testMessages[testStudent.status] || '');
+  setText('teacherTestStudentError', testStudent.error);
+  setText('teacherTestStudentResult', testStudent.result
+    ? `대상 ${testStudent.result.targeted} · 성공 ${testStudent.result.sent} · 만료 ${testStudent.result.expired} · 실패 ${testStudent.result.failed}`
+    : '');
+  const busy = testStudent.status === 'loading' || testStudent.sendingType !== null;
+  const refreshButton = element('teacherTestStudentRefreshButton');
+  const sleepButton = element('teacherTestStudentSleepButton');
+  const caffeineButton = element('teacherTestStudentCaffeineButton');
+  if (refreshButton) refreshButton.disabled = busy;
+  if (sleepButton) sleepButton.disabled = busy || testStudent.sleepDevices < 1;
+  if (caffeineButton) caffeineButton.disabled = busy || testStudent.caffeineDevices < 1;
 }
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
@@ -325,5 +462,7 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
     saveConfig: () => run(() => controller.saveConfig()),
     registerTestDevice: () => run(() => controller.registerTestDevice()),
     sendTest: (type) => run(() => controller.sendTest(type)),
+    refreshTestStudent: () => run(() => controller.refreshTestStudent()),
+    sendTestStudent: (type) => run(() => controller.sendTestStudent(type)),
   };
 }

@@ -1218,6 +1218,20 @@
                     <button class="btn" style="background:#fff7ed;color:#c2410c;" onclick="teacherReminders.sendTest('caffeine')">카페인 알림 미리보기</button>
                 </div>
             </section>
+
+            <section class="settings-card reminder-wide" id="teacherTestStudentCard">
+                <div class="settings-card-title">테스트 학생 알림 확인</div>
+                <p style="font-size:13px;color:#6b7280;line-height:1.7;margin-bottom:10px;">이름이 정확히 <strong>테스트</strong>인 학생의 활성 기기에만 실제 알림을 보냅니다. 전체 학생 알림이 꺼져 있어도 시험할 수 있습니다.</p>
+                <div id="teacherTestStudentSummary" style="font-size:14px;font-weight:700;color:#374151;margin-bottom:8px;">테스트 · 수면 가능 기기 0대 · 카페인 가능 기기 0대</div>
+                <div id="teacherTestStudentGuide" style="font-size:12px;color:#6b7280;line-height:1.6;margin-bottom:12px;">연결 상태를 확인하는 중입니다…</div>
+                <div class="reminder-actions">
+                    <button id="teacherTestStudentRefreshButton" class="btn" style="background:#f3f4f6;color:#374151;" onclick="teacherReminders.refreshTestStudent()">🔄 연결 상태 새로고침</button>
+                    <button id="teacherTestStudentSleepButton" class="btn btn-blue" onclick="teacherReminders.sendTestStudent('sleep')" disabled>😴 수면 알림 보내기</button>
+                    <button id="teacherTestStudentCaffeineButton" class="btn" style="background:#fff7ed;color:#c2410c;" onclick="teacherReminders.sendTestStudent('caffeine')" disabled>☕ 카페인 알림 보내기</button>
+                </div>
+                <div id="teacherTestStudentResult" class="reminder-status" aria-live="polite" style="margin-top:14px;"></div>
+                <div id="teacherTestStudentError" class="reminder-error" role="alert" aria-live="assertive"></div>
+            </section>
         </div>
     </div>
 

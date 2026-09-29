@@ -47,7 +47,10 @@ test('teacher page is gated by server-side authentication before dashboard start
   assert.match(html, /선택한 시간대 안에서 발송될 수 있습니다/);
   assert.match(html, /어젯밤 수면 기록을 간단히 남겨보세요\./);
   assert.match(html, /오늘의 카페인 기록을 확인해 주세요\. 마시지 않았다면 ‘섭취 안 함’을 선택하면 돼요\./);
-  assert.doesNotMatch(html, /reminderStudentSelector|학생.*시험.*발송/s);
+  assert.match(html, /테스트 학생 알림 확인/);
+  assert.match(html, /teacherReminders\.sendTestStudent\('sleep'\)/);
+  assert.match(html, /teacherReminders\.sendTestStudent\('caffeine'\)/);
+  assert.doesNotMatch(html, /reminderStudentSelector|name="studentId"|name="subscriptionId"/);
   assert.match(safeRender, /escapeHtml/);
   assert.match(safeRender, /sanitizeRichHtml/);
 });

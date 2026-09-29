@@ -51,6 +51,14 @@ function harness() {
     async saveConfig(value) { calls.push(['save-config', value]); return { success: true, config: value }; },
     async testSubscribe(value) { calls.push(['test-subscribe', value]); return { success: true, subscriptionId: 'safe-id' }; },
     async testSend(type, value) { calls.push(['test-send', type, value]); return { success: true, status: 'success' }; },
+    async getTestStudent() {
+      calls.push(['get-test-student']);
+      return { success: true, name: '테스트', sleepDevices: 1, caffeineDevices: 2, studentId: '1101' };
+    },
+    async sendTestStudent(type) {
+      calls.push(['send-test-student', type]);
+      return { success: true, type, targeted: 2, sent: 1, expired: 1, failed: 0, endpoint: 'https://push.example/private' };
+    },
   };
   const NotificationRef = {
     permission: 'default',
@@ -107,7 +115,8 @@ test('initial disabled config may render blank class dates but cannot be saved b
   assert.equal(state.config.enabled, false);
   assert.equal(state.config.classPeriods[0].startDate, '');
   assert.throws(() => normalizeTeacherReminderForm(blank));
-  assert.equal(states.length, 1);
+  assert.ok(states.length >= 1);
+  assert.deepEqual(states.at(-1).config.classPeriods, blank.classPeriods);
 });
 
 test('save requires valid explicit form values and reloads server state', async () => {
@@ -131,4 +140,94 @@ test('teacher test notification registers and sends only to the current browser'
   assert.equal(send[1], 'sleep');
   assert.equal(send[2].endpoint, 'https://push.example/teacher-device');
   await assert.rejects(() => controller.sendTest('all'));
+});
+
+test('test student status exposes only fixed name and aggregate type counts', async () => {
+  const { controller, states, calls } = harness();
+  const state = await controller.initialize();
+
+  assert.deepEqual(state.testStudent, {
+    status: 'ready', name: '테스트', sleepDevices: 1, caffeineDevices: 2,
+    sendingType: null, result: null, error: '',
+  });
+  assert.equal(calls.filter(([name]) => name === 'get-test-student').length, 1);
+  assert.doesNotMatch(JSON.stringify(states), /1101|push\.example/);
+});
+
+test('test student send rejects zero-device types and keeps aggregate results only', async () => {
+  const calls = [];
+  const states = [];
+  const controller = createTeacherReminders({
+    api: {
+      async getConfig() { return { config: config() }; },
+      async getTestStudent() { return { name: '테스트', sleepDevices: 0, caffeineDevices: 1 }; },
+      async sendTestStudent(type) {
+        calls.push(type);
+        return { type, targeted: 1, sent: 1, expired: 0, failed: 0, studentId: '1101' };
+      },
+    },
+    onState: (state) => states.push(state),
+  });
+  await controller.initialize();
+
+  await assert.rejects(() => controller.sendTestStudent('sleep'), /등록된 기기/);
+  const sent = await controller.sendTestStudent('caffeine');
+
+  assert.deepEqual(calls, ['caffeine']);
+  assert.deepEqual(sent.testStudent.result, { targeted: 1, sent: 1, expired: 0, failed: 0 });
+  assert.equal(sent.testStudent.sendingType, null);
+  assert.doesNotMatch(JSON.stringify(states), /1101/);
+});
+
+test('test student send locks repeated taps and always releases the sending state', async () => {
+  let release;
+  let sends = 0;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const states = [];
+  const controller = createTeacherReminders({
+    api: {
+      async getConfig() { return { config: config() }; },
+      async getTestStudent() { return { name: '테스트', sleepDevices: 1, caffeineDevices: 1 }; },
+      async sendTestStudent() { sends += 1; return pending; },
+    },
+    onState: (state) => states.push(state),
+  });
+  await controller.initialize();
+
+  const first = controller.sendTestStudent('sleep');
+  const repeated = controller.sendTestStudent('sleep');
+  assert.equal(first, repeated);
+  assert.equal(sends, 1);
+  await assert.rejects(() => controller.sendTestStudent('caffeine'), /진행 중/);
+  release({ type: 'sleep', targeted: 1, sent: 1, expired: 0, failed: 0 });
+  const completed = await first;
+
+  assert.equal(completed.testStudent.status, 'sent');
+  assert.equal(completed.testStudent.sendingType, null);
+  assert.ok(states.some((state) => state.testStudent.sendingType === 'sleep'));
+});
+
+test('test student refresh and send errors use fixed safe messages', async () => {
+  let failRefresh = true;
+  const controller = createTeacherReminders({
+    api: {
+      async getConfig() { return { config: config() }; },
+      async getTestStudent() {
+        if (failRefresh) throw new Error('private gateway detail 1101');
+        return { name: '테스트', sleepDevices: 1, caffeineDevices: 0 };
+      },
+      async sendTestStudent() { throw new Error('private provider endpoint'); },
+    },
+  });
+  const initial = await controller.initialize();
+  assert.equal(initial.testStudent.error, '테스트 학생 연결 상태를 확인하지 못했습니다.');
+  assert.doesNotMatch(JSON.stringify(initial), /1101|gateway/);
+
+  failRefresh = false;
+  await controller.refreshTestStudent();
+  await assert.rejects(() => controller.sendTestStudent('sleep'));
+  const failed = controller.getState();
+  assert.equal(failed.testStudent.error, '테스트 학생 알림 요청을 처리하지 못했습니다.');
+  assert.equal(failed.testStudent.sendingType, null);
+  assert.doesNotMatch(JSON.stringify(failed), /endpoint|provider/);
 });
