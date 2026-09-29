@@ -74,6 +74,18 @@ function normalizeLoadedConfig(value) {
   }
 }
 
+function defaultLoadedConfig() {
+  return {
+    enabled: false,
+    sleepEnabled: false,
+    caffeineEnabled: false,
+    sleepTime: '08:00',
+    caffeineTime: '20:00',
+    includeWeekends: false,
+    classPeriods: CLASS_IDS.map((classId) => ({ classId, startDate: '', endDate: '' })),
+  };
+}
+
 function nonnegative(value) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? Math.floor(number) : 0;
@@ -106,7 +118,7 @@ function safeDashboardState(payload, extra = {}) {
   const byClass = {};
   for (const classId of CLASS_IDS) byClass[classId] = nonnegative(payload?.subscriberCounts?.byClass?.[classId]);
   return {
-    config: normalizeLoadedConfig(payload?.config),
+    config: normalizeLoadedConfig(payload?.config || defaultLoadedConfig()),
     subscriberCounts: {
       students: nonnegative(payload?.subscriberCounts?.students),
       devices: nonnegative(payload?.subscriberCounts?.devices),

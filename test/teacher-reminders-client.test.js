@@ -154,6 +154,26 @@ test('test student status exposes only fixed name and aggregate type counts', as
   assert.doesNotMatch(JSON.stringify(states), /1101|push\.example/);
 });
 
+test('test student status can refresh before reminder config has loaded', async () => {
+  const states = [];
+  const controller = createTeacherReminders({
+    api: {
+      async getTestStudent() { return { name: '테스트', sleepDevices: 1, caffeineDevices: 1 }; },
+    },
+    onState: (state) => states.push(state),
+  });
+
+  const state = await controller.refreshTestStudent();
+
+  assert.equal(state.config.enabled, false);
+  assert.equal(state.config.sleepTime, '08:00');
+  assert.equal(state.config.caffeineTime, '20:00');
+  assert.equal(state.testStudent.status, 'ready');
+  assert.equal(state.testStudent.sleepDevices, 1);
+  assert.equal(state.testStudent.caffeineDevices, 1);
+  assert.ok(states.length >= 2);
+});
+
 test('test student send rejects zero-device types and keeps aggregate results only', async () => {
   const calls = [];
   const states = [];
