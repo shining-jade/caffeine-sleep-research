@@ -87,6 +87,16 @@ test('not-installed iOS opens installation guidance without prompting for permis
   assert.equal(getPermissionRequests(), 0);
 });
 
+test('not-installed Android Chrome and Samsung browsers require app installation before notification permission', async () => {
+  for (const environment of ['android-chrome', 'samsung']) {
+    const { controller, calls, getPermissionRequests } = harness({ environment });
+    const state = await controller.enable();
+    assert.equal(state.status, 'needs-install');
+    assert.deepEqual(calls, [['install-guide']]);
+    assert.equal(getPermissionRequests(), 0);
+  }
+});
+
 test('Naver in-app browser directs to the browser guide without prompting for permission', async () => {
   const { controller, calls, getPermissionRequests } = harness({ environment: 'naver' });
   const state = await controller.enable();
@@ -96,7 +106,7 @@ test('Naver in-app browser directs to the browser guide without prompting for pe
 });
 
 test('enable requests permission only in the click flow and registers the current device', async () => {
-  const { controller, calls, states, getPermissionRequests } = harness();
+  const { controller, calls, states, getPermissionRequests } = harness({ environment: 'installed' });
   await controller.initialize({ studentId: '1101' });
   assert.equal(getPermissionRequests(), 0);
   const state = await controller.enable();
@@ -108,8 +118,15 @@ test('enable requests permission only in the click flow and registers the curren
   assert.doesNotMatch(JSON.stringify(states), /push\.example|public-key|auth-key/);
 });
 
+test('desktop browsers can enable notifications without installing the app', async () => {
+  const { controller, getPermissionRequests } = harness({ environment: 'unsupported' });
+  const state = await controller.enable();
+  assert.equal(state.status, 'enabled');
+  assert.equal(getPermissionRequests(), 1);
+});
+
 test('denied permission is reported and never automatically prompted again', async () => {
-  const { controller, getPermissionRequests } = harness({ requestResult: 'denied' });
+  const { controller, getPermissionRequests } = harness({ environment: 'installed', requestResult: 'denied' });
   assert.equal((await controller.enable()).status, 'denied');
   assert.equal(getPermissionRequests(), 1);
   await controller.initialize({ studentId: '1101' });
@@ -123,7 +140,7 @@ test('existing subscription loads and saves independent morning and evening pref
     toJSON() { return { endpoint: this.endpoint, keys: { p256dh: 'public-key', auth: 'auth-key' } }; },
     async unsubscribe() { return true; },
   };
-  const { controller, calls } = harness({ permission: 'granted', existingSubscription: existing });
+  const { controller, calls } = harness({ environment: 'installed', permission: 'granted', existingSubscription: existing });
   const loaded = await controller.initialize({ studentId: '1101' });
   assert.equal(loaded.sleepEnabled, true);
   assert.equal(loaded.caffeineEnabled, false);

@@ -71,6 +71,14 @@ test('install guide browser mockups include the approved notification setup step
   assert.match(installGuideModule.buildInstallGuideMarkup('naver'), /설치·알림 기능이 제한/);
 });
 
+test('Android Chrome guide requires app installation and warns that a shortcut is not enough for notifications', () => {
+  const markup = installGuideModule.buildInstallGuideMarkup('android-chrome');
+  assert.match(markup, /앱 설치/);
+  assert.match(markup, /바로가기 만들기/);
+  assert.match(markup, /알림.*정상.*작동하지 않을 수/);
+  assert.doesNotMatch(markup, /<b>홈 화면에 추가<\/b>/);
+});
+
 test('service worker shows push payload and focuses a matching same-origin deep link', async () => {
   const source = await readFile(new URL('public/sw.js', root), 'utf8');
   const listeners = {};

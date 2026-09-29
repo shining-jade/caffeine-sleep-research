@@ -93,8 +93,9 @@ export function createPushReminders({
 
   function permissionState() {
     if (!isSupported()) return 'unsupported';
-    if (environment() === 'ios-safari') return 'needs-install';
-    if (environment() === 'naver') return 'needs-browser';
+    const currentEnvironment = environment();
+    if (['ios-safari', 'android-chrome', 'samsung'].includes(currentEnvironment)) return 'needs-install';
+    if (currentEnvironment === 'naver') return 'needs-browser';
     return ['granted', 'denied'].includes(NotificationRef.permission) ? NotificationRef.permission : 'default';
   }
 
@@ -262,7 +263,7 @@ function renderStudentReminderState(state) {
   const caffeineTime = document.getElementById('pushCaffeineTime');
   const labels = {
     unsupported: '이 브라우저에서는 알림을 지원하지 않아요.',
-    'needs-install': 'iPhone은 홈 화면에 설치한 뒤 알림을 켤 수 있어요.',
+    'needs-install': '휴대폰은 앱으로 설치한 뒤 알림을 켤 수 있어요.',
     'needs-browser': '네이버 앱에서는 Safari, Chrome 또는 삼성 인터넷으로 열어 주세요.',
     default: '알림을 사용하지 않고 있어요.',
     denied: '브라우저 설정에서 알림을 허용해 주세요.',
