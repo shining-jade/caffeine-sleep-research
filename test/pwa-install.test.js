@@ -3,7 +3,9 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
 
-import { detectInstallEnvironment } from '../public/js/install-guide.js';
+import * as installGuideModule from '../public/js/install-guide.js';
+
+const { detectInstallEnvironment } = installGuideModule;
 
 const root = new URL('../', import.meta.url);
 
@@ -41,6 +43,32 @@ test('install environment detection handles installed iOS Chrome Samsung Naver a
   assert.equal(detectInstallEnvironment({ userAgent: 'Mozilla/5.0 (Linux; Android 14) SamsungBrowser/28.0 Chrome/130 Mobile', standalone: false, displayMode: false }), 'samsung');
   assert.equal(detectInstallEnvironment({ userAgent: 'Mozilla/5.0 (Linux; Android 14) NAVER(inapp; search; 2000)', standalone: false, displayMode: false }), 'naver');
   assert.equal(detectInstallEnvironment({ userAgent: 'Desktop Firefox', standalone: false, displayMode: false }), 'unsupported');
+});
+
+test('install guide renders a distinct recognizable browser interface for every supported mobile browser', () => {
+  assert.equal(typeof installGuideModule.buildInstallGuideMarkup, 'function');
+  const expected = {
+    'ios-safari': ['data-browser-ui="safari"', 'Safari 도구 막대', '공유', '홈 화면에 추가'],
+    'android-chrome': ['data-browser-ui="chrome"', 'Chrome 메뉴', '⋮', '앱 설치'],
+    samsung: ['data-browser-ui="samsung"', '삼성 인터넷 메뉴', '☰', '현재 페이지 추가', '홈 화면'],
+    naver: ['data-browser-ui="naver"', '네이버 앱 메뉴', '다른 브라우저로 열기', 'Safari', 'Chrome'],
+  };
+  const outputs = Object.entries(expected).map(([environment, visibleCues]) => {
+    const markup = installGuideModule.buildInstallGuideMarkup(environment);
+    for (const cue of visibleCues) assert.match(markup, new RegExp(cue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    return markup;
+  });
+  assert.equal(new Set(outputs).size, 4);
+});
+
+test('install guide browser mockups include the approved notification setup step', () => {
+  assert.equal(typeof installGuideModule.buildInstallGuideMarkup, 'function');
+  for (const environment of ['ios-safari', 'android-chrome', 'samsung']) {
+    const markup = installGuideModule.buildInstallGuideMarkup(environment);
+    assert.match(markup, /알림 켜기/);
+    assert.match(markup, /허용/);
+  }
+  assert.match(installGuideModule.buildInstallGuideMarkup('naver'), /설치·알림 기능이 제한/);
 });
 
 test('service worker shows push payload and focuses a matching same-origin deep link', async () => {
