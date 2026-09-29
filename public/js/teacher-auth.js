@@ -14,7 +14,7 @@
     '#teacherPassword:focus{border-color:#6366f1}',
     '#teacherLoginButton{width:100%;margin-top:12px;padding:14px;border:0;border-radius:14px;background:#4f46e5;color:#fff;font-weight:800;font-size:16px;cursor:pointer}',
     '#teacherAuthMessage{min-height:20px;margin:10px 0 0!important;color:#dc2626!important;font-size:13px!important}',
-    '#teacherSecureLogout{position:fixed;right:16px;bottom:16px;z-index:90000;padding:10px 14px;border:0;border-radius:12px;background:#1f2937;color:#fff;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.18);cursor:pointer}',
+    '#teacherSecureLogout{position:static;padding:10px 14px;border:0;border-radius:12px;background:#1f2937;color:#fff;font-weight:700;box-shadow:0 6px 18px rgba(0,0,0,.18);cursor:pointer;white-space:nowrap}',
   ].join('');
   document.head.appendChild(style);
 
@@ -44,7 +44,8 @@
     button.addEventListener('click', async function() {
       try { await window.appAuth.logout(); } finally { window.location.reload(); }
     });
-    document.body.appendChild(button);
+    var logoutHost = document.querySelector('.header-actions') || document.body;
+    logoutHost.appendChild(button);
   }
 
   function enterDashboard() {

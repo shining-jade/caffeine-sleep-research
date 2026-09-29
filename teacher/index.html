@@ -14,6 +14,8 @@
         .header-top{display:flex;justify-content:space-between;align-items:center;gap:16px;}
         .header-left{flex:1;min-width:0;}
         .header-right{display:flex;align-items:center;gap:12px;flex-shrink:0;}
+        .header-actions{min-width:0;}
+        .refresh-settings{display:flex;align-items:center;gap:8px;background:#f9fafb;padding:8px 14px;border-radius:10px;border:1px solid #e5e7eb;}
         .zoom-box{display:flex;align-items:center;gap:8px;background:#f9fafb;padding:8px 14px;border-radius:10px;border:1px solid #e5e7eb;}
         h1{color:#1f2937;font-size:28px;font-weight:700;display:flex;align-items:center;gap:12px;}
         .subtitle{color:#6b7280;font-size:14px;margin-top:8px;}
@@ -161,6 +163,10 @@
         .reminder-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
         .reminder-status{font-size:13px;color:#4f46e5;font-weight:600;}
         .reminder-error{font-size:13px;color:#dc2626;font-weight:600;min-height:20px;margin-top:8px;}
+        .chart-card,.settings-card,.student-card{min-width:0;}
+        .tab-content,.filter-bar,.chart-grid,.settings-grid,.student-grid{min-width:0;}
+        .responsive-table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain;}
+        .responsive-table-wrap:focus-visible{outline:3px solid #818cf8;outline-offset:2px;}
 
         .modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);}
         .modal.active{display:flex;align-items:center;justify-content:center;}
@@ -327,29 +333,26 @@
 
         /* ── 모바일 반응형 (max 768px) ── */
         @media(max-width:768px){
-            body{font-size:15px;}
+            html,body{width:100%;max-width:100%;overflow-x:hidden;}
+            body{font-size:15px;zoom:100%;}
             .container{padding:0 14px;}
 
             /* 헤더 */
             header{padding:14px 0;}
-            .header-top{flex-wrap:wrap;}
+            .header-top{display:block;}
             h1{font-size:18px;gap:8px;}
             .subtitle{font-size:12px;margin-top:4px;}
             .last-update{font-size:11px;}
-            /* 제목(왼쪽)은 최대한 넓게, 우측 버튼들은 한 줄에 */
-            .header-left{flex:1;min-width:200px;}
-            .header-right{flex-shrink:0;flex-direction:column;align-items:flex-end;gap:8px;}
-            /* 줌박스: 모바일에서 compact하게 */
-            .zoom-box{padding:6px 10px;gap:6px;}
-            .zoom-box span:first-child{font-size:12px;}
-            #zoomSlider{width:70px;}
-            #zoomLabel{font-size:12px;min-width:30px;}
-            #refreshBtn{font-size:13px;padding:8px 14px;}
+            .header-left{width:100%;min-width:0;}
+            .header-actions{width:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:stretch;margin-top:12px;}
+            .zoom-box{display:none;}
+            .refresh-settings{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px 12px;}
+            #refreshBtn,#teacherSecureLogout{width:100%;min-height:44px;justify-content:center;margin:0;}
 
             /* 탭 네비게이션 */
-            .tab-nav{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-wrap:nowrap;}
+            .tab-nav{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-wrap:nowrap;scroll-snap-type:x mandatory;overscroll-behavior-inline:contain;}
             .tab-nav::-webkit-scrollbar{display:none;}
-            .tab-button{padding:12px 16px;font-size:13px;white-space:nowrap;flex-shrink:0;}
+            .tab-button{padding:12px 16px;font-size:13px;white-space:nowrap;flex:0 0 auto;min-height:44px;scroll-snap-align:start;}
 
             /* 카드 & 그리드 */
             .stats-grid{grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px;}
@@ -374,7 +377,7 @@
             .student-grid{grid-template-columns:1fr;gap:14px;}
             .student-card{padding:18px;}
             .student-name{font-size:18px;margin-bottom:12px;}
-            .info-row{font-size:13px;}
+            .info-row{font-size:13px;flex-wrap:wrap;}
 
             /* 학생 필터 날짜 행: 항상 가로 한 줄 유지 */
             .student-date-filter{flex-wrap:nowrap !important;}
@@ -401,6 +404,19 @@
             /* 설정 그리드 */
             .settings-grid{grid-template-columns:1fr;}
             .settings-card{padding:20px 16px;}
+            .settings-input-row{flex-wrap:wrap;align-items:stretch;}
+            .settings-input{width:100%;flex:1 1 140px;min-height:44px;}
+            .reminder-select,.reminder-date,.journey-date-input{min-height:44px;width:100%;}
+            .award-setting-row{flex-wrap:wrap;align-items:flex-start;}
+            .analysis-dropdown-menu{min-width:0;max-width:calc(100vw - 28px);width:max-content;}
+            .chart-card,.chart-container,.dual-chart-container{max-width:100%;overflow:hidden;}
+            .responsive-table-wrap{border-radius:10px;}
+            .reminder-period-table,.journey-schedule-table{min-width:0!important;width:100%;}
+            .reminder-period-table thead,.journey-schedule-table thead{display:none;}
+            .reminder-period-table tbody,.journey-schedule-table tbody{display:grid;gap:10px;}
+            .reminder-period-table tr,.journey-schedule-table tr{display:grid;grid-template-columns:1fr;border:1px solid #d1fae5;border-radius:10px;padding:10px;background:#fff;}
+            .reminder-period-table th,.reminder-period-table td,.journey-schedule-table td{display:grid;grid-template-columns:minmax(86px,auto) minmax(0,1fr);align-items:center;gap:8px;padding:7px 4px;border:0;}
+            .reminder-period-table td::before,.journey-schedule-table td::before{content:attr(data-label);font-weight:700;color:#4b5563;}
 
             /* 모달 */
             .modal-content{width:100%;max-width:100%;max-height:100vh;border-radius:16px 16px 0 0;position:fixed;bottom:0;left:0;animation:modalSlideUp 0.3s ease-out;}
@@ -433,6 +449,8 @@
         /* ── 소형 모바일 (max 480px) ── */
         @media(max-width:480px){
             h1{font-size:17px;}
+            .header-actions{grid-template-columns:1fr;}
+            .refresh-settings{grid-template-columns:1fr;}
             .tab-button{padding:10px 12px;font-size:12px;}
             .stats-grid{grid-template-columns:1fr;gap:10px;}
             .stat-value{font-size:32px;}
@@ -440,6 +458,7 @@
             .filter-buttons{gap:6px;}
             .filter-btn{font-size:11px;padding:6px 10px;}
             .btn-sm{padding:8px 12px;font-size:12px;}
+            .reminder-metrics{grid-template-columns:1fr;}
         }
 
         .student-filter-row{display:grid;grid-template-columns:1fr 180px 180px auto;gap:12px;align-items:center;margin-bottom:12px;}
@@ -648,14 +667,14 @@
                 <p class="subtitle">학생들의 카페인 섭취 및 수면 패턴을 실시간으로 모니터링합니다</p>
                 <p class="last-update" id="lastUpdate">마지막 업데이트: -</p>
             </div>
-            <div class="header-right">
+            <div class="header-right header-actions">
                 <div class="zoom-box">
                     <span style="font-size:13px;font-weight:600;color:#374151;">🖥️ 화면 비율</span>
                     <input type="range" id="zoomSlider" min="70" max="130" value="100" step="5" style="width:100px;accent-color:#6366f1;" oninput="applyZoom(this.value)">
                     <span style="font-size:13px;font-weight:700;color:#6366f1;min-width:36px;" id="zoomLabel">100%</span>
                     <button onclick="applyZoom(100);document.getElementById('zoomSlider').value=100;" style="background:#e5e7eb;border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:#6b7280;font-weight:600;">초기화</button>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;background:#f9fafb;padding:8px 14px;border-radius:10px;border:1px solid #e5e7eb;">
+                <div class="refresh-settings">
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:#374151;white-space:nowrap;">
                         <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh(this.checked)"
                             style="width:15px;height:15px;accent-color:#6366f1;cursor:pointer;">
@@ -977,7 +996,7 @@
                 <input id="journeyStatusSearch" type="text" placeholder="학번 또는 이름 검색" oninput="renderJourneyStatus()"
                     style="padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;width:190px;">
             </div>
-            <div style="overflow-x:auto;">
+            <div class="responsive-table-wrap" tabindex="0" aria-label="학생별 건강기록 현황 표">
                 <table style="width:100%;border-collapse:collapse;min-width:760px;font-size:12px;">
                     <thead><tr style="background:#f9fafb;color:#4b5563;text-align:left;">
                         <th style="padding:9px;">학번</th><th>이름</th><th>누적 완료일</th><th>이번 주</th><th>초기 7일</th><th>행동실험 7일</th><th>현재 단계</th>
@@ -1183,14 +1202,14 @@
 
             <section class="settings-card reminder-wide">
                 <div class="settings-card-title">반별 알림 운영 기간</div>
-                <div style="overflow-x:auto;">
+                <div class="responsive-table-wrap" tabindex="0" aria-label="반별 알림 운영 기간 표">
                     <table class="reminder-period-table">
                         <thead><tr><th>반</th><th>시작일</th><th>종료일</th><th>알림 기기</th></tr></thead>
                         <tbody>
-                            <tr><th>1반</th><td><input id="teacherReminderClass1Start" class="reminder-date" type="date"></td><td><input id="teacherReminderClass1End" class="reminder-date" type="date"></td><td id="teacherReminderClass1Count">0대</td></tr>
-                            <tr><th>2반</th><td><input id="teacherReminderClass2Start" class="reminder-date" type="date"></td><td><input id="teacherReminderClass2End" class="reminder-date" type="date"></td><td id="teacherReminderClass2Count">0대</td></tr>
-                            <tr><th>3반</th><td><input id="teacherReminderClass3Start" class="reminder-date" type="date"></td><td><input id="teacherReminderClass3End" class="reminder-date" type="date"></td><td id="teacherReminderClass3Count">0대</td></tr>
-                            <tr><th>4반</th><td><input id="teacherReminderClass4Start" class="reminder-date" type="date"></td><td><input id="teacherReminderClass4End" class="reminder-date" type="date"></td><td id="teacherReminderClass4Count">0대</td></tr>
+                            <tr><th>1반</th><td data-label="시작일"><input id="teacherReminderClass1Start" class="reminder-date" type="date"></td><td data-label="종료일"><input id="teacherReminderClass1End" class="reminder-date" type="date"></td><td data-label="알림 기기" id="teacherReminderClass1Count">0대</td></tr>
+                            <tr><th>2반</th><td data-label="시작일"><input id="teacherReminderClass2Start" class="reminder-date" type="date"></td><td data-label="종료일"><input id="teacherReminderClass2End" class="reminder-date" type="date"></td><td data-label="알림 기기" id="teacherReminderClass2Count">0대</td></tr>
+                            <tr><th>3반</th><td data-label="시작일"><input id="teacherReminderClass3Start" class="reminder-date" type="date"></td><td data-label="종료일"><input id="teacherReminderClass3End" class="reminder-date" type="date"></td><td data-label="알림 기기" id="teacherReminderClass3Count">0대</td></tr>
+                            <tr><th>4반</th><td data-label="시작일"><input id="teacherReminderClass4Start" class="reminder-date" type="date"></td><td data-label="종료일"><input id="teacherReminderClass4End" class="reminder-date" type="date"></td><td data-label="알림 기기" id="teacherReminderClass4Count">0대</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1382,8 +1401,8 @@
                         <input type="text" id="setting_challengeName" placeholder="예: 나의 건강기록 여정" value="나의 건강기록 여정"
                             style="flex:1;max-width:220px;padding:6px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:13px;font-weight:600;">
                     </div>
-                    <div style="overflow-x:auto;">
-                        <table style="width:100%;border-collapse:collapse;min-width:900px;font-size:11px;">
+                    <div class="responsive-table-wrap" tabindex="0" aria-label="반별 건강기록 여정 일정 표">
+                        <table class="journey-schedule-table" style="width:100%;border-collapse:collapse;min-width:900px;font-size:11px;">
                             <thead><tr style="color:#166534;text-align:left;">
                                 <th style="padding:5px;">반</th><th>전체 시작</th><th>전체 종료</th><th>초기 시작</th><th>초기 종료</th><th>실천 시작</th><th>실천 종료</th>
                             </tr></thead>
@@ -1500,15 +1519,19 @@
             <h3 class="section-title">📈 카페인 &amp; 수면 현황 <span id="chartRangeLabel" style="font-size:13px;color:#9ca3af;font-weight:400;"></span></h3>
             <div class="chart-card" style="margin-bottom:24px;"><div class="dual-chart-container"><canvas id="modalDualChart"></canvas></div></div>
             <h3 class="section-title">☕ 카페인 섭취 내역 <span id="cafTableRangeLabel" style="font-size:13px;color:#9ca3af;font-weight:400;"></span></h3>
+            <div class="responsive-table-wrap" tabindex="0" aria-label="카페인 섭취 내역 표">
             <table class="data-table">
                 <thead><tr><th>섭취시간</th><th>음료명</th><th>카페인 함량</th><th>당일 누계</th><th>상태</th></tr></thead>
                 <tbody id="modalCaffeineTable"></tbody>
             </table>
+            </div>
             <h3 class="section-title" style="margin-top:28px;">😴 수면 기록 <span id="sleepTableRangeLabel" style="font-size:13px;color:#9ca3af;font-weight:400;"></span></h3>
+            <div class="responsive-table-wrap" tabindex="0" aria-label="수면 기록 표">
             <table class="data-table">
                 <thead><tr><th>취침날짜</th><th>취침</th><th>기상날짜</th><th>기상</th><th>수면시간</th><th>컨디션</th><th>상태</th></tr></thead>
                 <tbody id="modalSleepTable"></tbody>
             </table>
+            </div>
 
             <!-- ── 생활 패턴 추가 차트 ── -->
             <section class="pattern-panel">
@@ -4847,16 +4870,18 @@ function sendPDFToStudent(pdfOptions){
 
 function isMobile(){return window.innerWidth<=768;}
 function applyZoom(val){
-    const v=parseInt(val);
+    let v=parseInt(val)||100;
     if(isMobile()){
-        // 모바일: zoom 대신 font-size 조절 (zoom이 모바일에서 불안정)
-        document.documentElement.style.fontSize=(v/100*16)+'px';
+        v=100;
+        document.documentElement.style.fontSize='16px';
+        document.body.style.zoom='100%';
     } else {
+        document.documentElement.style.fontSize='';
         document.body.style.zoom=v+'%';
     }
     const lbl=document.getElementById('zoomLabel');
     if(lbl)lbl.textContent=v+'%';
-    try{localStorage.setItem('dashZoom',v);}catch(e){}
+    if(!isMobile()){try{localStorage.setItem('dashZoom',v);}catch(e){}}
 }
 window.startTeacherApp = function startTeacherApp(){
     if (window.__teacherAppStarted) return;
@@ -4869,7 +4894,10 @@ window.startTeacherApp = function startTeacherApp(){
     if(dtEl){dtEl.value=today;dtEl.max=today;}
     onStudentDateChange();
     // 화면 비율 복원
-    try{const z=localStorage.getItem('dashZoom');if(z){const sl=document.getElementById('zoomSlider');if(sl)sl.value=z;applyZoom(z);}}catch(e){}
+    try{
+        if(isMobile())applyZoom(100);
+        else {const z=localStorage.getItem('dashZoom');if(z){const sl=document.getElementById('zoomSlider');if(sl)sl.value=z;applyZoom(z);}}
+    }catch(e){}
     loadDataFromSheet();
     if(window.teacherReminders)window.teacherReminders.initialize();
     // 학생 답장 알림 체크 (로드 후 3초, 이후 2분마다)
@@ -7272,7 +7300,7 @@ function resetChallengeSettings(){
 
 // ── 건강기록 여정 v4 ──────────────────────────────────────
 function journeyDateInput(classNo, field, value){
-    return `<input type="date" id="journey_${classNo}_${field}" value="${value||''}" style="padding:5px;border:1px solid #d1d5db;border-radius:6px;font-size:11px;">`;
+    return `<input class="journey-date-input" type="date" id="journey_${classNo}_${field}" value="${value||''}" style="padding:5px;border:1px solid #d1d5db;border-radius:6px;font-size:11px;">`;
 }
 
 function renderJourneyScheduleRows(){
@@ -7281,9 +7309,9 @@ function renderJourneyScheduleRows(){
     body.innerHTML=['1','2','3','4'].map(classNo=>{
         const s=journeyConfig.schedules[classNo];
         return `<tr style="border-top:1px solid #dcfce7;"><td style="padding:7px 5px;font-weight:700;">2-${classNo}반</td>
-            <td>${journeyDateInput(classNo,'start',s.start)}</td><td>${journeyDateInput(classNo,'end',s.end)}</td>
-            <td>${journeyDateInput(classNo,'initialStart',s.initialStart)}</td><td>${journeyDateInput(classNo,'initialEnd',s.initialEnd)}</td>
-            <td>${journeyDateInput(classNo,'actionStart',s.actionStart)}</td><td>${journeyDateInput(classNo,'actionEnd',s.actionEnd)}</td></tr>`;
+            <td data-label="전체 시작">${journeyDateInput(classNo,'start',s.start)}</td><td data-label="전체 종료">${journeyDateInput(classNo,'end',s.end)}</td>
+            <td data-label="초기 시작">${journeyDateInput(classNo,'initialStart',s.initialStart)}</td><td data-label="초기 종료">${journeyDateInput(classNo,'initialEnd',s.initialEnd)}</td>
+            <td data-label="실천 시작">${journeyDateInput(classNo,'actionStart',s.actionStart)}</td><td data-label="실천 종료">${journeyDateInput(classNo,'actionEnd',s.actionEnd)}</td></tr>`;
     }).join('');
 }
 
