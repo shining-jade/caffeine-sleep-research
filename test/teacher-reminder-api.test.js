@@ -161,28 +161,26 @@ test('teacher reminder config POST saves one normalized configuration', async ()
   });
 });
 
-test('teacher test subscription registers only the current browser and returns no endpoint keys', async () => {
-  let forwarded;
+test('teacher test subscription stays browser-local when the endpoint already belongs to a student', async () => {
+  let gatewayCalls = 0;
   const subscriptionId = subscriptionIdForEndpoint(SUBSCRIPTION.endpoint);
   const handler = createTestSubscribeHandler({
     now: () => NOW,
-    callGas: async (input) => { forwarded = input; return { subscriptionId, active: true }; },
+    callGas: async () => { gatewayCalls += 1; throw new Error('role collision'); },
   });
   const res = response();
   await handler(request('POST', JSON.stringify({ subscription: SUBSCRIPTION }), teacherCookie()), res);
   assert.deepEqual(res.json(), { success: true, subscriptionId });
-  assert.equal(forwarded.action, 'saveTeacherTestSubscription');
-  assert.equal(forwarded.params[0].role, 'teacher-test');
+  assert.equal(gatewayCalls, 0);
   assert.doesNotMatch(res.body, /push\.example|teacher-public-key|teacher-auth-key/);
 });
 
-test('teacher test send rejects student IDs and sends approved copy only to confirmed teacher device', async () => {
-  const calls = [];
+test('teacher test send bypasses student ownership storage and sends only to the current browser', async () => {
+  let gatewayCalls = 0;
   let delivered;
-  const subscriptionId = subscriptionIdForEndpoint(SUBSCRIPTION.endpoint);
   const handler = createTestSendHandler({
     now: () => NOW,
-    callGas: async (input) => { calls.push(input); return { subscriptionId, active: true }; },
+    callGas: async () => { gatewayCalls += 1; throw new Error('role collision'); },
     createSender: () => ({
       async send(subscription, payload) { delivered = { subscription, payload: JSON.parse(payload) }; return { status: 'success', errorCode: null }; },
     }),
@@ -194,7 +192,7 @@ test('teacher test send rejects student IDs and sends approved copy only to conf
   const res = response();
   await handler(request('POST', JSON.stringify({ type: 'sleep', subscription: SUBSCRIPTION }), teacherCookie()), res);
   assert.deepEqual(res.json(), { success: true, status: 'success' });
-  assert.equal(calls[0].action, 'saveTeacherTestSubscription');
+  assert.equal(gatewayCalls, 0);
   assert.deepEqual(delivered.subscription, SUBSCRIPTION);
   assert.equal(delivered.payload.title, '좋은 아침이에요 ☀️');
   assert.equal(delivered.payload.body, '어젯밤 수면 기록을 간단히 남겨보세요.');
