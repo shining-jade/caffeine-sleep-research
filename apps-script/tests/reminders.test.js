@@ -301,3 +301,99 @@ test('teacher reminder admin summary returns aggregate subscribers and latest ru
   });
   assert.doesNotMatch(JSON.stringify(result), /1101|1201|push\.example|auth-key/);
 });
+
+test('test student status resolves one trimmed exact name and returns aggregate device counts only', async () => {
+  const { context } = await reminders({
+    students: [
+      ['학년', '반', '번호', '이름', '학번ID'],
+      [1, 1, 1, ' 테스트 ', 1101],
+      [1, 1, 2, '테스트1', 1102],
+      [1, 1, 3, '테스트 학생', 1103],
+    ],
+  });
+  context.sleepOnly = pushRecord('https://push.example/sleep-only', { caffeineEnabled: false });
+  context.caffeineOnly = pushRecord('https://push.example/caffeine-only', { sleepEnabled: false });
+  context.both = pushRecord('https://push.example/both');
+  context.other = pushRecord('https://push.example/other', { studentId: '1102' });
+  call(context, 'upsertPushSubscription_(sleepOnly)');
+  call(context, 'upsertPushSubscription_(caffeineOnly)');
+  call(context, 'upsertPushSubscription_(both)');
+  call(context, 'upsertPushSubscription_(other)');
+
+  const status = JSON.parse(JSON.stringify(call(context, 'getTestStudentReminderStatus_()')));
+
+  assert.deepEqual(status, { name: '테스트', sleepDevices: 2, caffeineDevices: 2 });
+  assert.doesNotMatch(JSON.stringify(status), /1101|push\.example|public-key|auth-key/);
+});
+
+test('test student resolution fails closed for missing duplicate and lookalike-only names', async () => {
+  for (const studentRows of [
+    [[1, 1, 1, '일반학생', 1101]],
+    [[1, 1, 1, '테스트1', 1101], [1, 1, 2, '테스트 학생', 1102]],
+    [[1, 1, 1, '테스트', 1101], [1, 1, 2, ' 테스트 ', 1102]],
+  ]) {
+    const { context } = await reminders({
+      students: [['학년', '반', '번호', '이름', '학번ID'], ...studentRows],
+    });
+    assert.throws(() => call(context, 'getTestStudentReminderStatus_()'), /REQUEST_REJECTED/);
+  }
+});
+
+test('test student targets include only active student devices enabled for the requested type', async () => {
+  const { context } = await reminders({
+    students: [['이름', '학번ID'], ['테스트', 1101], ['다른학생', 1201]],
+  });
+  context.sleep = pushRecord('https://push.example/sleep', { caffeineEnabled: false });
+  context.caffeine = pushRecord('https://push.example/caffeine', { sleepEnabled: false });
+  context.inactive = pushRecord('https://push.example/inactive', { active: false });
+  context.other = pushRecord('https://push.example/other', { studentId: '1201' });
+  context.teacher = pushRecord('https://push.example/teacher', { role: 'teacher-test', studentId: '' });
+  call(context, 'upsertPushSubscription_(sleep)');
+  call(context, 'upsertPushSubscription_(caffeine)');
+  call(context, 'upsertPushSubscription_(inactive)');
+  call(context, 'upsertPushSubscription_(other)');
+  call(context, 'saveTeacherTestSubscription_(teacher)');
+
+  const sleepTargets = JSON.parse(JSON.stringify(call(context, "getTestStudentReminderTargets_('sleep')")));
+  const caffeineTargets = JSON.parse(JSON.stringify(call(context, "getTestStudentReminderTargets_('caffeine')")));
+
+  assert.equal(sleepTargets.name, '테스트');
+  assert.equal(sleepTargets.subscriptions.length, 1);
+  assert.equal(sleepTargets.subscriptions[0].endpoint, 'https://push.example/sleep');
+  assert.equal(caffeineTargets.subscriptions.length, 1);
+  assert.equal(caffeineTargets.subscriptions[0].endpoint, 'https://push.example/caffeine');
+  assert.throws(() => call(context, "getTestStudentReminderTargets_('all')"), /REQUEST_REJECTED/);
+});
+
+test('test student result recording requires manual keys and deactivates only expired devices', async () => {
+  const { context, spreadsheet } = await reminders({
+    students: [['이름', '학번ID'], ['테스트', 1101]],
+  });
+  context.first = pushRecord('https://push.example/first');
+  context.second = pushRecord('https://push.example/second');
+  const first = call(context, 'upsertPushSubscription_(first)');
+  const second = call(context, 'upsertPushSubscription_(second)');
+  context.results = [
+    {
+      deliveryKey: `manual-test:req-1:sleep:${first.subscriptionId}`,
+      studentId: '1101', subscriptionId: first.subscriptionId,
+      status: 'success', errorCode: '',
+    },
+    {
+      deliveryKey: `manual-test:req-1:sleep:${second.subscriptionId}`,
+      studentId: '1101', subscriptionId: second.subscriptionId,
+      status: 'expired', errorCode: 'PUSH_SUBSCRIPTION_EXPIRED',
+    },
+  ];
+
+  assert.throws(
+    () => call(context, "recordTestStudentReminderResults_('sleep', '2026-09-28', [{deliveryKey:'2026-09-28:sleep:device',studentId:'1101',subscriptionId:'device',status:'success',errorCode:''}])"),
+    /REQUEST_REJECTED/,
+  );
+  const recorded = call(context, "recordTestStudentReminderResults_('sleep', '2026-09-28', results)");
+
+  assert.equal(recorded.recorded, 2);
+  assert.equal(rows(spreadsheet, '알림발송로그')[1][0].startsWith('manual-test:'), true);
+  assert.equal(rows(spreadsheet, '푸시구독')[1][8], true);
+  assert.equal(rows(spreadsheet, '푸시구독')[2][8], false);
+});

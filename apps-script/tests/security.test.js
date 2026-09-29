@@ -18,6 +18,9 @@ async function gateway(extra = {}) {
       recordReminderDeliveryResults_(results) { return { recorded: results.length }; },
       getReminderAdminConfig_() { return { enabled: false }; },
       getReminderStudentConfig_() { return { sleepTime: '08:00', caffeineTime: '20:00', globallyEnabled: false }; },
+      getTestStudentReminderStatus_() { return { name: '테스트', sleepDevices: 1, caffeineDevices: 1 }; },
+      getTestStudentReminderTargets_(type) { return { name: '테스트', type, subscriptions: [] }; },
+      recordTestStudentReminderResults_(type, referenceDate, results) { return { type, referenceDate, recorded: results.length }; },
       ...extra,
     },
   });
@@ -140,4 +143,25 @@ test('student role can read only the limited reminder config action', async () =
   assert.deepEqual(JSON.parse(JSON.stringify(result.data)), {
     sleepTime: '08:00', caffeineTime: '20:00', globallyEnabled: false,
   });
+});
+
+test('test student reminder actions are teacher-only', async () => {
+  const { context } = await gateway();
+  const allowed = [
+    ['getTestStudentReminderStatus', []],
+    ['getTestStudentReminderTargets', ['sleep']],
+    ['recordTestStudentReminderResults', ['sleep', '2026-09-28', []]],
+  ];
+  for (const [action, params] of allowed) {
+    context.teacherTestStudentEvent = event({ secret, role: 'teacher', action, params });
+    assert.equal(outputJson(call(context, 'doPost(teacherTestStudentEvent)')).success, true);
+    for (const request of [
+      { role: 'student', subject: { studentId: '1101', name: '테스트' } },
+      { role: 'scheduler' },
+      { role: 'public' },
+    ]) {
+      context.deniedTestStudentEvent = event({ secret, action, params, ...request });
+      assert.equal(outputJson(call(context, 'doPost(deniedTestStudentEvent)')).error, 'REQUEST_REJECTED');
+    }
+  }
 });

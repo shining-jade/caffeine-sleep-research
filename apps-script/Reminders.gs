@@ -522,3 +522,102 @@ function deactivateTeacherTestSubscription_(subscriptionId) {
     return subscriptionViewFromRow_(row);
   });
 }
+
+function resolveExactTestStudent_() {
+  var spreadsheet = ensureReminderSheets_();
+  var roster = reminderRows_(spreadsheet.getSheetByName('students'));
+  var idColumn = requireNamedColumn_(roster.headers, ['학번ID', '전체학번', '학번', 'studentId']);
+  var nameColumn = requireNamedColumn_(roster.headers, ['이름', '성명', 'name']);
+  var matches = roster.values.map(function(row) {
+    return {
+      studentId: normalizeOwnerId_(row[idColumn]),
+      name: String(row[nameColumn] || '').trim()
+    };
+  }).filter(function(student) {
+    return student.studentId && student.name === '테스트';
+  });
+  if (matches.length !== 1) throw new Error('REQUEST_REJECTED');
+  return matches[0];
+}
+
+function testStudentSubscriptionRows_(studentId) {
+  var spreadsheet = ensureReminderSheets_();
+  var sheet = spreadsheet.getSheetByName(REMINDER_SHEETS_.subscriptions.name);
+  if (sheet.getLastRow() < 2) return [];
+  return sheet.getRange(2, 1, sheet.getLastRow() - 1, REMINDER_SHEETS_.subscriptions.headers.length)
+    .getValues().filter(function(row) {
+      return String(row[1]) === 'student'
+        && normalizeOwnerId_(row[2]) === normalizeOwnerId_(studentId)
+        && row[8] === true;
+    });
+}
+
+function getTestStudentReminderStatus_() {
+  var student = resolveExactTestStudent_();
+  var rows = testStudentSubscriptionRows_(student.studentId);
+  return {
+    name: '테스트',
+    sleepDevices: rows.filter(function(row) { return row[6] === true; }).length,
+    caffeineDevices: rows.filter(function(row) { return row[7] === true; }).length
+  };
+}
+
+function getTestStudentReminderTargets_(type) {
+  if (type !== 'sleep' && type !== 'caffeine') throw new Error('REQUEST_REJECTED');
+  var student = resolveExactTestStudent_();
+  var preferenceColumn = type === 'sleep' ? 6 : 7;
+  return {
+    name: '테스트',
+    subscriptions: testStudentSubscriptionRows_(student.studentId).filter(function(row) {
+      return row[preferenceColumn] === true;
+    }).map(function(row) {
+      return {
+        studentId: student.studentId,
+        subscriptionId: String(row[0]),
+        endpoint: String(row[3]),
+        keys: { p256dh: String(row[4]), auth: String(row[5]) }
+      };
+    })
+  };
+}
+
+function recordTestStudentReminderResults_(type, referenceDate, results) {
+  if (type !== 'sleep' && type !== 'caffeine') throw new Error('REQUEST_REJECTED');
+  var safeDate = normalizeReminderDate_(referenceDate, false);
+  if (!Array.isArray(results)) throw new Error('REQUEST_REJECTED');
+  var allowedStatuses = { success: true, expired: true, failed: true };
+  var student = resolveExactTestStudent_();
+  return withScriptLock_(function() {
+    var spreadsheet = ensureReminderSheets_();
+    var deliverySheet = spreadsheet.getSheetByName(REMINDER_SHEETS_.deliveries.name);
+    var subscriptionSheet = spreadsheet.getSheetByName(REMINDER_SHEETS_.subscriptions.name);
+    var now = reminderNowIso_();
+    results.forEach(function(result) {
+      var deliveryKey = String(result && result.deliveryKey || '').trim();
+      var subscriptionId = String(result && result.subscriptionId || '').trim();
+      var studentId = normalizeOwnerId_(result && result.studentId);
+      var status = String(result && result.status || '');
+      var keySuffix = ':' + type + ':' + subscriptionId;
+      if (!allowedStatuses[status]
+          || !/^manual-test:[^:]+:(sleep|caffeine):[a-f0-9]{64}$/.test(deliveryKey)
+          || !deliveryKey.endsWith(keySuffix)
+          || studentId !== student.studentId) throw new Error('REQUEST_REJECTED');
+      var rowIndex = findSubscriptionRow_(subscriptionSheet, subscriptionId);
+      if (rowIndex < 2) throw new Error('REQUEST_REJECTED');
+      var row = subscriptionSheet.getRange(rowIndex, 1, 1, REMINDER_SHEETS_.subscriptions.headers.length).getValues()[0];
+      if (String(row[1]) !== 'student' || normalizeOwnerId_(row[2]) !== student.studentId) {
+        throw new Error('REQUEST_REJECTED');
+      }
+      deliverySheet.appendRow([
+        deliveryKey, safeDate, type, student.studentId, subscriptionId, now,
+        status, String(result.errorCode || '')
+      ]);
+      if (status === 'success') { row[11] = now; row[12] = ''; }
+      if (status === 'expired') row[8] = false;
+      if (status !== 'success') row[12] = String(result.errorCode || '');
+      row[10] = now;
+      subscriptionSheet.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+    });
+    return { recorded: results.length };
+  });
+}

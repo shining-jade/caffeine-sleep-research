@@ -31,7 +31,9 @@ var TEACHER_ACTIONS_ = {
   saveDismissedBadgesData: true, getAwardSettings: true,
   saveAwardSettingsData: true, saveAIReport: true, getAIReport: true,
   saveSleepSettings: true, getReminderAdminConfig: true, saveReminderAdminConfig: true,
-  saveTeacherTestSubscription: true, deactivateTeacherTestSubscription: true
+  saveTeacherTestSubscription: true, deactivateTeacherTestSubscription: true,
+  getTestStudentReminderStatus: true, getTestStudentReminderTargets: true,
+  recordTestStudentReminderResults: true
 };
 
 var SCHEDULER_ACTIONS_ = {
@@ -54,7 +56,8 @@ var TEACHER_MUTATIONS_ = {
   deleteTeacherMessage: true, deleteBulkTeacherMessages: true,
   markStudentReplyRead: true, saveBadgeConfig: true, saveChallengeBadgeConfig: true,
   savePendingBadgesData: true, saveDismissedBadgesData: true,
-  saveAwardSettingsData: true, saveAIReport: true, saveSleepSettings: true
+  saveAwardSettingsData: true, saveAIReport: true, saveSleepSettings: true,
+  recordTestStudentReminderResults: true
 };
 
 function normalizeCaffeineTime_(value) {
@@ -231,6 +234,9 @@ function invokeAction_(action, params) {
     case 'saveReminderAdminConfig': return saveReminderAdminConfig_.apply(null, params);
     case 'saveTeacherTestSubscription': return saveTeacherTestSubscription_.apply(null, params);
     case 'deactivateTeacherTestSubscription': return deactivateTeacherTestSubscription_.apply(null, params);
+    case 'getTestStudentReminderStatus': return getTestStudentReminderStatus_.apply(null, params);
+    case 'getTestStudentReminderTargets': return getTestStudentReminderTargets_.apply(null, params);
+    case 'recordTestStudentReminderResults': return recordTestStudentReminderResults_.apply(null, params);
     case 'getReminderDispatchSnapshot': return getReminderDispatchSnapshot_.apply(null, params);
     case 'claimReminderDeliveries': return claimReminderDeliveries_.apply(null, params);
     case 'recordReminderDeliveryResults': return recordReminderDeliveryResults_.apply(null, params);
