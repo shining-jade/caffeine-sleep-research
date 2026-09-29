@@ -40,6 +40,21 @@ test('teacher reminder catch-all preserves config and current-device test paths'
   assert.deepEqual(calls, ['config', 'test-subscribe', 'test-send']);
 });
 
+test('catch-all routers recover the endpoint from req.url when Vercel omits the path query', async () => {
+  const calls = [];
+  const studentRouter = createStudentPushRouter({
+    handlers: { config: async () => calls.push('student-config') },
+  });
+  const teacherRouter = createTeacherReminderRouter({
+    handlers: { config: async () => calls.push('teacher-config') },
+  });
+
+  await studentRouter({ url: '/api/student/push/config?source=preview', query: {} }, response());
+  await teacherRouter({ url: '/api/teacher/reminders/config', query: {} }, response());
+
+  assert.deepEqual(calls, ['student-config', 'teacher-config']);
+});
+
 test('consolidated reminder routes fail closed for unknown nested paths', async () => {
   for (const router of [createStudentPushRouter(), createTeacherReminderRouter()]) {
     const res = response();

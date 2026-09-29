@@ -5,7 +5,12 @@ import testSubscribeHandler from '../../_lib/teacher/reminders/test-subscribe.js
 
 function routeName(req) {
   const value = req.query?.path;
-  return Array.isArray(value) ? value.join('/') : String(value || '');
+  if (Array.isArray(value)) return value.join('/');
+  if (value) return String(value);
+  const pathname = String(req.url || '').split('?')[0];
+  const prefix = '/api/teacher/reminders/';
+  const index = pathname.indexOf(prefix);
+  return index >= 0 ? decodeURIComponent(pathname.slice(index + prefix.length)).replace(/^\/+|\/+$/g, '') : '';
 }
 
 export function createTeacherReminderRouter({ handlers = {
