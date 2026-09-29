@@ -27,17 +27,17 @@ test('student push catch-all preserves each public endpoint path', async () => {
   assert.deepEqual(calls, ['config', 'preferences', 'subscribe', 'unsubscribe']);
 });
 
-test('teacher reminder catch-all preserves config and current-device test paths', async () => {
+test('teacher reminder catch-all preserves config current-device and test-student paths', async () => {
   const calls = [];
   const handlers = Object.fromEntries(
-    ['config', 'test-subscribe', 'test-send'].map((name) => [
+    ['config', 'test-subscribe', 'test-send', 'test-student'].map((name) => [
       name,
       async () => calls.push(name),
     ]),
   );
   const router = createTeacherReminderRouter({ handlers });
   for (const name of Object.keys(handlers)) await router({ query: { path: name } }, response());
-  assert.deepEqual(calls, ['config', 'test-subscribe', 'test-send']);
+  assert.deepEqual(calls, ['config', 'test-subscribe', 'test-send', 'test-student']);
 });
 
 test('catch-all routers recover the endpoint from req.url when Vercel omits the path query', async () => {

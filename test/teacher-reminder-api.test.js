@@ -6,6 +6,7 @@ import { createSession } from '../api/_lib/session.js';
 import { subscriptionIdForEndpoint } from '../api/_lib/push-subscription.js';
 import { createReminderConfigHandler } from '../api/_lib/teacher/reminders/config.js';
 import { createTestSendHandler } from '../api/_lib/teacher/reminders/test-send.js';
+import { createTestStudentHandler } from '../api/_lib/teacher/reminders/test-student.js';
 import { createTestSubscribeHandler } from '../api/_lib/teacher/reminders/test-subscribe.js';
 
 process.env.SESSION_SECRET = 'teacher-reminder-session-secret';
@@ -213,4 +214,134 @@ test('teacher test send maps provider failures without exposing provider or devi
   assert.equal(res.statusCode, 502);
   assert.deepEqual(res.json(), { success: false, error: 'PUSH_SERVER_ERROR' });
   assert.doesNotMatch(res.body, /push\.example|teacher-auth-key/);
+});
+
+test('test student status requires a teacher session and returns aggregate counts only', async () => {
+  let forwarded;
+  const handler = createTestStudentHandler({
+    now: () => NOW,
+    callGas: async (input) => {
+      forwarded = input;
+      return { name: '테스트', sleepDevices: 2, caffeineDevices: 1, studentId: '1101', endpoint: 'https://push.example/private' };
+    },
+  });
+  const denied = response();
+  await handler(request('GET'), denied);
+  assert.equal(denied.statusCode, 401);
+
+  const res = response();
+  await handler(request('GET', undefined, teacherCookie()), res);
+  assert.deepEqual(res.json(), { success: true, name: '테스트', sleepDevices: 2, caffeineDevices: 1 });
+  assert.deepEqual(forwarded, {
+    role: 'teacher', action: 'getTestStudentReminderStatus', params: [], subject: null,
+  });
+  assert.doesNotMatch(res.body, /1101|push\.example/);
+
+  const wrongMethod = response();
+  await handler(request('PUT', '{}', teacherCookie()), wrongMethod);
+  assert.equal(wrongMethod.statusCode, 405);
+});
+
+test('test student send rejects identity subscription and extra fields before any gateway call', async () => {
+  let calls = 0;
+  const handler = createTestStudentHandler({
+    now: () => NOW,
+    callGas: async () => { calls += 1; },
+  });
+  for (const body of [
+    { type: 'all' },
+    { type: 'sleep', studentId: '1101' },
+    { type: 'sleep', subscriptionId: 'device' },
+    { type: 'sleep', subscription: SUBSCRIPTION },
+    { type: 'sleep', endpoint: SUBSCRIPTION.endpoint },
+    { type: 'sleep', keys: SUBSCRIPTION.keys },
+    { type: 'sleep', extra: true },
+  ]) {
+    const res = response();
+    await handler(request('POST', JSON.stringify(body), teacherCookie()), res);
+    assert.equal(res.statusCode, 400);
+  }
+  assert.equal(calls, 0);
+});
+
+test('test student send delivers approved copy and persists aggregate lifecycle results', async () => {
+  const deviceA = { ...SUBSCRIPTION, endpoint: 'https://push.example/student-a' };
+  const deviceB = { ...SUBSCRIPTION, endpoint: 'https://push.example/student-b' };
+  const idA = subscriptionIdForEndpoint(deviceA.endpoint);
+  const idB = subscriptionIdForEndpoint(deviceB.endpoint);
+  const gasCalls = [];
+  const deliveries = [];
+  const outcomes = [
+    { status: 'success', errorCode: null },
+    { status: 'expired', errorCode: 'PUSH_SUBSCRIPTION_EXPIRED' },
+  ];
+  const handler = createTestStudentHandler({
+    now: () => NOW,
+    randomId: () => 'req-1',
+    callGas: async (input) => {
+      gasCalls.push(input);
+      if (input.action === 'getTestStudentReminderTargets') {
+        return { name: '테스트', subscriptions: [
+          { studentId: '1101', subscriptionId: idA, ...deviceA },
+          { studentId: '1101', subscriptionId: idB, ...deviceB },
+        ] };
+      }
+      return { recorded: input.params[2].length };
+    },
+    createSender: () => ({
+      async send(subscription, payload) {
+        deliveries.push({ subscription, payload: JSON.parse(payload) });
+        return outcomes[deliveries.length - 1];
+      },
+    }),
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ type: 'sleep' }), teacherCookie()), res);
+
+  assert.deepEqual(res.json(), {
+    success: true, type: 'sleep', targeted: 2, sent: 1, expired: 1, failed: 0,
+  });
+  assert.equal(deliveries[0].payload.body, '어젯밤 수면 기록을 간단히 남겨보세요.');
+  assert.equal(deliveries[0].payload.data.referenceDate, '2026-09-09');
+  assert.deepEqual(gasCalls.map(({ action }) => action), [
+    'getTestStudentReminderTargets', 'recordTestStudentReminderResults',
+  ]);
+  assert.match(gasCalls[1].params[2][0].deliveryKey, new RegExp(`^manual-test:req-1:sleep:${idA}$`));
+  assert.doesNotMatch(res.body, /1101|push\.example|teacher-auth-key|teacher-public-key/);
+});
+
+test('test student send converts thrown and provider failures to safe aggregate results', async () => {
+  const devices = ['a', 'b'].map((suffix) => {
+    const subscription = { ...SUBSCRIPTION, endpoint: `https://push.example/${suffix}` };
+    return { studentId: '1101', subscriptionId: subscriptionIdForEndpoint(subscription.endpoint), ...subscription };
+  });
+  let saved;
+  let sendCount = 0;
+  const handler = createTestStudentHandler({
+    now: () => NOW,
+    randomId: () => 'req-2',
+    callGas: async ({ action, params }) => {
+      if (action === 'getTestStudentReminderTargets') return { name: '테스트', subscriptions: devices };
+      saved = params[2];
+      return { recorded: saved.length };
+    },
+    createSender: () => ({
+      async send() {
+        sendCount += 1;
+        if (sendCount === 1) throw new Error(`provider leaked ${SUBSCRIPTION.endpoint}`);
+        return { status: 'failed', errorCode: 'PUSH_SERVER_ERROR' };
+      },
+    }),
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ type: 'caffeine' }), teacherCookie()), res);
+
+  assert.deepEqual(res.json(), {
+    success: true, type: 'caffeine', targeted: 2, sent: 0, expired: 0, failed: 2,
+  });
+  assert.deepEqual(saved.map(({ status, errorCode }) => ({ status, errorCode })), [
+    { status: 'failed', errorCode: 'PUSH_UNAVAILABLE' },
+    { status: 'failed', errorCode: 'PUSH_SERVER_ERROR' },
+  ]);
+  assert.doesNotMatch(res.body, /provider leaked|push\.example/);
 });

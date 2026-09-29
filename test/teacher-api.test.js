@@ -27,7 +27,8 @@ const EXPECTED_ACTIONS = [
   'getDismissedBadges', 'saveDismissedBadgesData', 'getAwardSettings',
   'saveAwardSettingsData', 'saveAIReport', 'getAIReport', 'saveSleepSettings',
   'getReminderAdminConfig', 'saveReminderAdminConfig', 'saveTeacherTestSubscription',
-  'deactivateTeacherTestSubscription',
+  'deactivateTeacherTestSubscription', 'getTestStudentReminderStatus',
+  'getTestStudentReminderTargets', 'recordTestStudentReminderResults',
 ];
 
 function request(method, body, cookie = '') {
@@ -178,6 +179,9 @@ test('teacher API session inspection and logout are role-safe', async () => {
 test('teacher reminder actions are allowlisted without admitting scheduler actions', () => {
   assert.deepEqual(normalizeTeacherRequest('getReminderAdminConfig', []).params, []);
   assert.deepEqual(normalizeTeacherRequest('saveReminderAdminConfig', [{ enabled: false }]).params, [{ enabled: false }]);
+  assert.deepEqual(normalizeTeacherRequest('getTestStudentReminderStatus', []).params, []);
+  assert.deepEqual(normalizeTeacherRequest('getTestStudentReminderTargets', ['sleep']).params, ['sleep']);
+  assert.deepEqual(normalizeTeacherRequest('recordTestStudentReminderResults', ['sleep', '2026-09-28', []]).params, ['sleep', '2026-09-28', []]);
   assert.throws(() => normalizeTeacherRequest('getReminderDispatchSnapshot', []), /not allowed/i);
   assert.throws(() => normalizeTeacherRequest('recordReminderDeliveryResults', []), /not allowed/i);
 });

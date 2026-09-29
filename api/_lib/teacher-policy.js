@@ -32,6 +32,9 @@ const ACTION_NAMES = [
   'saveReminderAdminConfig',
   'saveTeacherTestSubscription',
   'deactivateTeacherTestSubscription',
+  'getTestStudentReminderStatus',
+  'getTestStudentReminderTargets',
+  'recordTestStudentReminderResults',
 ];
 
 export const TEACHER_ACTIONS = new Set(ACTION_NAMES);

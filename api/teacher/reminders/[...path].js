@@ -1,6 +1,7 @@
 import { sendJson } from '../../_lib/http.js';
 import configHandler from '../../_lib/teacher/reminders/config.js';
 import testSendHandler from '../../_lib/teacher/reminders/test-send.js';
+import testStudentHandler from '../../_lib/teacher/reminders/test-student.js';
 import testSubscribeHandler from '../../_lib/teacher/reminders/test-subscribe.js';
 
 function routeName(req) {
@@ -16,6 +17,7 @@ function routeName(req) {
 export function createTeacherReminderRouter({ handlers = {
   config: configHandler,
   'test-send': testSendHandler,
+  'test-student': testStudentHandler,
   'test-subscribe': testSubscribeHandler,
 } } = {}) {
   return async function teacherReminderRouter(req, res) {
