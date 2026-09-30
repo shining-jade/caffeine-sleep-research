@@ -31,6 +31,16 @@ test('teacher mobile breakpoints hide zoom and keep tabs touchable and horizonta
   assert.doesNotMatch(html, /document\.documentElement\.style\.fontSize=\(v\/100\*16\)/);
 });
 
+test('half-width desktop stacks the header before the title and tabs become cramped', async () => {
+  const html = await read('teacher/index.html');
+
+  assert.match(html, /@media\(max-width:1200px\)\{[\s\S]*?\.header-top\{flex-direction:column[^}]*align-items:stretch/);
+  assert.match(html, /@media\(max-width:1200px\)\{[\s\S]*?\.header-left\{width:100%/);
+  assert.match(html, /@media\(max-width:1200px\)\{[\s\S]*?\.header-actions\{flex-wrap:wrap[^}]*width:100%/);
+  assert.match(html, /@media\(max-width:1200px\)\{[\s\S]*?\.tab-nav\{[^}]*overflow-x:auto[^}]*flex-wrap:nowrap/);
+  assert.match(html, /@media\(max-width:1200px\)\{[\s\S]*?\.tab-button\{[^}]*white-space:nowrap[^}]*flex:0 0 auto/);
+});
+
 test('wide teacher content uses local scroll regions and mobile card rows', async () => {
   const html = await read('teacher/index.html');
 

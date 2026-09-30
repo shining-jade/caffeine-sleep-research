@@ -318,7 +318,17 @@
         /* ── PC 반응형 ── */
         @media(max-width:1600px){.student-grid{grid-template-columns:repeat(3,1fr);}}
         @media(max-width:1400px){.settings-grid{grid-template-columns:repeat(2,1fr);}}
-        @media(max-width:1200px){.stats-grid{grid-template-columns:repeat(2,1fr);}.student-grid{grid-template-columns:repeat(2,1fr);}}
+        @media(max-width:1200px){
+            .header-top{flex-direction:column;align-items:stretch;}
+            .header-left{width:100%;}
+            .header-left h1,.header-left .subtitle{word-break:keep-all;}
+            .header-actions{flex-wrap:wrap;width:100%;justify-content:flex-end;}
+            .tab-nav{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-wrap:nowrap;overscroll-behavior-inline:contain;}
+            .tab-nav::-webkit-scrollbar{display:none;}
+            .tab-button{white-space:nowrap;flex:0 0 auto;}
+            .stats-grid{grid-template-columns:repeat(2,1fr);}
+            .student-grid{grid-template-columns:repeat(2,1fr);}
+        }
         @media(max-width:900px){.settings-grid{grid-template-columns:1fr;}}
 
         /* ── 태블릿 반응형 (768px ~ 1024px) ── */
