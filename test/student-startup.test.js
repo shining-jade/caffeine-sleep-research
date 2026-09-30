@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  getStudentBootstrapAction,
   loadStudentBootstrap,
   restoreStudentSession,
   shouldDeferStudentBootstrap,
@@ -68,4 +69,10 @@ test('bootstrap waits only for active analysis or a returned camera file', () =>
   assert.equal(shouldDeferStudentBootstrap({ analyzingVisible: false, cameraHasFile: false }), false);
   assert.equal(shouldDeferStudentBootstrap({ analyzingVisible: true, cameraHasFile: false }), true);
   assert.equal(shouldDeferStudentBootstrap({ analyzingVisible: false, cameraHasFile: true }), true);
+});
+
+test('returned camera file starts analysis instead of waiting forever', () => {
+  assert.equal(getStudentBootstrapAction({ analyzingVisible: false, cameraHasFile: false }), 'load');
+  assert.equal(getStudentBootstrapAction({ analyzingVisible: true, cameraHasFile: true }), 'wait');
+  assert.equal(getStudentBootstrapAction({ analyzingVisible: false, cameraHasFile: true }), 'analyze');
 });

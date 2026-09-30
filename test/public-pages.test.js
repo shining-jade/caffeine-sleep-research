@@ -32,11 +32,14 @@ test('student page first paint shows a neutral boot screen instead of the login 
   const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
   const boot = html.match(/<div id="bootPage"[^>]*class="([^"]*)"/);
   const login = html.match(/<div id="loginPage"[^>]*class="([^"]*)"/);
+  const mainApp = html.match(/<div id="mainApp"[^>]*>/)?.[0] || '';
 
   assert.ok(boot);
   assert.ok(login);
   assert.doesNotMatch(boot[1], /\bhidden\b/);
   assert.match(login[1], /\bhidden\b/);
+  assert.match(login[0], /style="display:none"/);
+  assert.match(mainApp, /style="display:none"/);
   assert.match(html, /public\/js\/student-startup\.js/);
 });
 

@@ -193,7 +193,7 @@
   </div>
 
   <!-- 로그인 화면 -->
-  <div id="loginPage" class="hidden min-h-screen flex items-center justify-center p-6 bg-white">
+  <div id="loginPage" style="display:none" class="hidden min-h-screen flex items-center justify-center p-6 bg-white">
     <div class="w-full max-w-sm text-center">
       <div class="mb-10">
         <span class="text-6xl">☕</span>
@@ -230,7 +230,7 @@
   </div>
 
   <!-- 메인 앱 -->
-  <div id="mainApp" class="hidden">
+  <div id="mainApp" style="display:none" class="hidden">
     <header class="p-6 bg-white shadow-sm flex justify-between items-center sticky top-0 z-10 w-full min-w-0 overflow-hidden">
       <h2 id="userTitle" class="font-bold text-xl"></h2>
       <div class="flex items-center gap-3">
@@ -1493,7 +1493,18 @@
         const input = document.getElementById(id);
         return Boolean(input && input.files && input.files.length > 0);
       });
-      if (window.studentStartup && window.studentStartup.shouldDeferStudentBootstrap({ analyzingVisible, cameraHasFile })) {
+      const action = window.studentStartup
+        ? window.studentStartup.getStudentBootstrapAction({ analyzingVisible, cameraHasFile })
+        : (analyzingVisible ? 'wait' : 'load');
+      if (action === 'analyze') {
+        const cameraInput = ['drinkCamera', 'drinkImage']
+          .map(function(id) { return document.getElementById(id); })
+          .find(function(input) { return input && input.files && input.files.length > 0; });
+        if (cameraInput) analyzeDrinkImage({ target: cameraInput });
+        setTimeout(waitForCameraAnalysisThenLoad, 500);
+        return;
+      }
+      if (action === 'wait') {
         setTimeout(waitForCameraAnalysisThenLoad, 500);
         return;
       }
@@ -5242,7 +5253,8 @@
         clearSession();
         document.getElementById('bootPage')?.classList.add('hidden');
         document.getElementById('mainApp')?.classList.add('hidden');
-        document.getElementById('loginPage')?.classList.remove('hidden');
+        const loginPage = document.getElementById('loginPage');
+        if (loginPage) { loginPage.style.display = ''; loginPage.classList.remove('hidden'); }
         const msg = document.getElementById('loginMsg');
         if (msg) msg.innerText = '로그인이 만료되었습니다. 다시 로그인해 주세요.';
       });
@@ -5261,7 +5273,8 @@
           clearSession();
           document.getElementById('bootPage')?.classList.add('hidden');
           document.getElementById('mainApp')?.classList.add('hidden');
-          document.getElementById('loginPage')?.classList.remove('hidden');
+          const loginPage = document.getElementById('loginPage');
+          if (loginPage) { loginPage.style.display = ''; loginPage.classList.remove('hidden'); }
         }
       };
       if (window.studentStartup) window.studentStartup.restoreStudentSession(restoreOptions);
