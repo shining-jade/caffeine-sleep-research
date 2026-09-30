@@ -87,6 +87,39 @@ test('student and teacher roles use distinct allowlists', async () => {
   assert.equal(outputJson(call(context, 'doPost(teacherDenied)')).error, 'REQUEST_REJECTED');
 });
 
+test('student bootstrap is student-only and replaces a supplied identity', async () => {
+  const { context } = await gateway({
+    getStudentBootstrap(id) { return { studentId: id, stats: { todayTotal: 0 } }; },
+  });
+  context.studentBootstrap = event({
+    secret, role: 'student', action: 'getStudentBootstrap', params: ['9999'],
+    subject: { studentId: '1101', name: '학생' },
+  });
+  context.teacherBootstrap = event({
+    secret, role: 'teacher', action: 'getStudentBootstrap', params: ['1101'],
+  });
+
+  assert.equal(outputJson(call(context, 'doPost(studentBootstrap)')).data.studentId, '1101');
+  assert.equal(outputJson(call(context, 'doPost(teacherBootstrap)')).error, 'REQUEST_REJECTED');
+});
+
+test('student bootstrap aggregates the existing student datasets', async () => {
+  const { context } = await loadAppsScript({ files: ['Code.gs'] });
+  context.getWeightData = (id) => ({ success: true, studentId: id, weight: 55 });
+  context.getStats = (id) => ({ studentId: id, todayTotal: 10 });
+  context.getCaffeineLogs = (id) => [{ id: `c-${id}` }];
+  context.getSleepLogs = (id) => [{ id: `s-${id}` }];
+  context.getSleepSettings = () => ({ success: true, settings: { ageGroup: 'teen' } });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(call(context, "getStudentBootstrap('1101')"))), {
+    weight: { success: true, studentId: '1101', weight: 55 },
+    stats: { studentId: '1101', todayTotal: 10 },
+    caffeineLogs: [{ id: 'c-1101' }],
+    sleepLogs: [{ id: 's-1101' }],
+    sleepSettings: { success: true, settings: { ageGroup: 'teen' } },
+  });
+});
+
 test('unknown roles actions and malformed params are rejected without echoing input', async () => {
   const { context } = await gateway();
   for (const body of [

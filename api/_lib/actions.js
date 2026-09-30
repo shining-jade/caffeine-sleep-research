@@ -10,6 +10,7 @@ export const STUDENT_ACTION_RULES = Object.freeze({
   getWeightData: 'identityFirst',
   saveInitialSetup: 'identityPayload',
   getStats: 'identityFirst',
+  getStudentBootstrap: 'identityFirst',
   getFilteredStats: 'identityFirst',
   getTeacherAwardsForStudent: 'identityFirst',
   markTeacherAwardsSeen: 'identityPair',

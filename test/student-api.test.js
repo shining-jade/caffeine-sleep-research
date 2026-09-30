@@ -196,6 +196,19 @@ test('student API session inspection never returns token', async () => {
   assert.equal(res.body.includes('caffeine_session'), false);
 });
 
+test('student API session inspection renews the same student session for 90 days', async () => {
+  const res = response();
+  await createSessionHandler({ now: () => NOW })(request('GET', undefined, studentCookie()), res);
+
+  const setCookie = res.getHeader('set-cookie');
+  assert.match(setCookie, /Max-Age=7776000/);
+  const token = decodeURIComponent(setCookie.match(/^caffeine_session=([^;]+)/)[1]);
+  assert.deepEqual(verifySession(token, 'student', NOW + 7_775_999), {
+    role: 'student', studentId: '1101', name: '테스트학생', exp: NOW + 7_776_000,
+  });
+  assert.throws(() => verifySession(token, 'student', NOW + 7_776_000), /expired session/i);
+});
+
 test('student API logout clears the session cookie', async () => {
   const res = response();
   await createLogoutHandler({ now: () => NOW })(request('POST'), res);

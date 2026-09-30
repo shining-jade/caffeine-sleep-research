@@ -10,6 +10,7 @@ const EXPECTED_ACTIONS = [
   'saveCaffeineData', 'getCaffeineLogs', 'deleteCaffeineData', 'updateCaffeineData',
   'saveSleepData', 'getSleepLogs', 'deleteSleepData', 'updateSleepData',
   'getWeightData', 'saveInitialSetup', 'getStats', 'getFilteredStats',
+  'getStudentBootstrap',
   'getTeacherAwardsForStudent', 'markTeacherAwardsSeen', 'submitInquiry',
   'getMyInquiries', 'getCaffeineDB', 'testConnection', 'generateAIHealthReport',
   'analyzeDrinkImageWithAI', 'getTeacherMessages', 'markTeacherMessageRead',
@@ -38,6 +39,13 @@ test('student identity replaces the first argument for own-data reads', () => {
   );
 
   assert.deepEqual(result.params, ['1101', '2026-09-01', '2026-09-07']);
+  assert.deepEqual(result.subject, { studentId: '1101', name: '테스트학생' });
+});
+
+test('student bootstrap always uses the signed session identity', () => {
+  const result = normalizeStudentRequest('getStudentBootstrap', ['9999'], SESSION);
+
+  assert.deepEqual(result.params, ['1101']);
   assert.deepEqual(result.subject, { studentId: '1101', name: '테스트학생' });
 });
 

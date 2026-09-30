@@ -4,6 +4,7 @@ import { requireEnv } from './env.js';
 
 const COOKIE_NAME = 'caffeine_session';
 const MAX_COOKIE_AGE = 90 * 24 * 60 * 60;
+export const STUDENT_SESSION_SECONDS = MAX_COOKIE_AGE;
 
 function encode(value) {
   return Buffer.from(value, 'utf8').toString('base64url');

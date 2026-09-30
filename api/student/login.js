@@ -1,9 +1,7 @@
 import { callGas as defaultCallGas } from '../_lib/gas.js';
 import { readJson, sendJson } from '../_lib/http.js';
-import { createSession, setSessionCookie } from '../_lib/session.js';
+import { createSession, setSessionCookie, STUDENT_SESSION_SECONDS } from '../_lib/session.js';
 import { checkLoginRateLimit } from '../_lib/rate-limit.js';
-
-const SESSION_SECONDS = 90 * 24 * 60 * 60;
 
 function sendKnownError(res, error) {
   const status = Number.isInteger(error?.status) ? error.status : 500;
@@ -63,9 +61,9 @@ export function createLoginHandler({
         role: 'student',
         studentId: normalizedId,
         name: normalizedName,
-        exp: issuedAt + SESSION_SECONDS,
+        exp: issuedAt + STUDENT_SESSION_SECONDS,
       }, issuedAt);
-      setSessionCookie(res, token, SESSION_SECONDS);
+      setSessionCookie(res, token, STUDENT_SESSION_SECONDS);
       sendJson(res, 200, {
         success: true,
         authenticated: true,

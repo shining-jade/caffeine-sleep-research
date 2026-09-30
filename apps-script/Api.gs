@@ -4,7 +4,7 @@ var STUDENT_ACTIONS_ = {
   saveSleepData: 'identityPayload', getSleepLogs: 'identityFirst',
   deleteSleepData: 'sleepRecord', updateSleepData: 'sleepPayload',
   getWeightData: 'identityFirst', saveInitialSetup: 'identityPayload',
-  getStats: 'identityFirst', getFilteredStats: 'identityFirst',
+  getStats: 'identityFirst', getStudentBootstrap: 'identityFirst', getFilteredStats: 'identityFirst',
   getTeacherAwardsForStudent: 'identityFirst', markTeacherAwardsSeen: 'identityPair',
   submitInquiry: 'identityPayload', getMyInquiries: 'identityFirst',
   getCaffeineDB: 'passthrough', testConnection: 'passthrough',
@@ -182,6 +182,7 @@ function invokeAction_(action, params) {
     case 'getWeightData': return getWeightData.apply(null, params);
     case 'saveInitialSetup': return saveInitialSetup.apply(null, params);
     case 'getStats': return getStats.apply(null, params);
+    case 'getStudentBootstrap': return getStudentBootstrap.apply(null, params);
     case 'getFilteredStats': return getFilteredStats.apply(null, params);
     case 'getTeacherAwardsForStudent': return getTeacherAwardsForStudent.apply(null, params);
     case 'markTeacherAwardsSeen': return markTeacherAwardsSeen.apply(null, params);

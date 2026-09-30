@@ -1,7 +1,10 @@
 import { sendJson } from '../_lib/http.js';
 import {
   clearSessionCookie,
+  createSession,
   readSessionCookie,
+  setSessionCookie,
+  STUDENT_SESSION_SECONDS,
   verifySession,
 } from '../_lib/session.js';
 
@@ -15,7 +18,15 @@ export function createSessionHandler({
     }
 
     try {
-      const session = verifySession(readSessionCookie(req), 'student', now());
+      const issuedAt = now();
+      const session = verifySession(readSessionCookie(req), 'student', issuedAt);
+      const renewedToken = createSession({
+        role: 'student',
+        studentId: session.studentId,
+        name: session.name,
+        exp: issuedAt + STUDENT_SESSION_SECONDS,
+      }, issuedAt);
+      setSessionCookie(res, renewedToken, STUDENT_SESSION_SECONDS);
       sendJson(res, 200, {
         authenticated: true,
         role: 'student',

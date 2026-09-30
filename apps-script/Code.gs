@@ -562,6 +562,17 @@ function getWeightData(studentId) {
   }
 }
 
+// 학생 앱 재실행 시 필요한 초기 데이터를 한 번의 게이트웨이 요청으로 조회
+function getStudentBootstrap(studentId) {
+  return {
+    weight: getWeightData(studentId),
+    stats: getStats(studentId),
+    caffeineLogs: getCaffeineLogs(studentId),
+    sleepLogs: getSleepLogs(studentId),
+    sleepSettings: getSleepSettings()
+  };
+}
+
 // 초기 설정 저장 (체중 + 목표 카페인 + 목표 취침/기상시간)
 function saveInitialSetup(payload) {
   try {
