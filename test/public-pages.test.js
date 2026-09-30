@@ -40,6 +40,19 @@ test('student page first paint shows a neutral boot screen instead of the login 
   assert.match(html, /public\/js\/student-startup\.js/);
 });
 
+test('student logout is settings-only and requires an alert warning before final confirmation', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const header = html.match(/<header\b[\s\S]*?<\/header>/)?.[0] || '';
+  const settings = html.match(/<div id="tab-settings"[\s\S]*?<\/main>/)?.[0] || '';
+
+  assert.doesNotMatch(header, /onclick="logout\(\)"/);
+  assert.match(settings, /id="studentLogoutBtn"/);
+  assert.match(settings, /학생 변경·로그아웃/);
+  assert.match(html, /pendingDelete = \{ type: 'logout-warning'/);
+  assert.match(html, /아침·저녁 기록 알림도 중지됩니다/);
+  assert.match(html, /정말 학생을 변경하고 알림을 중지할까요/);
+});
+
 test('teacher page is gated by server-side authentication before dashboard start', async () => {
   const html = await read('teacher/index.html');
   const auth = await read('public/js/teacher-auth.js');

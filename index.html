@@ -243,11 +243,6 @@
         <div id="statusBadge" class="text-indigo-600 font-bold bg-indigo-50 px-3 py-1 rounded-lg text-xs">
           정상 상태
         </div>
-        <button onclick="logout()"
-          class="text-gray-400 hover:text-red-500 active:scale-95 transition-all"
-          title="로그아웃">
-          <i class="fa-solid fa-right-from-bracket text-lg"></i>
-        </button>
       </div>
     </header>
 
@@ -829,9 +824,9 @@
                 <p class="text-sm font-bold text-gray-800" id="displayStudentInfo">-</p>
                 <p class="text-xs text-gray-500 mt-1">로그인된 계정</p>
               </div>
-              <button onclick="logout()"
-                class="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-bold hover:bg-red-600 transition-colors active:scale-95">
-                로그아웃
+              <button id="studentLogoutBtn" onclick="logout()"
+                class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-200 transition-colors active:scale-95">
+                학생 변경·로그아웃
               </button>
             </div>
           </div>
@@ -2449,19 +2444,29 @@
     function logout() { showLogoutConfirm(); }
 
     function showLogoutConfirm() {
-      document.getElementById('confirmModalIcon').innerText = '👋';
-      document.getElementById('confirmModalTitle').innerText = '로그아웃';
-      document.getElementById('deleteConfirmMessage').innerText = '로그아웃 하시겠습니까?';
-      document.getElementById('confirmActionBtn').innerText = '로그아웃';
-      document.getElementById('confirmActionBtn').className = 'flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition';
+      document.getElementById('confirmModalIcon').innerText = '🔔';
+      document.getElementById('confirmModalTitle').innerText = '알림도 함께 중지돼요';
+      document.getElementById('deleteConfirmMessage').innerText = '이 기기에서 학생을 변경하면 아침·저녁 기록 알림도 중지됩니다. 연구기간에는 본인 휴대폰에서 로그아웃하지 마세요.';
+      document.getElementById('confirmActionBtn').innerText = '계속';
+      document.getElementById('confirmActionBtn').className = 'flex-1 py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 transition';
       document.getElementById('deleteConfirmModal').style.display = 'flex';
-      pendingDelete = { type: 'logout', id: null };
+      pendingDelete = { type: 'logout-warning', id: null };
       // 포커스를 버튼에서 제거 - 카메라 확인키가 버튼을 자동 클릭하는 현상 방지
       setTimeout(function() {
         var btn = document.getElementById('confirmActionBtn');
         if (btn) btn.blur();
         document.activeElement && document.activeElement.blur();
       }, 0);
+    }
+
+    function showLogoutFinalConfirm() {
+      document.getElementById('confirmModalIcon').innerText = '👋';
+      document.getElementById('confirmModalTitle').innerText = '학생 변경·로그아웃';
+      document.getElementById('deleteConfirmMessage').innerText = '정말 학생을 변경하고 알림을 중지할까요?';
+      document.getElementById('confirmActionBtn').innerText = '학생 변경·로그아웃';
+      document.getElementById('confirmActionBtn').className = 'flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition';
+      document.getElementById('deleteConfirmModal').style.display = 'flex';
+      pendingDelete = { type: 'logout', id: null };
     }
 
     async function executeLogout() {
@@ -3814,7 +3819,8 @@
       if (!modal || modal.style.display === 'none' || modal.style.display === '') return;
       const { type, id } = pendingDelete;
       closeDeleteConfirm();
-      if (type === 'logout') { executeLogout(); }
+      if (type === 'logout-warning') { showLogoutFinalConfirm(); }
+      else if (type === 'logout') { executeLogout(); }
       else if (type && id) { deleteLog(type, id); }
     }
 
