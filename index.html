@@ -180,11 +180,20 @@
   <script src="/public/js/badge-journey.js"></script>
   <script type="module" src="/public/js/install-guide.js"></script>
   <script type="module" src="/public/js/push-reminders.js"></script>
+  <script type="module" src="/public/js/student-startup.js"></script>
 </head>
 <body class="pb-24">
 
+  <!-- 세션 확인 중에는 로그인 폼을 노출하지 않는다. -->
+  <div id="bootPage" class="min-h-screen flex items-center justify-center p-6 bg-white">
+    <div class="text-center text-gray-500" role="status" aria-live="polite">
+      <div class="text-6xl animate-pulse" aria-hidden="true">☕</div>
+      <p class="mt-5 text-sm font-bold">카페인·수면 기록을 여는 중...</p>
+    </div>
+  </div>
+
   <!-- 로그인 화면 -->
-  <div id="loginPage" class="min-h-screen flex items-center justify-center p-6 bg-white">
+  <div id="loginPage" class="hidden min-h-screen flex items-center justify-center p-6 bg-white">
     <div class="w-full max-w-sm text-center">
       <div class="mb-10">
         <span class="text-6xl">☕</span>
@@ -1293,10 +1302,12 @@
 
       const loginPage = document.getElementById('loginPage');
       const mainApp = document.getElementById('mainApp');
+      const bootPage = document.getElementById('bootPage');
       const userTitle = document.getElementById('userTitle');
 
       if(loginPage) { loginPage.style.display = ''; loginPage.classList.add('hidden'); }
       if(mainApp) { mainApp.style.display = ''; mainApp.classList.remove('hidden'); }
+      if(bootPage) bootPage.classList.add('hidden');
       if(userTitle) userTitle.textContent = `${res.name} 님`;
       if (typeof hideTutFab === 'function') hideTutFab();
       if (window.pushReminders) window.pushReminders.initialize(res);
@@ -1316,44 +1327,19 @@
         if (tabEl) tabEl.classList.add('active');
         if (navEl) { navEl.classList.add('nav-active', 'text-indigo-600'); navEl.classList.remove('text-gray-300'); }
 
-        // ⭐ 나머지 초기화: 3000ms 딜레이로 onchange/visibilitychange 발화 여유 확보
-        //    분석 중이면 loadCaffeineLogs 등 GAS 호출을 추가 지연 (큐 경합 방지)
-        setTimeout(() => {
-          if (!user) return;
-          updateDisplayStudentInfo();
-          loadQuickMenuFromStorage();
-          initQuickMenuEditor();
-          renderQuickMenus();
-          setCurrentTime();
-          setToday();
-          checkAndLoadWeight();
-          startAutoRefresh();
-          setTimeout(checkReplyBubble, 1500);
-          setTimeout(checkMsgBubble, 2000);
-          setTimeout(checkTeacherAwards, 2500);
-          setTimeout(loadBadgeConfig, 800);
-
-          // ⭐ 분석 중이면 GAS 호출 계열(loadCaffeineLogs, loadSleepLogs, refreshData, loadCaffeineDbFromGAS)을
-          //    분석 완료까지 대기 후 실행 (최대 30초 폴링)
-          function _waitAnalysisDoneAndLoad() {
-            var analyzing = document.getElementById('aiAnalyzing');
-            var isAnalyzing = analyzing && !analyzing.classList.contains('hidden');
-            if (isAnalyzing) {
-              setTimeout(_waitAnalysisDoneAndLoad, 1000); // 1초마다 재확인
-            } else {
-              refreshData();
-              loadCaffeineLogs();
-              loadSleepLogs();
-              // ⭐ 캐시가 없거나 만료된 경우에만 DB 재로드 (분석 완료 후)
-              var cachedTime = localStorage.getItem('caffeine_db_cache_time');
-              var CACHE_TTL  = 24 * 60 * 60 * 1000;
-              if (!cachedTime || (Date.now() - parseInt(cachedTime)) >= CACHE_TTL) {
-                loadCaffeineDbFromGAS();
-              }
-            }
-          }
-          _waitAnalysisDoneAndLoad();
-        }, 3000);
+        updateDisplayStudentInfo();
+        loadQuickMenuFromStorage();
+        initQuickMenuEditor();
+        renderQuickMenus();
+        setCurrentTime();
+        setToday();
+        startAutoRefresh();
+        setTimeout(checkReplyBubble, 1500);
+        setTimeout(checkMsgBubble, 2000);
+        setTimeout(checkTeacherAwards, 2500);
+        setTimeout(loadBadgeConfig, 800);
+        // 카메라 복귀 파일이 세팅될 짧은 여유만 둔다. 일반 재실행은 즉시 초기 데이터를 요청한다.
+        setTimeout(waitForCameraAnalysisThenLoad, 100);
         return;
       }
 
@@ -1365,10 +1351,7 @@
       initQuickMenuEditor();
       renderQuickMenus();
       setToday();
-      checkAndLoadWeight();
-      refreshData();
-      loadCaffeineLogs();
-      loadSleepLogs();
+      loadInitialStudentData();
       startAutoRefresh();
       setTimeout(checkReplyBubble, 1500);
       setTimeout(checkMsgBubble, 2000);
@@ -1405,6 +1388,33 @@
       }
     }
 
+    function applyWeightData(result) {
+      if (!user || !user.studentId) return;
+      if (result && result.success && result.weight) {
+        userWeight = result.weight;
+        userLimit = result.targetCaf || Math.round(userWeight * 2.5);
+        const weightInput = document.getElementById('userWeight');
+        if (weightInput) weightInput.value = userWeight;
+        if (result.targetCaf) {
+          const tc = document.getElementById('targetCafInput');
+          if (tc) tc.value = result.targetCaf;
+        }
+        if (result.targetBedtime) {
+          const tb = document.getElementById('targetBedtimeInput');
+          if (tb) tb.value = result.targetBedtime;
+        }
+        if (result.targetWakeTime) {
+          const tw = document.getElementById('targetWakeTimeInput');
+          if (tw) tw.value = result.targetWakeTime;
+        }
+        if (result.ageGroup) changeSettingsAgeGroup(result.ageGroup);
+        updateLimitDisplay();
+        updateTargetSleepDisplay();
+      } else {
+        showWeightSetupModal();
+      }
+    }
+
     // 체중 정보 확인 및 로드
     function checkAndLoadWeight() {
       // ── ⭐ 이미 체중 데이터 로드됐으면 재호출 방지 (세션 복구 시 중복 실행 차단) ──
@@ -1413,35 +1423,7 @@
 
       google.script.run
         .withSuccessHandler(result => {
-          if (!user || !user.studentId) return;
-          if (result.success && result.weight) {
-            // 기존 데이터 로드 → 설정탭 UI에 반영
-            userWeight = result.weight;
-            userLimit = result.targetCaf || Math.round(userWeight * 2.5);
-            const weightInput = document.getElementById('userWeight');
-            if (weightInput) weightInput.value = userWeight;
-            if (result.targetCaf) {
-              const tc = document.getElementById('targetCafInput');
-              if (tc) tc.value = result.targetCaf;
-            }
-            if (result.targetBedtime) {
-              const tb = document.getElementById('targetBedtimeInput');
-              if (tb) tb.value = result.targetBedtime;
-            }
-            if (result.targetWakeTime) {
-              const tw = document.getElementById('targetWakeTimeInput');
-              if (tw) tw.value = result.targetWakeTime;
-            }
-            // 학생 개인 연령대 → SLEEP_CFG에 반영 및 설정탭 버튼 동기화
-            if (result.ageGroup) {
-              changeSettingsAgeGroup(result.ageGroup);
-            }
-            updateLimitDisplay();
-            updateTargetSleepDisplay();
-          } else {
-            // 첫 로그인 → 초기 설정 모달 표시
-            showWeightSetupModal();
-          }
+          applyWeightData(result);
         })
         .withFailureHandler(err => {
           if (!user || !user.studentId) return;
@@ -1449,6 +1431,81 @@
           showWeightSetupModal();
         })
         .getWeightData(user.studentId);
+    }
+
+    function loadSleepSettingsLegacy() {
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.success && res.settings) {
+            SLEEP_CFG = res.settings;
+            changeSettingsAgeGroup(res.settings.ageGroup || 'teen');
+          }
+        })
+        .withFailureHandler(function() {})
+        .getSleepSettings();
+    }
+
+    function requestStudentBootstrap() {
+      return new Promise(function(resolve, reject) {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .getStudentBootstrap(user.studentId);
+      });
+    }
+
+    function applyStudentBootstrap(data) {
+      window._weightLoaded = true;
+      applyWeightData(data.weight);
+      caffeineLogs = data.caffeineLogs || [];
+      sleepLogs = data.sleepLogs || [];
+      renderCaffeineLogs();
+      renderSleepLogs();
+      updateDashboard(data.stats || {});
+      if (data.sleepSettings && data.sleepSettings.success && data.sleepSettings.settings) {
+        SLEEP_CFG = data.sleepSettings.settings;
+        changeSettingsAgeGroup(data.sleepSettings.settings.ageGroup || 'teen');
+      }
+      if (lastDashboardData) renderCharts(lastDashboardData);
+    }
+
+    function loadLegacyStudentData() {
+      window._weightLoaded = false;
+      checkAndLoadWeight();
+      refreshData();
+      loadCaffeineLogs();
+      loadSleepLogs();
+      loadSleepSettingsLegacy();
+    }
+
+    function loadInitialStudentData() {
+      if (!window.studentStartup) {
+        loadLegacyStudentData();
+        return Promise.resolve(false);
+      }
+      return window.studentStartup.loadStudentBootstrap({
+        requestBootstrap: requestStudentBootstrap,
+        applyBootstrap: applyStudentBootstrap,
+        fallback: loadLegacyStudentData
+      });
+    }
+
+    function waitForCameraAnalysisThenLoad() {
+      if (!user) return;
+      const analyzing = document.getElementById('aiAnalyzing');
+      const analyzingVisible = Boolean(analyzing && !analyzing.classList.contains('hidden'));
+      const cameraHasFile = ['drinkCamera', 'drinkImage'].some(function(id) {
+        const input = document.getElementById(id);
+        return Boolean(input && input.files && input.files.length > 0);
+      });
+      if (window.studentStartup && window.studentStartup.shouldDeferStudentBootstrap({ analyzingVisible, cameraHasFile })) {
+        setTimeout(waitForCameraAnalysisThenLoad, 500);
+        return;
+      }
+      loadInitialStudentData();
+      const cachedTime = localStorage.getItem('caffeine_db_cache_time');
+      const cacheTtl = 24 * 60 * 60 * 1000;
+      if (!cachedTime || (Date.now() - parseInt(cachedTime)) >= cacheTtl) loadCaffeineDbFromGAS();
     }
 
     // 초기 설정 모달 (첫 로그인 시)
@@ -5177,6 +5234,7 @@
       window.appAuth.onSessionExpired(function() {
         user = null;
         clearSession();
+        document.getElementById('bootPage')?.classList.add('hidden');
         document.getElementById('mainApp')?.classList.add('hidden');
         document.getElementById('loginPage')?.classList.remove('hidden');
         const msg = document.getElementById('loginMsg');
@@ -5184,28 +5242,24 @@
       });
 
       // 브라우저 저장값이 아니라 서명된 서버 세션으로만 로그인 상태를 복구한다.
-      window.appAuth.getSession()
-        .then(function(savedSession) {
+      const restoreOptions = {
+        getSession: window.appAuth.getSession,
+        onAuthenticated: function(savedSession) {
           try {
             const cached = localStorage.getItem('caffeine_db_cache');
             if (cached) CAFFEINE_DB = JSON.parse(cached);
           } catch(e) {}
           enterApp(savedSession, true);
-          google.script.run
-            .withSuccessHandler(function(res) {
-              if (res && res.success && res.settings) {
-                SLEEP_CFG = res.settings;
-                changeSettingsAgeGroup(res.settings.ageGroup || 'teen');
-              }
-            })
-            .withFailureHandler(function() {})
-            .getSleepSettings();
-        })
-        .catch(function() {
+        },
+        onUnauthenticated: function() {
           clearSession();
+          document.getElementById('bootPage')?.classList.add('hidden');
           document.getElementById('mainApp')?.classList.add('hidden');
           document.getElementById('loginPage')?.classList.remove('hidden');
-        });
+        }
+      };
+      if (window.studentStartup) window.studentStartup.restoreStudentSession(restoreOptions);
+      else restoreOptions.getSession().then(restoreOptions.onAuthenticated).catch(restoreOptions.onUnauthenticated);
 
       // ── 뒤로가기 완전 차단 ──
       history.pushState({ page: 'app' }, '', location.href);

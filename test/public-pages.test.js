@@ -28,6 +28,18 @@ test('student page uses the same-origin secure bridge and server session auth', 
   assert.match(html, /pushReminders\.initialize/);
 });
 
+test('student page first paint shows a neutral boot screen instead of the login form', async () => {
+  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const boot = html.match(/<div id="bootPage"[^>]*class="([^"]*)"/);
+  const login = html.match(/<div id="loginPage"[^>]*class="([^"]*)"/);
+
+  assert.ok(boot);
+  assert.ok(login);
+  assert.doesNotMatch(boot[1], /\bhidden\b/);
+  assert.match(login[1], /\bhidden\b/);
+  assert.match(html, /public\/js\/student-startup\.js/);
+});
+
 test('teacher page is gated by server-side authentication before dashboard start', async () => {
   const html = await read('teacher/index.html');
   const auth = await read('public/js/teacher-auth.js');
