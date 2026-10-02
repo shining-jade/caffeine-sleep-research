@@ -188,9 +188,11 @@ export function createTeacherReminders({
 
   async function saveConfig() {
     const normalized = normalizeTeacherReminderForm(readForm());
+    payload = { ...(payload || {}), config: normalized };
     emit({ status: 'saving' });
-    await api.saveConfig(normalized);
-    payload = await api.getConfig();
+    const saved = await api.saveConfig(normalized);
+    payload = { ...payload, config: saved?.config || normalized };
+    try { payload = await api.getConfig(); } catch { /* The save already succeeded; keep the confirmed values. */ }
     return emit({ status: 'saved' });
   }
 

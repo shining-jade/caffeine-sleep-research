@@ -120,13 +120,43 @@ test('initial disabled config may render blank class dates but cannot be saved b
 });
 
 test('save requires valid explicit form values and reloads server state', async () => {
-  const { controller, calls } = harness();
+  const { controller, calls, states } = harness();
   await controller.initialize();
   await controller.saveConfig();
   const saved = calls.find(([name]) => name === 'save-config')[1];
+  const saving = states.find((state) => state.status === 'saving');
   assert.equal(saved.enabled, true);
   assert.equal(saved.includeWeekends, false);
+  assert.equal(saving.config.enabled, true);
+  assert.equal(saving.config.classPeriods[0].startDate, '2026-09-01');
   assert.equal(calls.filter(([name]) => name === 'get-config').length, 2);
+});
+
+test('successful save stays confirmed when the follow-up refresh fails', async () => {
+  const states = [];
+  let reads = 0;
+  const initial = config({ enabled: false });
+  const draft = config({ enabled: true, includeWeekends: false });
+  const controller = createTeacherReminders({
+    api: {
+      async getConfig() {
+        reads += 1;
+        if (reads > 1) throw new Error('refresh failed');
+        return { config: initial };
+      },
+      async saveConfig(value) { return { success: true, config: value }; },
+      async getTestStudent() { return { sleepDevices: 0, caffeineDevices: 0 }; },
+    },
+    readForm: () => draft,
+    onState: (state) => states.push(state),
+  });
+  await controller.initialize();
+
+  const saved = await controller.saveConfig();
+
+  assert.equal(saved.status, 'saved');
+  assert.deepEqual(saved.config, draft);
+  assert.equal(states.at(-1).status, 'saved');
 });
 
 test('teacher test notification registers and sends only to the current browser', async () => {

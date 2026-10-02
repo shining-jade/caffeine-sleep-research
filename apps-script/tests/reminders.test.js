@@ -106,6 +106,27 @@ test('saving reminder config normalizes values stamps actor and uses a script lo
   assert.deepEqual(JSON.parse(JSON.stringify(call(context, 'getReminderConfig_()'))), JSON.parse(JSON.stringify(saved)));
 });
 
+test('reminder config reloads spreadsheet date cells as ISO calendar dates', async () => {
+  const stored = [
+    1, true, true, true, '08:00', '20:00', true,
+    new Date('2026-10-19T00:00:00.000Z'), new Date('2026-11-22T00:00:00.000Z'),
+    new Date('2026-10-23T00:00:00.000Z'), new Date('2026-11-26T00:00:00.000Z'),
+    new Date('2026-10-13T00:00:00.000Z'), new Date('2026-11-16T00:00:00.000Z'),
+    new Date('2026-10-13T00:00:00.000Z'), new Date('2026-11-16T00:00:00.000Z'),
+    '2026-10-02T11:54:43.000Z', 'teacher',
+  ];
+  const { context } = await reminders({ '알림설정': [CONFIG_HEADERS, stored] });
+
+  const loaded = JSON.parse(JSON.stringify(call(context, 'getReminderConfig_()')));
+
+  assert.deepEqual(loaded.classPeriods, [
+    { classId: '1', startDate: '2026-10-19', endDate: '2026-11-22' },
+    { classId: '2', startDate: '2026-10-23', endDate: '2026-11-26' },
+    { classId: '3', startDate: '2026-10-13', endDate: '2026-11-16' },
+    { classId: '4', startDate: '2026-10-13', endDate: '2026-11-16' },
+  ]);
+});
+
 function enabledConfig() {
   return {
     enabled: true,

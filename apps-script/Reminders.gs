@@ -33,6 +33,9 @@ function normalizeReminderHour_(value) {
 }
 
 function normalizeReminderDate_(value, allowEmpty) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, 'Asia/Seoul', 'yyyy-MM-dd');
+  }
   var text = String(value || '').trim();
   if (!text && allowEmpty) return '';
   var match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
