@@ -25,6 +25,9 @@ function reminderNowIso_() {
 }
 
 function normalizeReminderHour_(value) {
+  if (value instanceof Date && !isNaN(value.getTime())) {
+    return Utilities.formatDate(value, 'Asia/Seoul', 'HH:mm');
+  }
   var match = String(value || '').trim().match(/^(\d{1,2})(?::00)?$/);
   if (!match) throw new Error('REQUEST_REJECTED');
   var hour = Number(match[1]);

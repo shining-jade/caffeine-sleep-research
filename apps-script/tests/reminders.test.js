@@ -108,7 +108,8 @@ test('saving reminder config normalizes values stamps actor and uses a script lo
 
 test('reminder config reloads spreadsheet date cells as ISO calendar dates', async () => {
   const stored = [
-    1, true, true, true, '08:00', '20:00', true,
+    1, true, true, true,
+    new Date('1970-01-01T23:00:00.000Z'), new Date('1970-01-01T11:00:00.000Z'), true,
     new Date('2026-10-19T00:00:00.000Z'), new Date('2026-11-22T00:00:00.000Z'),
     new Date('2026-10-23T00:00:00.000Z'), new Date('2026-11-26T00:00:00.000Z'),
     new Date('2026-10-13T00:00:00.000Z'), new Date('2026-11-16T00:00:00.000Z'),
@@ -119,6 +120,8 @@ test('reminder config reloads spreadsheet date cells as ISO calendar dates', asy
 
   const loaded = JSON.parse(JSON.stringify(call(context, 'getReminderConfig_()')));
 
+  assert.equal(loaded.sleepTime, '08:00');
+  assert.equal(loaded.caffeineTime, '20:00');
   assert.deepEqual(loaded.classPeriods, [
     { classId: '1', startDate: '2026-10-19', endDate: '2026-11-22' },
     { classId: '2', startDate: '2026-10-23', endDate: '2026-11-26' },

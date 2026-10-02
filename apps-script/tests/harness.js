@@ -88,6 +88,14 @@ export async function loadAppsScript({
       },
       formatDate(value, _timezone, pattern) {
         const date = value instanceof Date ? value : new Date(value);
+        if (pattern === 'HH:mm') {
+          const parts = new Intl.DateTimeFormat('en-GB', {
+            timeZone: _timezone,
+            hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+          }).formatToParts(date);
+          const values = Object.fromEntries(parts.map(({ type, value: partValue }) => [type, partValue]));
+          return `${values.hour}:${values.minute}`;
+        }
         if (pattern === 'yyyy-MM-dd') {
           const parts = new Intl.DateTimeFormat('en-CA', {
             timeZone: _timezone,
