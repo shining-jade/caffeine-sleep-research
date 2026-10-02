@@ -21,6 +21,13 @@
         .subtitle{color:#6b7280;font-size:14px;margin-top:8px;}
         .last-update{font-size:13px;color:#9ca3af;margin-top:4px;}
         .btn{padding:10px 20px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all 0.3s;}
+        .teacher-save-toast{position:fixed;top:20px;right:20px;z-index:1800;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:14px 16px;border-radius:12px;color:white;font-size:14px;font-weight:700;line-height:1.45;box-shadow:0 14px 36px rgba(15,23,42,.24);opacity:0;transform:translateY(-14px);pointer-events:none;transition:opacity .2s ease,transform .2s ease;}
+        .teacher-save-toast.is-visible{opacity:1;transform:translateY(0);pointer-events:auto;}
+        .teacher-save-toast-loading{background:#2563eb;}
+        .teacher-save-toast-success{background:#15803d;}
+        .teacher-save-toast-error{background:#b91c1c;}
+        .teacher-save-toast-message{flex:1;}
+        .teacher-save-toast-close{border:0;background:rgba(255,255,255,.18);color:white;border-radius:999px;width:28px;height:28px;font-size:20px;line-height:1;cursor:pointer;flex:0 0 auto;}
         .btn-primary{background:#6366f1;color:white;} .btn-primary:hover{background:#4f46e5;} .btn-primary:disabled{background:#9ca3af;cursor:not-allowed;}
         .btn-green{background:#10b981;color:white;} .btn-green:hover{background:#059669;} .btn-green:disabled{background:#9ca3af;cursor:not-allowed;}
         .btn-blue{background:#3b82f6;color:white;} .btn-blue:hover{background:#2563eb;}
@@ -486,6 +493,7 @@
             .reminder-wide{grid-column:auto;}
             .reminder-metrics{grid-template-columns:1fr;}
             .reminder-time-row{grid-template-columns:1fr;}
+            .teacher-save-toast{top:12px;left:14px;right:14px;max-width:none;}
         }
 
         .rec-badge{display:inline-block;padding:1px 7px;border-radius:8px;font-size:11px;font-weight:600;margin-left:4px;}
@@ -560,6 +568,7 @@
   <script src="/public/js/badge-journey.js"></script>
   <script src="/public/js/safe-render.js"></script>
   <script src="/public/js/teacher-auth.js"></script>
+  <script type="module" src="/public/js/teacher-save-feedback.js"></script>
   <script type="module" src="/public/js/teacher-reminders.js"></script>
 </head>
 <body>
@@ -1769,29 +1778,33 @@ function loadSettings(){
     if(!localStorage.getItem('badgeMigrationV3'))migrateOldBadges();
 }
 function saveSettings(){
-    S.cafMaxFixed=parseFloat(document.getElementById('setting_cafMax').value)||0;
-    S.cafWarn=parseFloat(document.getElementById('setting_cafWarn').value)||80;
-    S.cafOver=parseFloat(document.getElementById('setting_cafOver').value)||100;
-    S.sleepSevere=parseFloat(document.getElementById('setting_sleepSevere').value)||7;
-    S.sleepWarn=parseFloat(document.getElementById('setting_sleepWarn').value)||8;
-    S.sleepGood=parseFloat(document.getElementById('setting_sleepGood').value)||10;
-    S.sleepMax=parseFloat(document.getElementById('setting_sleepMax').value)||11;
-    S.aiMinCaf=parseInt(document.getElementById('setting_aiMinCaf').value)||3;
-    S.aiMinSleep=parseInt(document.getElementById('setting_aiMinSleep').value)||3;
-    S.awardMinDays=parseInt(document.getElementById('setting_awardMinDays')?.value||5);
-    S.badgeHabitDays=parseInt(document.getElementById('setting_badgeHabitDays')?.value||3);
-    S.badgeStreakDays=parseInt(document.getElementById('setting_badgeStreakDays')?.value||7);
-    S.badgeMonthlyDays=parseInt(document.getElementById('setting_badgeMonthlyDays')?.value||10);
-    S.challengeName  = document.getElementById('setting_challengeName')?.value  || S.challengeName  || '10일 건강 챌린지';
-    S.challengeStart = document.getElementById('setting_challengeStart')?.value || S.challengeStart || '';
-    S.challengeEnd   = document.getElementById('setting_challengeEnd')?.value   || S.challengeEnd   || '';
-    try{localStorage.setItem('monSettings',JSON.stringify(S));}catch(e){}
-    saveSleepSettingsToGAS();
-    saveAwardSettings();
-    updateCafPreview(); updateSleepPreview();
-    document.getElementById('sleepWarningDetail').textContent=`7일 평균 ${S.sleepSevere}시간 미만`;
-    showTeacherModal('💾', '설정 저장 완료', '설정이 성공적으로 저장되었습니다.', 'success');
-    if(studentsData.length){updateDashboard();updateStudentGrid();}
+    const action=()=>{
+        S.cafMaxFixed=parseFloat(document.getElementById('setting_cafMax').value)||0;
+        S.cafWarn=parseFloat(document.getElementById('setting_cafWarn').value)||80;
+        S.cafOver=parseFloat(document.getElementById('setting_cafOver').value)||100;
+        S.sleepSevere=parseFloat(document.getElementById('setting_sleepSevere').value)||7;
+        S.sleepWarn=parseFloat(document.getElementById('setting_sleepWarn').value)||8;
+        S.sleepGood=parseFloat(document.getElementById('setting_sleepGood').value)||10;
+        S.sleepMax=parseFloat(document.getElementById('setting_sleepMax').value)||11;
+        S.aiMinCaf=parseInt(document.getElementById('setting_aiMinCaf').value)||3;
+        S.aiMinSleep=parseInt(document.getElementById('setting_aiMinSleep').value)||3;
+        S.awardMinDays=parseInt(document.getElementById('setting_awardMinDays')?.value||5);
+        S.badgeHabitDays=parseInt(document.getElementById('setting_badgeHabitDays')?.value||3);
+        S.badgeStreakDays=parseInt(document.getElementById('setting_badgeStreakDays')?.value||7);
+        S.badgeMonthlyDays=parseInt(document.getElementById('setting_badgeMonthlyDays')?.value||10);
+        S.challengeName=document.getElementById('setting_challengeName')?.value||S.challengeName||'10일 건강 챌린지';
+        S.challengeStart=document.getElementById('setting_challengeStart')?.value||S.challengeStart||'';
+        S.challengeEnd=document.getElementById('setting_challengeEnd')?.value||S.challengeEnd||'';
+        localStorage.setItem('monSettings',JSON.stringify(S));
+        saveSleepSettingsToGAS();
+        saveAwardSettings();
+        updateCafPreview();updateSleepPreview();
+        document.getElementById('sleepWarningDetail').textContent=`7일 평균 ${S.sleepSevere}시간 미만`;
+        if(studentsData.length){updateDashboard();updateStudentGrid();}
+    };
+    if(window.teacherSaveFeedback)return window.teacherSaveFeedback.runSave('settings',action);
+    try{action();showTeacherModal('💾','설정 저장 완료','설정이 성공적으로 저장되었습니다.','success');}
+    catch(error){showTeacherModal('⚠️','설정 저장 실패','다시 시도해 주세요.','error');throw error;}
 }
 function updateCafPreview(){
     document.getElementById('lvl_ok').textContent='0% ~ 56% 미만 → 1단계: 안전';

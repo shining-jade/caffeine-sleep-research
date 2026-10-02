@@ -473,7 +473,12 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   }
   window.teacherReminders = {
     initialize: () => run(() => controller.initialize()),
-    saveConfig: () => run(() => controller.saveConfig()),
+    saveConfig: () => {
+      const action = () => run(() => controller.saveConfig());
+      return window.teacherSaveFeedback
+        ? window.teacherSaveFeedback.runSave('reminders', action)
+        : action();
+    },
     registerTestDevice: () => run(() => controller.registerTestDevice()),
     sendTest: (type) => run(() => controller.sendTest(type)),
     refreshTestStudent: () => run(() => controller.refreshTestStudent()),
