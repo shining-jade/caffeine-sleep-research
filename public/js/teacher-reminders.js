@@ -167,6 +167,8 @@ export function createTeacherReminders({
   let state = null;
   let subscription = null;
   let initializing = null;
+  let configSaving = null;
+  let configRevision = 0;
   let testStudentRefreshing = null;
   let testStudentSending = null;
 
@@ -186,14 +188,31 @@ export function createTeacherReminders({
     try { return await initializing; } finally { initializing = null; }
   }
 
-  async function saveConfig() {
+  function saveConfig() {
+    if (configSaving) return configSaving;
     const normalized = normalizeTeacherReminderForm(readForm());
+    const revision = ++configRevision;
     payload = { ...(payload || {}), config: normalized };
     emit({ status: 'saving' });
-    const saved = await api.saveConfig(normalized);
-    payload = { ...payload, config: saved?.config || normalized };
-    try { payload = await api.getConfig(); } catch { /* The save already succeeded; keep the confirmed values. */ }
-    return emit({ status: 'saved' });
+    configSaving = (async () => {
+      try {
+        const saved = await api.saveConfig(normalized);
+        payload = { ...payload, config: saved?.config || normalized };
+        const confirmed = emit({ status: 'saved' });
+        Promise.resolve()
+          .then(() => api.getConfig())
+          .then((refreshed) => {
+            if (revision !== configRevision) return;
+            payload = refreshed;
+            emit({ status: 'saved' });
+          })
+          .catch(() => { /* The save already succeeded; keep the confirmed values. */ });
+        return confirmed;
+      } finally {
+        configSaving = null;
+      }
+    })();
+    return configSaving;
   }
 
   function pushSupported() {
@@ -427,6 +446,8 @@ function renderBrowserState(state) {
     'test-sent': '이 브라우저로 시험 알림을 보냈습니다.',
   };
   setText('teacherReminderStatus', messages[state.status] || '');
+  const saveButton = element('teacherReminderSaveButton');
+  if (saveButton) saveButton.disabled = state.status === 'saving';
 
   const testStudent = state.testStudent;
   setText('teacherTestStudentSummary', `${testStudent.name} · 수면 가능 기기 ${testStudent.sleepDevices}대 · 카페인 가능 기기 ${testStudent.caffeineDevices}대`);

@@ -159,6 +159,107 @@ test('successful save stays confirmed when the follow-up refresh fails', async (
   assert.equal(states.at(-1).status, 'saved');
 });
 
+test('successful save resolves before the background dashboard refresh finishes', async () => {
+  let reads = 0;
+  let markRefreshStarted;
+  let finishRefresh;
+  const refreshStarted = new Promise((resolve) => { markRefreshStarted = resolve; });
+  const refreshPending = new Promise((resolve) => { finishRefresh = resolve; });
+  const draft = config({ enabled: true, includeWeekends: false });
+  const states = [];
+  const controller = createTeacherReminders({
+    api: {
+      async getConfig() {
+        reads += 1;
+        if (reads === 1) return { config: config({ enabled: false }) };
+        markRefreshStarted();
+        return refreshPending;
+      },
+      async saveConfig(value) { return { success: true, config: value }; },
+      async getTestStudent() { return { sleepDevices: 0, caffeineDevices: 0 }; },
+    },
+    readForm: () => draft,
+    onState: (state) => states.push(state),
+  });
+  await controller.initialize();
+
+  let settled = false;
+  const saving = controller.saveConfig().then((value) => {
+    settled = true;
+    return value;
+  });
+  await refreshStarted;
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(settled, true);
+  assert.equal((await saving).status, 'saved');
+  assert.equal(states.at(-1).status, 'saved');
+  finishRefresh({
+    config: draft,
+    subscriberCounts: { students: 15, devices: 18, byClass: { 1: 5, 2: 4, 3: 5, 4: 4 } },
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(controller.getState().subscriberCounts.devices, 18);
+});
+
+test('repeated saves share one in-flight request', async () => {
+  let finishSave;
+  let saves = 0;
+  const pendingSave = new Promise((resolve) => { finishSave = resolve; });
+  const draft = config({ enabled: true });
+  const controller = createTeacherReminders({
+    api: {
+      async getConfig() { return { config: draft }; },
+      async saveConfig() { saves += 1; return pendingSave; },
+      async getTestStudent() { return { sleepDevices: 0, caffeineDevices: 0 }; },
+    },
+    readForm: () => draft,
+  });
+  await controller.initialize();
+
+  const first = controller.saveConfig();
+  const repeated = controller.saveConfig();
+
+  assert.equal(first, repeated);
+  assert.equal(saves, 1);
+  finishSave({ success: true, config: draft });
+  await first;
+});
+
+test('a late refresh from an earlier save cannot overwrite a newer saved config', async () => {
+  let reads = 0;
+  let finishFirstRefresh;
+  const firstRefresh = new Promise((resolve) => { finishFirstRefresh = resolve; });
+  const firstDraft = config({ enabled: true, caffeineTime: '19:00' });
+  const secondDraft = config({ enabled: true, caffeineTime: '21:00' });
+  let draft = firstDraft;
+  const controller = createTeacherReminders({
+    api: {
+      async getConfig() {
+        reads += 1;
+        if (reads === 1) return { config: config({ enabled: false }) };
+        if (reads === 2) return firstRefresh;
+        return { config: secondDraft };
+      },
+      async saveConfig(value) { return { success: true, config: value }; },
+      async getTestStudent() { return { sleepDevices: 0, caffeineDevices: 0 }; },
+    },
+    readForm: () => draft,
+  });
+  await controller.initialize();
+
+  await controller.saveConfig();
+  draft = secondDraft;
+  await controller.saveConfig();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(controller.getState().config.caffeineTime, '21:00');
+
+  finishFirstRefresh({ config: firstDraft });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(controller.getState().config.caffeineTime, '21:00');
+});
+
 test('teacher test notification registers and sends only to the current browser', async () => {
   const { controller, calls } = harness();
   await controller.initialize();
