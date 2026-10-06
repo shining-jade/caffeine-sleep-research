@@ -2292,7 +2292,7 @@ function toggleAutoRefresh(enabled){
     }, ms);
 }
 
-function loadDataFromSheet(){
+function loadDataFromSheet(onReady,onError){
     const visibilityAtLoad=visibilityRevision;
     const btn=document.getElementById('refreshBtn');btn.disabled=true;btn.textContent='⏳ 로딩 중...';
     document.getElementById('studentGrid').innerHTML='<div class="loading"><div class="spinner"></div><p style="color:#6b7280;">구글시트에서 데이터를 불러오는 중...</p></div>';
@@ -2300,6 +2300,7 @@ function loadDataFromSheet(){
         .withSuccessHandler(function(result){
             try{
                 if(!result.success)throw new Error(result.error||'데이터 로드 실패');
+                if(onReady)window.teacherLoadingProgress?.(70,'학생·카페인·수면 데이터를 불러왔습니다');
                 if(visibilityAtLoad===visibilityRevision)hiddenStudentIds=new Set((result.hiddenStudentIds||[]).map(String));
                 studentHideSelection.clear();updateVisibilityControls();
                 studentsData=(result.students||[]).map(s=>({학번:String(s.학번),이름:String(s.이름),학년:String(s.학년),반:String(s.반),번호:String(s.번호)}));
@@ -2343,6 +2344,7 @@ function loadDataFromSheet(){
                     console.log('[뱃지동기화] GAS 시트 → manualAwards 완료:', Object.keys(manualAwards).length, '명');
                 }
 
+                if(onReady)window.teacherLoadingProgress?.(90,'통계와 화면을 준비하고 있습니다');
                 document.getElementById('lastUpdate').textContent='마지막 업데이트: '+new Date().toLocaleString('ko-KR');
                 initFilters();
                 updateDashboard();
@@ -2356,13 +2358,16 @@ function loadDataFromSheet(){
                 detectPendingBadges();
                 // 뱃지 탭이 열려있으면 자동 갱신
                 if (document.getElementById('tab-awards')?.classList.contains('active')) {renderAwardsTab();renderPendingBadges();}
+                if(onReady)onReady();
             }catch(err){
+                if(onError)onError(err);
                 document.getElementById('studentGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;background:white;border-radius:16px;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h3 style="color:#ef4444;margin-bottom:12px;">데이터를 불러오지 못했습니다</h3><p style="color:#6b7280;margin-bottom:20px;">'+err.message+'</p><button onclick="loadDataFromSheet()" class="btn btn-primary">🔄 다시 시도</button></div>';
                 ['totalStudents','notRecordedToday','caffeineWarning','sleepWarning'].forEach(function(id){document.getElementById(id).textContent='-';});
             }
             btn.disabled=false;btn.textContent='🔄 데이터 새로고침';
         })
         .withFailureHandler(function(err){
+            if(onError)onError(err);
             document.getElementById('studentGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;background:white;border-radius:16px;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h3 style="color:#ef4444;margin-bottom:12px;">데이터를 불러오지 못했습니다</h3><p style="color:#6b7280;margin-bottom:20px;">'+err.message+'</p><button onclick="loadDataFromSheet()" class="btn btn-primary">🔄 다시 시도</button></div>';
             ['totalStudents','notRecordedToday','caffeineWarning','sleepWarning'].forEach(function(id){document.getElementById(id).textContent='-';});
             btn.disabled=false;btn.textContent='🔄 데이터 새로고침';
@@ -4968,7 +4973,7 @@ function applyZoom(val){
     if(!isMobile()){try{localStorage.setItem('dashZoom',v);}catch(e){}}
 }
 window.startTeacherApp = function startTeacherApp(){
-    if (window.__teacherAppStarted) return;
+    if (window.__teacherAppStarted) return new Promise((resolve,reject)=>loadDataFromSheet(resolve,reject));
     window.__teacherAppStarted = true;
     loadSettings();
     ['setting_cafWarn','setting_cafOver'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',updateCafPreview);});
@@ -4982,7 +4987,7 @@ window.startTeacherApp = function startTeacherApp(){
         if(isMobile())applyZoom(100);
         else {const z=localStorage.getItem('dashZoom');if(z){const sl=document.getElementById('zoomSlider');if(sl)sl.value=z;applyZoom(z);}}
     }catch(e){}
-    loadDataFromSheet();
+    const ready=new Promise((resolve,reject)=>loadDataFromSheet(resolve,reject));
     if(window.teacherReminders)window.teacherReminders.initialize();
     // 학생 답장 알림 체크 (로드 후 3초, 이후 2분마다)
     setTimeout(checkStudentReplies, 3000);
@@ -4990,6 +4995,7 @@ window.startTeacherApp = function startTeacherApp(){
     // 새 문의 알림 체크 (로드 후 5초, 이후 2분마다)
     setTimeout(checkUnreadInquiries, 5000);
     setInterval(checkUnreadInquiries, 120000);
+    return ready;
 };
 
 // ============================================

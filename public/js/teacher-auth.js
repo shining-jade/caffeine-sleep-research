@@ -26,7 +26,7 @@
     overlay.id = 'teacherAuthOverlay';
     if (checking) {
       overlay.dataset.checking = 'true';
-      overlay.innerHTML = '<div id="teacherAuthCard" role="status" aria-live="polite"><h1>로그인 상태 확인 중...</h1><p>잠시만 기다려주세요.</p></div>';
+      overlay.innerHTML = '<div id="teacherAuthCard" role="status" aria-live="polite"><h1>로그인 상태 확인 중...</h1><p id="teacherLoadingStage">잠시만 기다려주세요.</p><div id="teacherLoadingBar" role="progressbar" aria-label="대시보드 준비 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="5" style="height:12px;background:#e5e7eb;border-radius:8px;overflow:hidden;"><div id="teacherLoadingFill" style="height:100%;width:5%;background:#6366f1;transition:width .2s;"></div></div><p id="teacherLoadingPercent" style="margin:12px 0 0;text-align:right;font-weight:700;color:#4f46e5;">5%</p></div>';
       document.body.appendChild(overlay);
       return overlay;
     }
@@ -55,12 +55,32 @@
     logoutHost.appendChild(button);
   }
 
-  function enterDashboard() {
+  window.teacherLoadingProgress = function(percent,label) {
+    var bar=document.getElementById('teacherLoadingBar');
+    if(bar)bar.setAttribute('aria-valuenow',String(percent));
+    var fill=document.getElementById('teacherLoadingFill');if(fill)fill.style.width=percent+'%';
+    var text=document.getElementById('teacherLoadingPercent');if(text)text.textContent=percent+'%';
+    var stage=document.getElementById('teacherLoadingStage');if(stage)stage.textContent=label;
+  };
+  async function enterDashboard() {
     enteredDashboard = true;
     document.getElementById('teacherAuthOverlay')?.remove();
-    document.documentElement.classList.remove('teacher-auth-pending');
-    addLogoutButton();
-    if (typeof window.startTeacherApp === 'function') window.startTeacherApp();
+    ensureOverlay(true);
+    window.teacherLoadingProgress(30,'로그인 확인 완료 · 데이터를 불러오는 중입니다');
+    try {
+      if (typeof window.startTeacherApp === 'function') await window.startTeacherApp();
+      window.teacherLoadingProgress(100,'준비가 완료되었습니다');
+      if(window.requestAnimationFrame)await new Promise(resolve=>window.requestAnimationFrame(()=>window.requestAnimationFrame(resolve)));
+      document.getElementById('teacherAuthOverlay')?.remove();
+      document.documentElement.classList.remove('teacher-auth-pending');
+      addLogoutButton();
+    } catch (_error) {
+      var stage=document.getElementById('teacherLoadingStage');if(stage)stage.textContent='데이터를 불러오지 못했습니다. 다시 시도해주세요.';
+      var retry=document.createElement('button');retry.id='teacherLoadingRetry';retry.type='button';retry.textContent='다시 시도';
+      retry.style.cssText='margin-top:16px;padding:12px 20px;border:0;border-radius:12px;background:#4f46e5;color:white;cursor:pointer;';
+      retry.addEventListener('click',enterDashboard);
+      document.getElementById('teacherAuthCard')?.appendChild(retry);
+    }
   }
 
   async function login(event) {
@@ -79,7 +99,7 @@
     try {
       await window.appAuth.loginTeacher(password);
       input.value = '';
-      enterDashboard();
+      await enterDashboard();
     } catch (_error) {
       input.value = '';
       message.textContent = '비밀번호가 올바르지 않거나 서버에 연결할 수 없습니다.';
@@ -101,7 +121,7 @@
     });
     try {
       await window.appAuth.getSession();
-      enterDashboard();
+      await enterDashboard();
     } catch (_error) {
       ensureOverlay();
       document.getElementById('teacherPassword')?.focus();
