@@ -151,7 +151,12 @@ function dispatchStudentAction_(action, params, subject) {
     if (rule === 'caffeinePayload') requireOwnedRecord_('caffeine', safeParams[0].id, subject);
     if (rule === 'sleepPayload') requireOwnedRecord_('sleep', safeParams[0].id, subject);
     if (rule === 'messageRow') requireOwnedRow_('teacher_messages', safeParams[0], subject);
-    return invokeAction_(action, safeParams);
+    var result = invokeAction_(action, safeParams);
+    if (action === 'saveCaffeineData' && result && result.success === true) {
+      var saved = safeParams[0];
+      result.record = { id: saved.id, name: saved.drink, amount: Number(saved.mg), time: saved.time, reason: saved.reason || '', symptom: saved.symptom || '' };
+    }
+    return result;
   };
   return STUDENT_MUTATIONS_[action] ? withScriptLock_(execute) : execute();
 }

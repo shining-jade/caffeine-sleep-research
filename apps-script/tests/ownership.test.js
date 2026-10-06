@@ -175,3 +175,12 @@ test('student push action overwrites a browser supplied owner and role', async (
   assert.equal(result.studentId, '1101');
   assert.equal(Object.hasOwn(result, 'name'), false);
 });
+
+test('confirmed caffeine save returns its trusted record without another spreadsheet read', async () => {
+  const {context}=await ownership({}, {__uuid:'trusted-save-id',saveCaffeineData(){return {success:true};}});
+  context.subject={studentId:'0',name:'테스트'};
+  context.params=[{id:'client-id',drink:'커피',mg:40,time:'2026-10-06T13:00',reason:'맛',symptom:'없음'}];
+  const result=call(context,"dispatchStudentAction_('saveCaffeineData',params,subject)");
+  assert.equal(result.record.id,'trusted-save-id');
+  assert.equal(result.record.name,'커피');assert.equal(result.record.amount,40);
+});

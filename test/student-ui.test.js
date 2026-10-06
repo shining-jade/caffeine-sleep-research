@@ -151,11 +151,20 @@ test('all inline student scripts parse before deployment', () => {
 
 test('consecutive confirmed caffeine saves include both amounts before history returns', () => {
   const submit=extract('submitCaffeine');
-  const start=submit.indexOf('.withSuccessHandler(() => {')+'.withSuccessHandler('.length;
+  const start=submit.indexOf('.withSuccessHandler((response) => {')+'.withSuccessHandler('.length;
   const end=submit.indexOf('\n        .withFailureHandler',start);
   const callback=submit.slice(start,end).trim().slice(0,-1);
   const totals=[];
-  const context=vm.createContext({btn:null,document:{getElementById:()=>({value:'',classList:{add(){}}}),querySelectorAll:()=>[]},selectedDrink:null,time:'today',amount:30,caffeineLogs:[{time:'today',amount:50}],confirmedPendingCaffeine:[],getLogDateKST:x=>x,getTodayKST:()=> 'today',showCaffeineWarning:(_amount,total)=>totals.push(total),loadCaffeineLogs(){},refreshData(){},showSaveCompleteModal(){}});
+  const context=vm.createContext({btn:null,pendingCaffeineSave:null,applyConfirmedCaffeineSave:()=>false,renderCaffeineLogs(){},document:{getElementById:()=>({value:'',classList:{add(){}}}),querySelectorAll:()=>[]},selectedDrink:null,time:'today',amount:30,caffeineLogs:[{time:'today',amount:50}],confirmedPendingCaffeine:[],getLogDateKST:x=>x,getTodayKST:()=> 'today',showCaffeineWarning:(_amount,total)=>totals.push(total),loadCaffeineLogs(){},refreshData(){},showSaveCompleteModal(){}});
   vm.runInContext('const saved='+callback+';saved();saved();',context);
   assert.deepEqual(totals,[80,110]);
+});
+
+test('confirmed save renders the trusted record immediately without needing a history request', () => {
+  let rendered=0,cached=0;
+  const context=vm.createContext({caffeineLogs:[],cacheStudentRecords(){cached++;},renderCaffeineLogs(){rendered++;}});
+  vm.runInContext(extract('applyConfirmedCaffeineSave'),context);
+  assert.equal(context.applyConfirmedCaffeineSave({record:{id:'server-id',name:'커피',amount:40,time:'2026-10-06T13:00'}}),true);
+  assert.equal(context.caffeineLogs[0].id,'server-id');assert.equal(rendered,1);assert.equal(cached,1);
+  assert.equal(context.applyConfirmedCaffeineSave({success:true}),false);
 });

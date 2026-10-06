@@ -1204,6 +1204,7 @@
 
     let caffeineLogs = [];
     let confirmedPendingCaffeine = [];
+    let pendingCaffeineSave = null;
     let sleepLogs = [];
     let lastDashboardData = null;
     let badgeConfig = null; // 교사가 설정한 뱃지 구성 (getBadgeConfig에서 로드)
@@ -1284,6 +1285,7 @@
     }
     function clearSession() {
       confirmedPendingCaffeine = [];
+      pendingCaffeineSave = null;
       if (window.studentRecordCache) window.studentRecordCache.clear();
       try {
         localStorage.removeItem('caffeineUser');
@@ -1304,6 +1306,7 @@
       stopAutoRefresh();
       caffeineLogs = [];
       confirmedPendingCaffeine = [];
+      pendingCaffeineSave = null;
       sleepLogs = [];
       teacherAwards = [];
       lastDashboardData = null;
@@ -1902,9 +1905,14 @@
       if(btn) { btn.disabled = true; btn.innerText = "저장 중..."; }
 
       const newLog = { id: Date.now(), name: drinkName, amount: amount, time: time, reason: reason };
+      pendingCaffeineSave = newLog;
+      renderCaffeineLogs();
 
       google.script.run
-        .withSuccessHandler(() => {
+        .withSuccessHandler((response) => {
+          pendingCaffeineSave = null;
+          const appliedRecord = applyConfirmedCaffeineSave(response);
+          if (!appliedRecord) renderCaffeineLogs();
           if(btn) { btn.disabled = false; btn.innerText = "카페인 기록 완료"; }
           document.getElementById('drinkName').value = '';
           document.getElementById('customAmount').value = '';
@@ -1917,18 +1925,20 @@
           selectedDrink = { drink: '', mg: 0 };
           // ⭐ 오늘 날짜 기록일 때만 섭취 경고 모달 표시
           // 과거 날짜 기록은 저장 완료 모달만 표시
-          confirmedPendingCaffeine.push({ time, amount });
+          if (!appliedRecord) confirmedPendingCaffeine.push({ time, amount });
           if(getLogDateKST(time) === getTodayKST()) {
             const knownTotal = caffeineLogs.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + Number(log.amount || 0), 0);
             showCaffeineWarning(amount, knownTotal + confirmedPendingCaffeine.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + log.amount, 0));
-            loadCaffeineLogs();
+            if (!appliedRecord) loadCaffeineLogs();
           } else {
             showSaveCompleteModal('✅ 카페인 기록이 저장되었습니다.');
-            loadCaffeineLogs();
+            if (!appliedRecord) loadCaffeineLogs();
           }
           refreshData();
         })
         .withFailureHandler(err => {
+          pendingCaffeineSave = null;
+          renderCaffeineLogs();
           showInfoModal('오류', '저장 중 오류가 발생했습니다. 다시 시도해주세요.');
           if(btn) { btn.disabled = false; btn.innerText = "카페인 기록 완료"; }
           console.error(err);
@@ -3559,7 +3569,7 @@
     function renderCaffeineLogs() {
       const container = document.getElementById('caffeineLogsContainer');
       if(!container) return;
-      if(caffeineLogs.length === 0) {
+      if(caffeineLogs.length === 0 && !pendingCaffeineSave) {
         container.innerHTML = '<p class="text-center py-8 text-gray-400 text-sm">기록이 없습니다.</p>';
         return;
       }
@@ -3572,6 +3582,13 @@
         return ib - ia;
       });
       container.innerHTML = '';
+      if (pendingCaffeineSave) {
+        const pending = document.createElement('div');
+        pending.className = 'p-4 bg-indigo-50 rounded-xl text-sm text-indigo-700';
+        pending.textContent = `${pendingCaffeineSave.name} · ${pendingCaffeineSave.amount}mg — 서버에 저장 중…`;
+        pending.setAttribute('role', 'status');
+        container.appendChild(pending);
+      }
       sorted.forEach(log => {
         const div = document.createElement('div');
         div.className = "p-4 bg-gray-50 rounded-xl flex justify-between items-center";
@@ -3967,6 +3984,15 @@
       if (type === 'logout-warning') { showLogoutFinalConfirm(); }
       else if (type === 'logout') { executeLogout(); }
       else if (type && id) { deleteLog(type, id); }
+    }
+
+    function applyConfirmedCaffeineSave(response) {
+      const record = response && response.record;
+      if (!record || typeof record.id !== 'string' || !record.id || typeof record.name !== 'string' || !Number.isFinite(record.amount) || typeof record.time !== 'string') return false;
+      if (!caffeineLogs.some(log => String(log.id) === record.id)) caffeineLogs.push(record);
+      cacheStudentRecords('caffeineLogs');
+      renderCaffeineLogs();
+      return true;
     }
 
     function applyConfirmedDeletion(type, id) {
