@@ -8,6 +8,16 @@ import {
   shouldDeferStudentBootstrap,
 } from '../public/js/student-startup.js';
 
+test('outdated session restoration cannot hide the newly authenticated app', async () => {
+  let hidden = false;
+  await restoreStudentSession({
+    getSession: async () => { const error = new Error('old session'); error.code = 'STALE_SESSION'; throw error; },
+    onAuthenticated: () => assert.fail('old session must not render'),
+    onUnauthenticated: () => { hidden = true; },
+  });
+  assert.equal(hidden, false);
+});
+
 test('valid session enters the app without showing login', async () => {
   const events = [];
   const session = { authenticated: true, studentId: '1101', name: '테스트학생' };
