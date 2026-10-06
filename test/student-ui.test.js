@@ -10,6 +10,25 @@ function extract(name) {
   return html.slice(start, end);
 }
 
+test('immediate caffeine guidance distinguishes pending from confirmed storage', () => {
+  const elements = new Map();
+  const document = { getElementById(id) {
+    if (!elements.has(id)) elements.set(id, { style: {}, querySelector: () => ({}) });
+    return elements.get(id);
+  } };
+  const logs = [{ amount: 50, time: 'today' }];
+  const context = vm.createContext({ document, caffeineLogs: logs, userLimit: 150,
+    user: { name: '테스트' }, getTodayKST: () => 'today', getLogDateKST: x => x, setTimeout() {} });
+  vm.runInContext(extract('showCaffeineWarning') + "\nshowCaffeineWarning(30, 80, 'pending');", context);
+  assert.match(elements.get('warningInfo').innerText, /서버에 저장 중/);
+  assert.match(elements.get('warningInfo').innerText, /예상 합계 80mg/);
+  assert.doesNotMatch(elements.get('warningInfo').innerText, /저장 완료/);
+  assert.equal(logs.length, 1);
+  vm.runInContext("showCaffeineWarning(30, 80, 'confirmed');", context);
+  assert.match(elements.get('warningInfo').innerText, /서버 저장 완료/);
+  assert.doesNotMatch(elements.get('warningInfo').innerText, /예상 합계/);
+});
+
 test('opening DB search loads the database without a previous cache', () => {
   let loads = 0;
   const panel = { classList: { contains: () => true, toggle() {} } };

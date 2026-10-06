@@ -1907,6 +1907,10 @@
       const newLog = { id: Date.now(), name: drinkName, amount: amount, time: time, reason: reason };
       pendingCaffeineSave = newLog;
       renderCaffeineLogs();
+      if (getLogDateKST(time) === getTodayKST()) {
+        const previewTotal = [...caffeineLogs, ...confirmedPendingCaffeine].filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + Number(log.amount || 0), 0) + amount;
+        showCaffeineWarning(amount, previewTotal, 'pending');
+      }
 
       google.script.run
         .withSuccessHandler((response) => {
@@ -1928,7 +1932,8 @@
           if (!appliedRecord) confirmedPendingCaffeine.push({ time, amount });
           if(getLogDateKST(time) === getTodayKST()) {
             const knownTotal = caffeineLogs.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + Number(log.amount || 0), 0);
-            showCaffeineWarning(amount, knownTotal + confirmedPendingCaffeine.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + log.amount, 0));
+            const warning = document.getElementById('caffeineWarningModal');
+            if (!warning || warning.style?.display !== 'none') showCaffeineWarning(amount, knownTotal + confirmedPendingCaffeine.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + log.amount, 0), 'confirmed');
             if (!appliedRecord) loadCaffeineLogs();
           } else {
             showSaveCompleteModal('✅ 카페인 기록이 저장되었습니다.');
@@ -1939,6 +1944,7 @@
         .withFailureHandler(err => {
           pendingCaffeineSave = null;
           renderCaffeineLogs();
+          closeCaffeineWarning();
           showInfoModal('오류', '저장 중 오류가 발생했습니다. 다시 시도해주세요.');
           if(btn) { btn.disabled = false; btn.innerText = "카페인 기록 완료"; }
           console.error(err);
@@ -4119,7 +4125,7 @@
       return kst.toISOString().split('T')[0];
     }
 
-    function showCaffeineWarning(addedAmount, totalOverride) {
+    function showCaffeineWarning(addedAmount, totalOverride, saveStatus) {
       const today = getTodayKST();
       let todayTotal = 0;
       // totalOverride: 편집 시 이미 정확히 계산된 합계값을 직접 사용 (>= 0 허용)
@@ -4170,6 +4176,8 @@
         title.innerText = stage.name;
         desc.innerText = stage.msg;
         info.innerText = `오늘 총 ${todayTotal}mg 섭취\n(권장량 ${userLimit}mg 대비 ${percentage}%)`;
+        if (saveStatus === 'pending') info.innerText = `서버에 저장 중…\n입력한 기록을 포함한 예상 합계 ${todayTotal}mg\n(권장량 ${userLimit}mg 대비 ${percentage}%)`;
+        if (saveStatus === 'confirmed') info.innerText = `서버 저장 완료\n오늘 총 ${todayTotal}mg 섭취\n(권장량 ${userLimit}mg 대비 ${percentage}%)`;
         btn.style.background = stage.color;
         btn.style.color = 'white';
         btn.style.border = 'none';
