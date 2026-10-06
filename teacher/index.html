@@ -793,7 +793,7 @@
             </div>
         </div>
         <div class="chart-grid">
-            <div class="chart-card"><h3 class="chart-title">일별 평균 카페인 (<span id="cafChartLabel1">7일</span>)</h3><div class="chart-container"><canvas id="dailyCaffeineChart"></canvas></div></div>
+            <div class="chart-card"><h3 class="chart-title">일별 평균 카페인 (<span id="cafChartLabel1">7일</span>)</h3><div class="chart-container"><canvas id="dailyCaffeineChart"></canvas></div><p id="cafDailyParticipation" style="font-size:12px;color:#6b7280;">기록한 학생만 평균에 포함됩니다. 0mg 기록은 포함됩니다.</p></div>
             <div class="chart-card"><h3 class="chart-title">카페인 단계별 학생 수 (<span id="cafChartLabel2">7일</span> 평균)</h3><div class="chart-container"><canvas id="gradeCaffeineChart"></canvas></div></div>
             <div class="chart-card"><h3 class="chart-title">음료 분류별 비율</h3><div class="chart-container"><canvas id="drinkTypeChart"></canvas></div></div>
             <div class="chart-card"><h3 class="chart-title">카페인 섭취 시간대</h3><div class="chart-container"><canvas id="caffeineTimeChart"></canvas></div></div>
@@ -871,6 +871,7 @@
     <!-- 학생 목록 -->
     <div id="tab-students" class="tab-content">
         <div class="student-filter-section">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"><button id="hideSelectedStudentsBtn" class="btn btn-sm" onclick="hideSelectedStudents()" disabled>선택 학생 숨기기 (0명)</button><button id="manageHiddenStudentsBtn" class="btn btn-sm" onclick="showHiddenStudents()">숨긴 학생 관리 (0명)</button><span style="font-size:12px;color:#6b7280;align-self:center;">숨긴 학생은 목록·필터·통계·내보내기에서 제외됩니다.</span></div>
             <h3 class="filter-title">🔍 학생 필터 <span id="studentFilterCount" style="margin-left:8px;font-size:13px;font-weight:600;color:#6366f1;background:#eef2ff;padding:3px 10px;border-radius:12px;"></span></h3>
             <!-- 검색·학년·반 -->
             <div class="student-filter-row" style="display:grid;grid-template-columns:1fr 180px 180px;gap:12px;align-items:center;margin-bottom:10px;">
@@ -1880,9 +1881,46 @@ function getCustomRange(s,e){const a=[],start=new Date(s+'T00:00:00'),end=new Da
 function getPeriodN(mode){return mode==='14'?14:mode==='30'?30:7;}
 function getPeriodLabel(dates){if(!dates||!dates.length)return '-';return dates[0].substring(5)+' ~ '+dates[dates.length-1].substring(5)+' ('+dates.length+'일)';}
 
-// 테스트 학생 필터 (종합/카페인/수면 대시보드에서만 제외, 학생목록에는 표시)
+// 분석 대상 필터: 테스트는 기본 제외, 숨긴 학생은 교사용 목록과 통계에서 제외
 const TEST_STUDENT_NAMES=new Set(['테스트','테스트1']);
 function isTestStudent(s){return TEST_STUDENT_NAMES.has((s.이름||'').trim());}
+let hiddenStudentIds=new Set();
+let studentHideSelection=new Set();
+let visibilitySaving=false;
+let visibilityRevision=0;
+function getAnalysisStudents(){return studentsData.filter(s=>!hiddenStudentIds.has(String(s.학번))&&(showTestStudents||!isTestStudent(s)));}
+function toggleStudentHideSelection(id,checked){if(checked)studentHideSelection.add(id);else studentHideSelection.delete(id);updateVisibilityControls();}
+function updateVisibilityControls(){
+ const button=document.getElementById('hideSelectedStudentsBtn');
+ if(button){button.disabled=visibilitySaving||!studentHideSelection.size;button.textContent=visibilitySaving?'저장 중...':'선택 학생 숨기기 ('+studentHideSelection.size+'명)';}
+ const manage=document.getElementById('manageHiddenStudentsBtn');if(manage)manage.textContent='숨긴 학생 관리 ('+hiddenStudentIds.size+'명)';
+}
+function refreshAnalysisVisibility(){
+ studentHideSelection.clear();updateVisibilityControls();
+ updateDashboard();updateCaffeineTab();updateSleepTab();updateStudentGrid();renderJourneyStatus();initBatchSelectors();renderBatchStudentList();
+}
+function saveStudentVisibility(ids,hidden){
+ if(visibilitySaving||!ids.length)return;
+ visibilitySaving=true;updateVisibilityControls();
+ const finish=()=>{visibilitySaving=false;updateVisibilityControls();};
+ google.script.run.withSuccessHandler(result=>{
+  finish();
+  if(!result?.success||!Array.isArray(result.hiddenStudentIds)){showTeacherModal('⚠️','저장 실패','숨김 설정을 저장하지 못했습니다. 다시 시도해주세요.','warning');return;}
+  visibilityRevision++;hiddenStudentIds=new Set(result.hiddenStudentIds.map(String));refreshAnalysisVisibility();
+  document.getElementById('hiddenStudentsPanel')?.remove();
+ }).withFailureHandler(()=>{finish();showTeacherModal('⚠️','저장 실패','서버 연결을 확인하고 다시 시도해주세요. 기존 설정은 유지됩니다.','warning');}).updateTeacherHiddenStudents(ids,hidden);
+}
+function hideSelectedStudents(){saveStudentVisibility([...studentHideSelection],true);}
+function showHiddenStudents(){
+ document.getElementById('hiddenStudentsPanel')?.remove();
+ const panel=document.createElement('div');panel.id='hiddenStudentsPanel';panel.style.cssText='position:fixed;inset:0;background:#0006;z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
+ const students=studentsData.filter(s=>hiddenStudentIds.has(String(s.학번)));
+ panel.innerHTML='<div style="background:white;border-radius:16px;padding:24px;width:460px;max-width:100%;max-height:80vh;overflow:auto;"><h3>숨긴 학생 관리</h3><p style="color:#6b7280;font-size:13px;">선택한 학생을 다시 표시하면 통계에도 포함됩니다. 기존 기록은 유지됩니다.</p>'+
+ (students.length?students.map(s=>'<label style="display:block;padding:10px;"><input type="checkbox" class="restore-student-checkbox" value="'+escapeHtml(s.학번)+'"> '+escapeHtml(s.학번)+' '+escapeHtml(s.이름)+'</label>').join(''):'<p>숨긴 학생이 없습니다.</p>')+
+ '<div style="display:flex;gap:8px;margin-top:16px;"><button class="btn btn-primary" onclick="restoreSelectedStudents()">선택 학생 다시 표시</button><button class="btn" id="closeHiddenPanel">닫기</button></div></div>';
+ document.body.appendChild(panel);document.getElementById('closeHiddenPanel').onclick=()=>panel.remove();
+}
+function restoreSelectedStudents(){const ids=Array.from(document.querySelectorAll('.restore-student-checkbox:checked'),el=>el.value);saveStudentVisibility(ids,false);}
 let showTestStudents=false; // 테스트 학생 포함 여부 (기본: 제외)
 function toggleTestStudents(){
     showTestStudents=!showTestStudents;
@@ -2206,6 +2244,11 @@ function sleepBehaviorLabel(type,val){
     return `${labels[type]||type}: ${val}`;
 }
 
+function getDailyCaffeineSummary(records,total,date){
+ const rows=records.filter(r=>String(r.섭취시간||'').startsWith(date));
+ const recorded=new Set(rows.map(r=>String(r.학번))).size;
+ return {recorded,total,average:recorded?Math.round(rows.reduce((sum,r)=>sum+r.함량,0)/recorded):null};
+}
 function avgCafForDates(id,dates){
     // ⭐ 기록이 존재하는 날만 포함 (0mg 기록도 포함, 미기록 날짜는 제외)
     const vals=dates.map(d=>{
@@ -2250,12 +2293,15 @@ function toggleAutoRefresh(enabled){
 }
 
 function loadDataFromSheet(){
+    const visibilityAtLoad=visibilityRevision;
     const btn=document.getElementById('refreshBtn');btn.disabled=true;btn.textContent='⏳ 로딩 중...';
     document.getElementById('studentGrid').innerHTML='<div class="loading"><div class="spinner"></div><p style="color:#6b7280;">구글시트에서 데이터를 불러오는 중...</p></div>';
     google.script.run
         .withSuccessHandler(function(result){
             try{
                 if(!result.success)throw new Error(result.error||'데이터 로드 실패');
+                if(visibilityAtLoad===visibilityRevision)hiddenStudentIds=new Set((result.hiddenStudentIds||[]).map(String));
+                studentHideSelection.clear();updateVisibilityControls();
                 studentsData=(result.students||[]).map(s=>({학번:String(s.학번),이름:String(s.이름),학년:String(s.학년),반:String(s.반),번호:String(s.번호)}));
                 caffeineData=(result.caffeine||[]).map(c=>({학번:String(c.학번),음료명:String(c.음료명||''),함량:parseFloat(c.함량)||0,섭취시간:String(c.섭취시간||''),이유:String(c.이유||''),부작용:String(c.부작용||'')}));
                 sleepData=(result.sleep||[]).map(s=>({학번:String(s.학번),날짜:String(s.날짜||''),기상날짜:String(s.wakeDate||s.기상날짜||''),취침:String(s.취침||''),기상:String(s.기상||''),시간:parseFloat(s.시간)||0,컨디션:String(s['수면 후 컨디션']||''),메모:String(s.메모||''),스마트폰:normalizeSleepUnitLabel(s.스마트폰),활동:normalizeSleepUnitLabel(s.활동),잠들기:normalizeSleepUnitLabel(s.잠들기),각성:String(s.각성||''),낮졸림:normalizeDaytimeLabel(s.낮졸림)}));
@@ -2484,14 +2530,14 @@ function initFilters(){
     const classIds = ['classFilter','studentClassFilter','cafClassFilter','sleepClassFilter'];
 
     // 고유 학년/반 목록 (정렬: 숫자 → 문자) — 비표준 학년은 교직원으로 정규화
-    const grades = [...new Set(studentsData.map(s => normalizeGrade(s.학년)))].sort((a, b) => {
+    const grades = [...new Set(getAnalysisStudents().map(s => normalizeGrade(s.학년)))].sort((a, b) => {
         const na = parseInt(a), nb = parseInt(b);
         if (!isNaN(na) && !isNaN(nb)) return na - nb;
         if (!isNaN(na)) return -1;
         if (!isNaN(nb)) return 1;
         return String(a).localeCompare(String(b));
     });
-    const classes = [...new Set(studentsData.map(s => normalizeClass(s.반)))].sort((a, b) => {
+    const classes = [...new Set(getAnalysisStudents().map(s => normalizeClass(s.반)))].sort((a, b) => {
         const na = parseInt(a), nb = parseInt(b);
         if (!isNaN(na) && !isNaN(nb)) return na - nb;
         if (!isNaN(na)) return -1;
@@ -2533,7 +2579,7 @@ function switchTab(n,el){document.querySelectorAll('.tab-button').forEach(b=>b.c
 
 function updateDashboard(){
     const g=msGet('gradeFilter'), c=msGet('classFilter');
-    let f=studentsData.filter(s=>showTestStudents||!isTestStudent(s));if(g)f=f.filter(s=>g.has(normalizeGrade(s.학년)));if(c)f=f.filter(s=>c.has(normalizeClass(s.반)));
+    let f=getAnalysisStudents();if(g)f=f.filter(s=>g.has(normalizeGrade(s.학년)));if(c)f=f.filter(s=>c.has(normalizeClass(s.반)));
     const dates7=getOverviewDates();
     const daysText=dates7.length+'일';
     ['overviewCafTitle','overviewSleepTitle'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=daysText;});
@@ -2580,7 +2626,7 @@ function getCafTabFilter(){
     const dates=getCafDates();
     const lbl=document.getElementById('cafDateRangeLabel');
     if(lbl)lbl.textContent=getPeriodLabel(dates);
-    let students=studentsData.filter(s=>showTestStudents||!isTestStudent(s));
+    let students=getAnalysisStudents();
     if(gv)students=students.filter(s=>gv.has(normalizeGrade(s.학년)));
     if(cv)students=students.filter(s=>cv.has(normalizeClass(s.반)));
     const ids=new Set(students.map(s=>s.학번));
@@ -2603,11 +2649,13 @@ function updateCaffeineTab(){
     ['cafChartLabel1','cafChartLabel2','cafChartLabel3','cafChartLabel4'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=daysText;});
     const l7=dates.map(d=>d.substring(5));
     // 일별 평균 카페인
-    const da=dates.map(d=>{const v=filteredCaf.filter(c=>c.섭취시간.startsWith(d));return v.length?Math.round(v.reduce((a,b)=>a+b.함량,0)/(students.length||1)):0;});
+    const dailyCaf=dates.map(d=>getDailyCaffeineSummary(filteredCaf,students.length,d));
+    const da=dailyCaf.map(r=>r.average);
+    const participation=document.getElementById('cafDailyParticipation');if(participation){const last=dailyCaf[dailyCaf.length-1];participation.textContent=dates[dates.length-1]+' 기록 '+(last?.recorded||0)+'명 / 분석 대상 '+students.length+'명 · 기록 학생만 평균 계산 (0mg 포함)';}
     if(charts.dc)charts.dc.destroy();
     charts.dc=new Chart(document.getElementById('dailyCaffeineChart').getContext('2d'),{
-        type:'line',data:{labels:l7,datasets:[{label:'평균 카페인(mg)',data:da,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.1)',borderWidth:3,fill:true,tension:0.4,pointRadius:5}]},
-        options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{display:false}}}
+        type:'line',data:{labels:l7,datasets:[{label:'기록 학생 평균 카페인(mg)',data:da,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.1)',borderWidth:3,fill:true,tension:0.4,pointRadius:5}]},
+        options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:ctx=>{const r=dailyCaf[ctx.dataIndex];return '기록 '+r.recorded+'명 / 분석 대상 '+r.total+'명';}}}}}
     });
     // 카페인 단계별 학생 수 (7일 평균 기준)
     // ⭐ '미기록' 제거, '카페인 섭취 안 함' 추가 (맨 왼쪽)
@@ -2791,7 +2839,7 @@ function getSleepTabFilter(){
     const dates=getSleepDates();
     const lbl=document.getElementById('sleepDateRangeLabel');
     if(lbl)lbl.textContent=getPeriodLabel(dates);
-    let students=studentsData.filter(s=>showTestStudents||!isTestStudent(s));
+    let students=getAnalysisStudents();
     if(gv)students=students.filter(s=>gv.has(normalizeGrade(s.학년)));
     if(cv)students=students.filter(s=>cv.has(normalizeClass(s.반)));
     const ids=new Set(students.map(s=>s.학번));
@@ -3103,7 +3151,7 @@ function resetStudentDate(){
 function filterStudents(){
     const sv=document.getElementById('studentSearchInput').value.toLowerCase();
     const gv=msGet('studentGradeFilter'), cv=msGet('studentClassFilter');
-    let f=studentsData;if(gv)f=f.filter(s=>gv.has(normalizeGrade(s.학년)));if(cv)f=f.filter(s=>cv.has(s.반));
+    let f=getAnalysisStudents();if(gv)f=f.filter(s=>gv.has(normalizeGrade(s.학년)));if(cv)f=f.filter(s=>cv.has(s.반));
     if(sv)f=f.filter(s=>s.학번.includes(sv)||s.이름.includes(sv));
     const fd=getStudentFilterDate();
     const d7=getStudentDates();
@@ -3186,9 +3234,9 @@ function updateBadges(){
     const fd=getStudentFilterDate();
     const d7=getStudentDates();
     const n=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
-    n('badgeAll',studentsData.length);
-    n('cntRecorded',studentsData.filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))||hasSleepRecordOnWakeDate(s.학번,fd)).length);
-    n('cntNotRecorded',studentsData.filter(s=>!caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))&&!hasSleepRecordOnWakeDate(s.학번,fd)).length);
+    n('badgeAll',getAnalysisStudents().length);
+    n('cntRecorded',getAnalysisStudents().filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))||hasSleepRecordOnWakeDate(s.학번,fd)).length);
+    n('cntNotRecorded',getAnalysisStudents().filter(s=>!caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))&&!hasSleepRecordOnWakeDate(s.학번,fd)).length);
 
     // 카페인 단계별 카운트
     const getCafStage=s=>{
@@ -3202,13 +3250,13 @@ function updateBadges(){
         if(ratio<2.0)return'caf4';
         return'caf5';
     };
-    n('cntCaf0',studentsData.filter(s=>getCafStage(s)==='caf0').length);
-    n('cntCaf1',studentsData.filter(s=>getCafStage(s)==='caf1').length);
-    n('cntCaf2',studentsData.filter(s=>getCafStage(s)==='caf2').length);
-    n('cntCaf3',studentsData.filter(s=>getCafStage(s)==='caf3').length);
-    n('cntCaf4',studentsData.filter(s=>getCafStage(s)==='caf4').length);
-    n('cntCaf5',studentsData.filter(s=>getCafStage(s)==='caf5').length);
-    n('cntCafNone',studentsData.filter(s=>getCafStage(s)==='cafNone').length);
+    n('cntCaf0',getAnalysisStudents().filter(s=>getCafStage(s)==='caf0').length);
+    n('cntCaf1',getAnalysisStudents().filter(s=>getCafStage(s)==='caf1').length);
+    n('cntCaf2',getAnalysisStudents().filter(s=>getCafStage(s)==='caf2').length);
+    n('cntCaf3',getAnalysisStudents().filter(s=>getCafStage(s)==='caf3').length);
+    n('cntCaf4',getAnalysisStudents().filter(s=>getCafStage(s)==='caf4').length);
+    n('cntCaf5',getAnalysisStudents().filter(s=>getCafStage(s)==='caf5').length);
+    n('cntCafNone',getAnalysisStudents().filter(s=>getCafStage(s)==='cafNone').length);
 
     // 수면 단계별 카운트
     const getSleepStage=s=>{
@@ -3220,23 +3268,23 @@ function updateBadges(){
         if(y<(S.sleepMax||11))return'sleepVarExcess';
         return'sleepExcess';
     };
-    n('cntSleepSevere',studentsData.filter(s=>getSleepStage(s)==='sleepSevere').length);
-    n('cntSleepBad',studentsData.filter(s=>getSleepStage(s)==='sleepBad').length);
-    n('cntSleepGood',studentsData.filter(s=>getSleepStage(s)==='sleepGood').length);
-    n('cntSleepVarExcess',studentsData.filter(s=>getSleepStage(s)==='sleepVarExcess').length);
-    n('cntSleepExcess',studentsData.filter(s=>getSleepStage(s)==='sleepExcess').length);
-    n('cntSleepNone',studentsData.filter(s=>getSleepStage(s)==='sleepNone').length);
+    n('cntSleepSevere',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepSevere').length);
+    n('cntSleepBad',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepBad').length);
+    n('cntSleepGood',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepGood').length);
+    n('cntSleepVarExcess',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepVarExcess').length);
+    n('cntSleepExcess',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepExcess').length);
+    n('cntSleepNone',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepNone').length);
 
     // 뱃지 카운트
     const fd2=getStudentFilterDate();
-    n('cntAuto_today_caf',   studentsData.filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd2))).length);
-    n('cntAuto_today_sleep', studentsData.filter(s=>hasSleepRecordOnWakeDate(s.학번,fd2)).length);
-    n('cntAwardNoTeacher',   studentsData.filter(s=>getManualAwardsFor(s.학번).length===0).length);
+    n('cntAuto_today_caf',   getAnalysisStudents().filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd2))).length);
+    n('cntAuto_today_sleep', getAnalysisStudents().filter(s=>hasSleepRecordOnWakeDate(s.학번,fd2)).length);
+    n('cntAwardNoTeacher',   getAnalysisStudents().filter(s=>getManualAwardsFor(s.학번).length===0).length);
     // 개별 뱃지별 카운트
     challengeBadges.filter(b=>!b.auto).forEach(b=>{
         const el=document.getElementById('cntBadge_'+b.id);
         if(!el)return;
-        el.textContent=studentsData.filter(s=>getManualAwardsFor(s.학번).some(a=>(a.awardId||a.badgeId)===b.id)).length;
+        el.textContent=getAnalysisStudents().filter(s=>getManualAwardsFor(s.학번).some(a=>(a.awardId||a.badgeId)===b.id)).length;
     });
 }
 // 드롭다운 토글
@@ -3491,6 +3539,7 @@ function renderStudentGrid(students){
         const card=document.createElement('div');card.className='student-card';card.onclick=()=>openStudentModal(s.학번);
         const awardChipsHtml = renderAwardChips(s.학번, d7, filterDate, false);
         card.innerHTML=`
+<label style="float:right;font-size:12px;color:#6b7280;" onclick="event.stopPropagation()"><input type="checkbox" value="${escapeHtml(s.학번)}" ${studentHideSelection.has(s.학번)?'checked':''} onchange="toggleStudentHideSelection(this.value,this.checked)"> 선택</label>
 <div class="student-id">${escapeHtml(s.학년)}학년 ${escapeHtml(s.반)}반 ${escapeHtml(s.번호)}번 &nbsp;|&nbsp; ${escapeHtml(s.학번)}</div>
 <div class="student-name">${escapeHtml(s.이름)}</div>
 <div class="student-info">
@@ -4370,7 +4419,7 @@ function exportStudentExcel(){
     // 현재 필터 적용된 학생 목록 생성
     const sv=document.getElementById('studentSearchInput').value.toLowerCase();
     const gv=msGet('studentGradeFilter'),cv=msGet('studentClassFilter');
-    let students=studentsData;
+    let students=getAnalysisStudents();
     if(gv)students=students.filter(s=>gv.has(normalizeGrade(s.학년)));
     if(cv)students=students.filter(s=>cv.has(s.반));
     if(sv)students=students.filter(s=>s.학번.includes(sv)||s.이름.includes(sv));
@@ -4434,7 +4483,7 @@ function exportStudentToSheet(){
 
     const sv=document.getElementById('studentSearchInput').value.toLowerCase();
     const gv=msGet('studentGradeFilter'),cv=msGet('studentClassFilter');
-    let students=studentsData;
+    let students=getAnalysisStudents();
     if(gv)students=students.filter(s=>gv.has(normalizeGrade(s.학년)));
     if(cv)students=students.filter(s=>cv.has(s.반));
     if(sv)students=students.filter(s=>s.학번.includes(sv)||s.이름.includes(sv));
@@ -5670,10 +5719,10 @@ function initBatchSelectors() {
     if (!gs || !cs) return;
     while (gs.options.length > 1) gs.remove(1);
     while (cs.options.length > 1) cs.remove(1);
-    [...new Set(studentsData.map(s => s.학년))].sort().forEach(g => {
+    [...new Set(getAnalysisStudents().map(s => s.학년))].sort().forEach(g => {
         const o = document.createElement('option'); o.value = g; o.textContent = g + '학년'; gs.appendChild(o);
     });
-    [...new Set(studentsData.map(s => s.반))].sort().forEach(c => {
+    [...new Set(getAnalysisStudents().map(s => s.반))].sort().forEach(c => {
         const o = document.createElement('option'); o.value = c; o.textContent = c + '반'; cs.appendChild(o);
     });
 }
@@ -5696,10 +5745,10 @@ function setBatchTab(tab) {
 function getBatchTargetStudents() {
     const gv = document.getElementById('batchGradeSelect')?.value || 'all';
     const cv = document.getElementById('batchClassSelect')?.value || 'all';
-    if (batchTabMode === 'all') return studentsData;
-    if (batchTabMode === 'grade') return studentsData.filter(s => s.학년 === gv || gv === 'all');
-    if (batchTabMode === 'class') return studentsData.filter(s => s.반 === cv || cv === 'all');
-    if (batchTabMode === 'manual') return studentsData.filter(s => batchSelectedStudents.has(s.학번));
+    if (batchTabMode === 'all') return getAnalysisStudents();
+    if (batchTabMode === 'grade') return getAnalysisStudents().filter(s => s.학년 === gv || gv === 'all');
+    if (batchTabMode === 'class') return getAnalysisStudents().filter(s => s.반 === cv || cv === 'all');
+    if (batchTabMode === 'manual') return getAnalysisStudents().filter(s => batchSelectedStudents.has(s.학번));
     return [];
 }
 
@@ -5707,7 +5756,7 @@ function renderBatchStudentList() {
     const list = document.getElementById('batchStudentList');
     if (!list) return;
     const sv = (document.getElementById('batchSearchInput')?.value || '').toLowerCase();
-    let filtered = studentsData;
+    let filtered = getAnalysisStudents();
     if (sv) filtered = filtered.filter(s => s.이름.includes(sv) || s.학번.includes(sv));
     list.innerHTML = filtered.map(s => {
         const checked = batchSelectedStudents.has(s.학번);
@@ -5734,7 +5783,7 @@ function toggleBatchStudent(id, row) {
 
 function toggleSelectAllBatch() {
     const sv = (document.getElementById('batchSearchInput')?.value || '').toLowerCase();
-    let filtered = studentsData;
+    let filtered = getAnalysisStudents();
     if (sv) filtered = filtered.filter(s => s.이름.includes(sv) || s.학번.includes(sv));
     const allSelected = filtered.every(s => batchSelectedStudents.has(s.학번));
     filtered.forEach(s => {
@@ -7429,7 +7478,7 @@ function renderJourneyStatus(){
     if(!body)return;
     const query=(document.getElementById('journeyStatusSearch')?.value||'').trim().toLowerCase();
     const todayKst=getKSTDate(0);
-    const students=studentsData.filter(s=>!query||s.학번.toLowerCase().includes(query)||s.이름.toLowerCase().includes(query));
+    const students=getAnalysisStudents().filter(s=>!query||s.학번.toLowerCase().includes(query)||s.이름.toLowerCase().includes(query));
     if(!students.length){body.innerHTML='<tr><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;">표시할 학생이 없습니다.</td></tr>';return;}
     body.innerHTML=students.map(s=>{
         const schedule=journeyConfig.schedules[String(s.반)]||journeyConfig.schedules['3'];

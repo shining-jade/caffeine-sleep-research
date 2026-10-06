@@ -4018,6 +4018,7 @@ function getTeacherData() {
 
     return {
       success      : true,
+      hiddenStudentIds: getTeacherHiddenStudents().hiddenStudentIds,
       students     : students,
       caffeine     : caffeine,
       sleep        : sleep,

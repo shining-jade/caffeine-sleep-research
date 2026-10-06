@@ -17,7 +17,7 @@ process.env.TEACHER_PASSWORD_HASH = '11'.repeat(64);
 
 const NOW = 1_800_000_000;
 const EXPECTED_ACTIONS = [
-  'getTeacherData', 'handleAIReportForTeacher', 'grantTeacherAwards',
+  'updateTeacherHiddenStudents', 'getTeacherData', 'handleAIReportForTeacher', 'grantTeacherAwards',
   'revokeTeacherAward', 'getInquiries', 'replyToInquiry', 'deleteInquiry',
   'getUnreadInquiries', 'markInquiryNotified', 'exportDataToNewSheet',
   'sendTeacherMessage', 'saveTeacherPdfAndSendMessage', 'getSentTeacherMessages',

@@ -18,6 +18,7 @@ var STUDENT_ACTIONS_ = {
 };
 
 var TEACHER_ACTIONS_ = {
+  updateTeacherHiddenStudents: true,
   getTeacherData: true, handleAIReportForTeacher: true, grantTeacherAwards: true,
   revokeTeacherAward: true, getInquiries: true, replyToInquiry: true,
   deleteInquiry: true, getUnreadInquiries: true, markInquiryNotified: true,
@@ -50,6 +51,7 @@ var STUDENT_MUTATIONS_ = {
 };
 
 var TEACHER_MUTATIONS_ = {
+  updateTeacherHiddenStudents: true,
   grantTeacherAwards: true, revokeTeacherAward: true, replyToInquiry: true,
   deleteInquiry: true, markInquiryNotified: true, exportDataToNewSheet: true,
   sendTeacherMessage: true, saveTeacherPdfAndSendMessage: true,
@@ -175,6 +177,8 @@ function dispatchSchedulerAction_(action, params) {
 
 function invokeAction_(action, params) {
   switch (action) {
+    case 'getTeacherHiddenStudents': return getTeacherHiddenStudents();
+    case 'updateTeacherHiddenStudents': return updateTeacherHiddenStudents.apply(null, params);
     case 'checkLogin': return checkLogin.apply(null, params);
     case 'saveCaffeineData': return saveCaffeineData.apply(null, params);
     case 'getCaffeineLogs': return getCaffeineLogs.apply(null, params);
@@ -248,4 +252,29 @@ function invokeAction_(action, params) {
     case 'recordReminderDeliveryResults': return recordReminderDeliveryResults_.apply(null, params);
   }
   throw new Error('REQUEST_REJECTED');
+}
+
+// Teacher-only analysis exclusions; research sheets and student access remain intact.
+function getTeacherHiddenStudents(){
+  var raw=PropertiesService.getScriptProperties().getProperty('TEACHER_HIDDEN_STUDENTS');
+  var ids=raw?JSON.parse(raw):[];
+  if(!Array.isArray(ids))throw new Error('REQUEST_REJECTED');
+  return {success:true,hiddenStudentIds:ids};
+}
+function updateTeacherHiddenStudents(ids,hidden){
+  if(!Array.isArray(ids)||ids.length>500||typeof hidden!=='boolean')throw new Error('REQUEST_REJECTED');
+  var clean=ids.map(function(id){
+    if(typeof id!=='string'||!id||id.length>100||/[<>\x00-\x1f]/.test(id))throw new Error('REQUEST_REJECTED');
+    return id;
+  });
+  var current=getTeacherHiddenStudents().hiddenStudentIds;
+  clean.forEach(function(id){
+    var index=current.indexOf(id);
+    if(hidden&&index<0)current.push(id);
+    if(!hidden&&index>=0)current.splice(index,1);
+  });
+  var encoded=JSON.stringify(current);
+  if(encoded.length>8000)throw new Error('REQUEST_REJECTED');
+  PropertiesService.getScriptProperties().setProperty('TEACHER_HIDDEN_STUDENTS',encoded);
+  return {success:true,hiddenStudentIds:current};
 }

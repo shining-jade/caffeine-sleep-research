@@ -1,5 +1,6 @@
 const ACTION_NAMES = [
   'getTeacherData',
+  'updateTeacherHiddenStudents',
   'handleAIReportForTeacher',
   'grantTeacherAwards',
   'revokeTeacherAward',
