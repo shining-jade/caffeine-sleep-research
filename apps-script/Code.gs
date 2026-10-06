@@ -279,7 +279,7 @@ function saveCaffeineData(payload) {
       intakeTime = Utilities.formatDate(dt, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
     }
 
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       kstTimestamp,      // A: 타임스탬프 (기록 시간)
       p.grade,           // B: 학년
       p.class,           // C: 반
@@ -330,7 +330,7 @@ function saveSleepData(payload) {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("sleep") || (() => {
       const s = ss.insertSheet("sleep");
-      s.appendRow([
+      appendRecordRow_(s, [
         "타임스탬프", "학년", "반", "번호", "전체학번", "성명",
         "날짜", "취침시간", "기상날짜", "기상시간", "수면시간",
         "컨디션", "메모", "고유ID",
@@ -415,14 +415,14 @@ function saveSleepData(payload) {
     if (existingRowIndex > 0) {
       // 기존 데이터가 있으면 해당 행 삭제
       safeLog_(`⚠️ Row ${existingRowIndex} 삭제 시작...`);
-      sheet.deleteRow(existingRowIndex);
+      // Replace this row atomically below; failed saves retain the old record.
       safeLog_(`✅ 기존 수면 기록 삭제 완료: 학번=${payload.studentId}, 날짜=${payload.date}`);
       wasUpdated = true;
     }
 
     // 새로운 데이터 추가 (항상)
     safeLog_(`새 데이터 추가 중...`);
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       kstTimestamp,           // A: 타임스탬프
       p.grade,                // B: 학년
       p.class,                // C: 반
@@ -442,7 +442,7 @@ function saveSleepData(payload) {
       payload.latency || '',     // P: 수면 잠들기 소요시간
       payload.awakenings || '',  // Q: 수면 중 각성
       payload.daytime || ''      // R: 낮 졸림
-    ]);
+    ], existingRowIndex > 0 ? existingRowIndex : null);
 
     safeLog_(`✅ 수면 기록 저장 완료: 학번=${payload.studentId}, 날짜=${payload.date}, 덮어쓰기=${wasUpdated}`);
     safeLog_('=== saveSleepData 종료 ===');
@@ -489,7 +489,7 @@ function saveWeightData(payload) {
       sheet.getRange(rowIndex, 7).setValue(payload.weight);
     } else {
       // 새 데이터 추가
-      sheet.appendRow([
+      appendRecordRow_(sheet, [
         kstTimestamp,      // A: 타임스탬프
         p.grade,           // B: 학년
         p.class,           // C: 반
@@ -591,7 +591,7 @@ function saveInitialSetup(payload) {
       sheet.getRange(rowIndex, 11).setValue(payload.ageGroup || 'teen'); // K: 연령대
     } else {
       // 새 행 추가
-      sheet.appendRow([
+      appendRecordRow_(sheet, [
         kstTimestamp,   // A: 타임스탬프
         p.grade,        // B: 학년
         p.class,        // C: 반
@@ -2165,7 +2165,7 @@ function ensureTeacherMessageSheet_() {
   ];
   if (!sheet) {
     sheet = ss.insertSheet('teacher_messages');
-    sheet.appendRow(headers);
+    appendRecordRow_(sheet, headers);
     return sheet;
   }
   const width = sheet.getLastColumn();
@@ -2208,7 +2208,7 @@ function sendTeacherMessage(data) {
   try {
     const sheet = ensureTeacherMessageSheet_();
     const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       ts,
       String(data.studentId),
       String(data.studentName),
@@ -2244,7 +2244,7 @@ function ensureTeacherMessageSheet_() {
   ];
   if (!sheet) {
     sheet = ss.insertSheet('teacher_messages');
-    sheet.appendRow(headers);
+    appendRecordRow_(sheet, headers);
     return sheet;
   }
   const width = sheet.getLastColumn();
@@ -2287,7 +2287,7 @@ function sendTeacherMessage(data) {
   try {
     const sheet = ensureTeacherMessageSheet_();
     const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       ts,
       String(data.studentId),
       String(data.studentName),
@@ -2359,7 +2359,7 @@ function saveTeacherPdfAndSendMessage(data) {
 
     const sheet = ensureTeacherMessageSheet_();
     const msgTs = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       msgTs,
       String(data.studentId),
       String(data.studentName),
@@ -2445,7 +2445,7 @@ function saveTeacherPdfAndSendMessage(data) {
 
     const sheet = ensureTeacherMessageSheet_();
     const msgTs = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       msgTs,
       String(data.studentId),
       String(data.studentName),
@@ -2671,7 +2671,7 @@ function saveAIReport(studentId, startDate, endDate, content, name) {
     let sheet   = ss.getSheetByName('ai_reports');
     if (!sheet) {
       sheet = ss.insertSheet('ai_reports');
-      sheet.appendRow(['이름', '학번', '시작일', '종료일', '내용', '저장일시']);
+      appendRecordRow_(sheet, ['이름', '학번', '시작일', '종료일', '내용', '저장일시']);
       sheet.setFrozenRows(1);
     }
     const now  = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
@@ -2688,7 +2688,7 @@ function saveAIReport(studentId, startDate, endDate, content, name) {
       }
     }
     // 없으면 새 행 추가
-    sheet.appendRow([sname, sid, startDate, endDate, cleanContent, now]);
+    appendRecordRow_(sheet, [sname, sid, startDate, endDate, cleanContent, now]);
     return { success: true, action: 'inserted' };
   } catch(e) {
     return { success: false, error: e.message };
@@ -2902,7 +2902,7 @@ function saveSleepDataSimple(studentId, name, date, sleepTime, wakeTime, hours, 
   const kstTimestamp = getKSTTimestamp();
   const p = parseStudentId(studentId);
 
-  sheet.appendRow([
+  appendRecordRow_(sheet, [
     kstTimestamp,
     p.grade,
     p.class,
@@ -4662,7 +4662,7 @@ function submitInquiry(data) {
     const timestamp = getKSTTimestamp();
     const p = parseStudentId(data.studentId);
 
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       timestamp,               // A: 타임스탬프
       p.grade,                 // B: 학년
       p.class,                 // C: 반
@@ -5720,10 +5720,10 @@ function sendTeacherMessage(data) {
     let sheet = ss.getSheetByName('teacher_messages');
     if (!sheet) {
       sheet = ss.insertSheet('teacher_messages');
-      sheet.appendRow(['타임스탬프','학번','이름','제목','내용','읽음여부','읽은시간','학생답장','학생답장시간','학생답장읽음']);
+      appendRecordRow_(sheet, ['타임스탬프','학번','이름','제목','내용','읽음여부','읽은시간','학생답장','학생답장시간','학생답장읽음']);
     }
     const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.appendRow([ts, String(data.studentId), String(data.studentName), String(data.title), String(data.content), '미읽음', '', '', '', '']);
+    appendRecordRow_(sheet, [ts, String(data.studentId), String(data.studentName), String(data.title), String(data.content), '미읽음', '', '', '', '']);
     return { success: true };
   } catch (err) {
     safeLog_('❌ sendTeacherMessage 오류: ' + err.message);
