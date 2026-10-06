@@ -388,7 +388,7 @@
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-database text-emerald-600"></i>
                   <span class="text-sm font-bold text-gray-700">카페인 DB 검색</span>
-                  <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold" id="dbTotalCount">2,319건</span>
+                  <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold" id="dbTotalCount">검색 준비</span>
                 </div>
                 <button onclick="toggleDbSearch()" class="text-emerald-600 text-xs font-bold flex items-center gap-1">
                   <i id="dbSearchToggleIcon" class="fa-solid fa-chevron-up"></i>
@@ -3159,12 +3159,14 @@
           } else {
             if (countEl) countEl.textContent = '로드 실패';
             console.error('카페인 DB 로드 실패:', result);
+            searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
           }
         })
         .withFailureHandler(function(err) {
           caffeineDbLoading = false;
           if (countEl) countEl.textContent = '로드 실패';
           console.error('getCaffeineDB 오류:', err);
+          searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
         })
         .getCaffeineDB();
     }
@@ -3255,7 +3257,8 @@
       const q = query.trim();
       if (q && !CAFFEINE_DB.length) {
         resultsEl.innerHTML = '<p class="text-xs text-center text-gray-400 py-4">' +
-          (caffeineDbLoading ? '카페인 DB를 불러오는 중입니다...' : 'DB가 비어 있거나 불러오지 못했습니다. 검색창을 다시 열어 재시도하세요.') + '</p>';
+          (caffeineDbLoading ? '카페인 DB를 불러오는 중입니다...' : '카페인 DB를 불러오지 못했습니다.') + '</p>' +
+          (caffeineDbLoading ? '' : '<button type="button" onclick="loadCaffeineDbFromGAS()" class="w-full py-2 text-sm font-bold text-emerald-700">DB 다시 불러오기</button>');
         return;
       }
       if (q.length < 1) {
