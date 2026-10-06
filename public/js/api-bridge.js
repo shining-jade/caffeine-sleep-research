@@ -10,6 +10,7 @@
   var sessionGeneration = 0;
   var studentIdentity = null;
   var pendingReads = new Map();
+  var readRevision = 0;
   var sharedReads = new Set([
     'getStudentBootstrap', 'getWeightData', 'getStats', 'getFilteredStats', 'getCaffeineLogs', 'getSleepLogs',
     'getMyInquiries', 'getTeacherMessages', 'getTeacherAwardsForStudent',
@@ -70,6 +71,8 @@
 
   function callAction(action, params) {
     var generation = sessionGeneration;
+    var revision = readRevision;
+    var isRead = action.startsWith('get');
     var expectedSubject = studentIdentity;
     var key = JSON.stringify([sessionGeneration, action, params]);
     var share = role === 'student' && sharedReads.has(action);
@@ -85,11 +88,16 @@
       if (generation !== sessionGeneration) throw publicError('STALE_SESSION', '로그인 정보가 변경되었습니다.', 409);
       return requestJson('/api/' + role + '/action', requestOptions);
     }).then(function(payload) {
+      if (isRead && revision !== readRevision && generation === sessionGeneration) return callAction(action, params);
       if (role === 'student' && expectedSubject && generation === sessionGeneration
           && (payload.subject?.studentId !== expectedSubject.studentId || payload.subject?.name !== expectedSubject.name)) {
         invalidateSession();
         if (typeof expiredHandler === 'function') expiredHandler();
         throw publicError('SESSION_CHANGED', '로그인 정보가 변경되었습니다.', 409);
+      }
+      if (role === 'student' && !isRead && generation === sessionGeneration) {
+        readRevision++;
+        pendingReads.clear();
       }
       return payload.data;
     });

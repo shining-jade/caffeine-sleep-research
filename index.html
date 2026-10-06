@@ -1203,6 +1203,7 @@
     let _dbSearchSelected = null; // 현재 DB 검색에서 선택된 항목
 
     let caffeineLogs = [];
+    let confirmedPendingCaffeine = [];
     let sleepLogs = [];
     let lastDashboardData = null;
     let badgeConfig = null; // 교사가 설정한 뱃지 구성 (getBadgeConfig에서 로드)
@@ -1282,6 +1283,7 @@
       try { return localStorage.getItem('caffeineTab') || 'caffeine'; } catch(e) { return 'caffeine'; }
     }
     function clearSession() {
+      confirmedPendingCaffeine = [];
       if (window.studentRecordCache) window.studentRecordCache.clear();
       try {
         localStorage.removeItem('caffeineUser');
@@ -1301,6 +1303,7 @@
     function resetStudentData() {
       stopAutoRefresh();
       caffeineLogs = [];
+      confirmedPendingCaffeine = [];
       sleepLogs = [];
       teacherAwards = [];
       lastDashboardData = null;
@@ -1526,6 +1529,7 @@
       window._weightLoaded = true;
       applyWeightData(data.weight);
       caffeineLogs = data.caffeineLogs || [];
+      confirmedPendingCaffeine = [];
       sleepLogs = data.sleepLogs || [];
       cacheStudentRecords();
       renderCaffeineLogs();
@@ -1894,14 +1898,14 @@
       }
 
       const btn = document.getElementById('saveCaffeineBtn');
-      if(btn) btn.innerText = "저장 중...";
+      if (btn && btn.disabled) return;
+      if(btn) { btn.disabled = true; btn.innerText = "저장 중..."; }
 
       const newLog = { id: Date.now(), name: drinkName, amount: amount, time: time, reason: reason };
-      caffeineLogs.push(newLog);
 
       google.script.run
         .withSuccessHandler(() => {
-          if(btn) btn.innerText = "카페인 기록 완료";
+          if(btn) { btn.disabled = false; btn.innerText = "카페인 기록 완료"; }
           document.getElementById('drinkName').value = '';
           document.getElementById('customAmount').value = '';
           document.querySelectorAll('input[name="caffeineReason"]').forEach(cb => cb.checked = false);
@@ -1913,8 +1917,11 @@
           selectedDrink = { drink: '', mg: 0 };
           // ⭐ 오늘 날짜 기록일 때만 섭취 경고 모달 표시
           // 과거 날짜 기록은 저장 완료 모달만 표시
+          confirmedPendingCaffeine.push({ time, amount });
           if(getLogDateKST(time) === getTodayKST()) {
-            loadCaffeineLogs(amount);
+            const knownTotal = caffeineLogs.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + Number(log.amount || 0), 0);
+            showCaffeineWarning(amount, knownTotal + confirmedPendingCaffeine.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + log.amount, 0));
+            loadCaffeineLogs();
           } else {
             showSaveCompleteModal('✅ 카페인 기록이 저장되었습니다.');
             loadCaffeineLogs();
@@ -1923,7 +1930,7 @@
         })
         .withFailureHandler(err => {
           showInfoModal('오류', '저장 중 오류가 발생했습니다. 다시 시도해주세요.');
-          if(btn) btn.innerText = "카페인 기록 완료";
+          if(btn) { btn.disabled = false; btn.innerText = "카페인 기록 완료"; }
           console.error(err);
         })
         .saveCaffeineData({
@@ -2076,6 +2083,8 @@
 
     // ⭐ 실제 수면 저장 실행 (중복 확인 후 공통으로 호출)
     function proceedSaveSleep(date, sleepStart, sleepEnd, memo, hours, btn, choices = {}) {
+      if (btn && btn.disabled) return;
+      if (btn) btn.disabled = true;
       const sleepStartTime = timePartFromDatetime(sleepStart);
       const sleepEndTime = timePartFromDatetime(sleepEnd);
       const wakeDate = datePartFromDatetime(sleepEnd);
@@ -2110,7 +2119,7 @@
             showSleepCompleteModal(hours, false);
           }
 
-          if(btn) btn.innerText = "수면 기록 완료";
+          if(btn) { btn.disabled = false; btn.innerText = "수면 기록 완료"; }
 
           // ⭐ 최근 취침/기상 시간 학번별로 저장
           localStorage.setItem('lastSleepStart_' + user.studentId, sleepStartTime);
@@ -2131,7 +2140,7 @@
           console.error('❌ 수면 저장 실패:', err, sleepData);
           const msg = err && err.message ? err.message : String(err || '알 수 없는 오류');
           showInfoModal('저장 실패', '수면 저장에 실패했습니다.\n\n' + msg);
-          if(btn) btn.innerText = "수면 기록 완료";
+          if(btn) { btn.disabled = false; btn.innerText = "수면 기록 완료"; }
         })
         .saveSleepData(sleepData);
     }
@@ -3960,15 +3969,28 @@
       else if (type && id) { deleteLog(type, id); }
     }
 
+    function applyConfirmedDeletion(type, id) {
+      if (type === 'caffeine') {
+        caffeineLogs = caffeineLogs.filter(log => String(log.id) !== String(id));
+        cacheStudentRecords('caffeineLogs');
+        renderCaffeineLogs();
+        updateCaffeineBadge();
+      } else if (type === 'sleep') {
+        sleepLogs = sleepLogs.filter(log => String(log.id) !== String(id));
+        cacheStudentRecords('sleepLogs');
+        renderSleepLogs();
+      }
+    }
+
     function deleteLog(type, id) {
       if(type === 'caffeine') {
         google.script.run
-          .withSuccessHandler(() => { loadCaffeineLogs(); showSaveCompleteModal('✅ 카페인 기록이 삭제되었습니다.'); setTimeout(() => { updateCaffeineBadge(); refreshData(); }, 500); })
+          .withSuccessHandler(() => { applyConfirmedDeletion(type, id); showSaveCompleteModal('✅ 카페인 기록이 삭제되었습니다.'); refreshData(); })
           .withFailureHandler(err => { showInfoModal('오류', '삭제 중 오류가 발생했습니다. 다시 시도해주세요.'); })
           .deleteCaffeineData(String(id));
       } else if(type === 'sleep') {
         google.script.run
-          .withSuccessHandler(() => { loadSleepLogs(); refreshData(); showSaveCompleteModal('✅ 수면 기록이 삭제되었습니다.'); })
+          .withSuccessHandler(() => { applyConfirmedDeletion(type, id); showSaveCompleteModal('✅ 수면 기록이 삭제되었습니다.'); refreshData(); })
           .withFailureHandler(err => { showInfoModal('오류', '삭제 중 오류가 발생했습니다. 다시 시도해주세요.'); })
           .deleteSleepData(String(id));
       }
@@ -3998,7 +4020,7 @@
       if(!user || !user.studentId) return;
       google.script.run
         .withSuccessHandler(logs => {
-          caffeineLogs = logs || []; cacheStudentRecords('caffeineLogs');
+          caffeineLogs = logs || []; confirmedPendingCaffeine = []; cacheStudentRecords('caffeineLogs');
           renderCaffeineLogs();
           if(showWarningAfter !== undefined) {
             const today = getTodayKST();
@@ -4988,35 +5010,10 @@
     // ────────────────────────────────────────────────
 
     function silentRefresh() {
-      if (!user || !user.studentId) return;
+      if (!user || !user.studentId || document.hidden) return;
       lastRefreshTime = Date.now();
-      google.script.run
-        .withSuccessHandler(logs => {
-          const oldLength = caffeineLogs.length;
-          caffeineLogs = logs || []; cacheStudentRecords('caffeineLogs');
-          renderCaffeineLogs();
-          if (caffeineLogs.length !== oldLength) { refreshData(); if (caffeineLogs.length > oldLength) showUpdateNotification('카페인 기록이 업데이트되었습니다'); }
-        })
-        .withFailureHandler(err => { showRecordConnectionError('caffeine'); })
-        .getCaffeineLogs(user.studentId);
-      google.script.run
-        .withSuccessHandler(logs => {
-          const oldLength = sleepLogs.length;
-          sleepLogs = logs || []; cacheStudentRecords('sleepLogs');
-          renderSleepLogs();
-          if (sleepLogs.length !== oldLength) {
-            if(lastDashboardData) renderCharts(lastDashboardData);
-            refreshData();
-            if (sleepLogs.length > oldLength) showUpdateNotification('수면 기록이 업데이트되었습니다');
-          }
-        })
-        .withFailureHandler(err => { showRecordConnectionError('sleep'); })
-        .getSleepLogs(user.studentId);
-      // 문의 답변 감지
       checkReplyBubble();
-      // 교사 수여 뱃지 감지
       checkTeacherAwards();
-      // 교사 메시지 감지 → 미읽음 있으면 자동 팝업
       checkMsgBubble();
     }
 
@@ -5039,7 +5036,7 @@
       const btn = document.getElementById('refreshBtn');
       if (btn) { btn.classList.add('animate-spin'); btn.style.pointerEvents = 'none'; }
       Promise.all([
-        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { caffeineLogs = logs || []; cacheStudentRecords('caffeineLogs'); renderCaffeineLogs(); resolve(); }).withFailureHandler(() => { showRecordConnectionError('caffeine'); resolve(); }).getCaffeineLogs(user.studentId); }),
+        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { caffeineLogs = logs || []; confirmedPendingCaffeine = []; cacheStudentRecords('caffeineLogs'); renderCaffeineLogs(); resolve(); }).withFailureHandler(() => { showRecordConnectionError('caffeine'); resolve(); }).getCaffeineLogs(user.studentId); }),
         new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { sleepLogs = logs || []; cacheStudentRecords('sleepLogs'); renderSleepLogs(); resolve(); }).withFailureHandler(() => { showRecordConnectionError('sleep'); resolve(); }).getSleepLogs(user.studentId); }),
         new Promise((resolve) => { google.script.run.withSuccessHandler(res => { updateDashboard(res); resolve(); }).withFailureHandler(() => resolve()).getStats(user.studentId); })
       ]).then(() => {

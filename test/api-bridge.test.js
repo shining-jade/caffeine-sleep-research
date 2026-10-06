@@ -277,3 +277,19 @@ test('changing session during a read retry never sends the old student request a
   await new Promise(resolve=>setTimeout(resolve,650));
   assert.equal(calls,1); assert.equal(settled,false);
 });
+
+test('a confirmed write forces fresh history and an older snapshot cannot overwrite it', async () => {
+  let finishOld, reads=0;
+  const {window}=loadBridge({fetchImpl:async(_url,options)=>{
+    const action=JSON.parse(options.body).action;
+    if(action==='saveCaffeineData')return response({success:true,data:{success:true}});
+    reads++;
+    if(reads===1)return new Promise(resolve=>{finishOld=()=>resolve(response({success:true,data:[{id:'old'}]}));});
+    return response({success:true,data:[{id:'new'}]});
+  }});
+  const old=new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCaffeineLogs('0'));
+  await new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveCaffeineData({}));
+  const fresh=await new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCaffeineLogs('0'));
+  finishOld(); const refreshedOld=await old;
+  assert.equal(fresh[0].id,'new');assert.equal(refreshedOld[0].id,'new');
+});

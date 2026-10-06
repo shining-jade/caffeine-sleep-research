@@ -80,7 +80,7 @@ test('session reset clears previous student records, settings and rendered priva
     document: { getElementById: id => id === 'myInquiriesContainer' ? container : null },
     privateUiDefaults: [{ id: 'myInquiriesContainer', html: '', className: 'initial', style: '' }],
     privateFormDefaults: [{ element: field, value: '', checked: false, disabled: true }],
-    caffeineLogs: [1], sleepLogs: [2], teacherAwards: [3], lastDashboardData: { private: true },
+    caffeineLogs: [1], confirmedPendingCaffeine: [{ amount: 100 }], sleepLogs: [2], teacherAwards: [3], lastDashboardData: { private: true },
     caffeineChart: null, sleepChart: null, userWeight: 55, userLimit: 137.5,
     sleepChoices: {}, pendingDelete: {}, editingId: 'old', editingType: 'sleep',
     caffeineDbLoading: true, stopAutoRefresh() {},
@@ -90,6 +90,7 @@ test('session reset clears previous student records, settings and rendered priva
   assert.equal(container.innerHTML, '');
   assert.equal(field.value, '');
   assert.equal(context.caffeineLogs.length, 0);
+  assert.equal(context.confirmedPendingCaffeine.length, 0);
   assert.equal(context.sleepLogs.length, 0);
   assert.equal(context.teacherAwards.length, 0);
   assert.equal(context.lastDashboardData, null);
@@ -119,4 +120,42 @@ test('app version checks never create an update announcement', () => {
   const context=vm.createContext({document:{lastModified:'new',createElement(){assert.fail('update toast');}},localStorage:{getItem:()=> 'old',setItem(){}}});
   vm.runInContext(extract('checkAppVersion')+'\ncheckAppVersion();',context);
   assert.doesNotMatch(html,/앱이 업데이트 되었습니다/);
+});
+
+test('confirmed deletion removes only the matching record and renders without waiting for a read', () => {
+  let rendered=0,cached=0;
+  const context=vm.createContext({caffeineLogs:[{id:'a'},{id:'b'}],sleepLogs:[{id:'a'}],renderCaffeineLogs(){rendered++;},renderSleepLogs(){},cacheStudentRecords(){cached++;},updateCaffeineBadge(){}});
+  vm.runInContext(extract('applyConfirmedDeletion')+"\napplyConfirmedDeletion('caffeine','a');",context);
+  assert.equal(context.caffeineLogs.length,1); assert.equal(context.caffeineLogs[0].id,'b'); assert.equal(context.sleepLogs.length,1);
+  assert.equal(rendered,1); assert.equal(cached,1);
+});
+test('caffeine save feedback does not wait for a second history request', () => {
+  const submit=extract('submitCaffeine');
+  assert.ok(submit.includes('showCaffeineWarning(amount,'));
+  assert.ok(!submit.includes('loadCaffeineLogs(amount)'));
+  assert.ok(!submit.includes('caffeineLogs.push(newLog)'));
+});
+
+test('background polling checks notifications without reloading record histories', () => {
+  const calls=[];
+  const context=vm.createContext({user:{studentId:'0'},document:{hidden:false},lastRefreshTime:0,Date,checkReplyBubble(){calls.push('reply');},checkTeacherAwards(){calls.push('badge');},checkMsgBubble(){calls.push('message');}});
+  vm.runInContext(extract('silentRefresh')+'\nsilentRefresh();',context);
+  assert.deepEqual(calls,['reply','badge','message']);
+});
+
+test('all inline student scripts parse before deployment', () => {
+  for (const match of html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/g)) {
+    if (!/type="(?:module|application\/)/.test(match[1])) new vm.Script(match[2]);
+  }
+});
+
+test('consecutive confirmed caffeine saves include both amounts before history returns', () => {
+  const submit=extract('submitCaffeine');
+  const start=submit.indexOf('.withSuccessHandler(() => {')+'.withSuccessHandler('.length;
+  const end=submit.indexOf('\n        .withFailureHandler',start);
+  const callback=submit.slice(start,end).trim().slice(0,-1);
+  const totals=[];
+  const context=vm.createContext({btn:null,document:{getElementById:()=>({value:'',classList:{add(){}}}),querySelectorAll:()=>[]},selectedDrink:null,time:'today',amount:30,caffeineLogs:[{time:'today',amount:50}],confirmedPendingCaffeine:[],getLogDateKST:x=>x,getTodayKST:()=> 'today',showCaffeineWarning:(_amount,total)=>totals.push(total),loadCaffeineLogs(){},refreshData(){},showSaveCompleteModal(){}});
+  vm.runInContext('const saved='+callback+';saved();saved();',context);
+  assert.deepEqual(totals,[80,110]);
 });
