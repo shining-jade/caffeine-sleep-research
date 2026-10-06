@@ -978,7 +978,7 @@
                     <div class="analysis-dropdown-menu" id="awardDrop">
                         <div class="adrop-header">오늘 기록 뱃지 (자동)</div>
                         <div class="adrop-item" onclick="toggleAwardItem('auto_today_caf')"><input type="checkbox" id="chk_auto_today_caf"><span class="adrop-dot" style="background:#059669;"></span>☕ 카페인 오늘 기록<span class="adrop-cnt" id="cntAuto_today_caf">0</span></div>
-                        <div class="adrop-item" onclick="toggleAwardItem('auto_today_sleep')"><input type="checkbox" id="chk_auto_today_sleep"><span class="adrop-dot" style="background:#2563eb;"></span>😴 수면 오늘 기록<span class="adrop-cnt" id="cntAuto_today_sleep">0</span></div>
+                        <div class="adrop-item" onclick="toggleAwardItem('auto_today_sleep')"><input type="checkbox" id="chk_auto_today_sleep"><span class="adrop-dot" style="background:#2563eb;"></span>😴 지난밤 수면 기록<span class="adrop-cnt" id="cntAuto_today_sleep">0</span></div>
                         <div class="adrop-divider"></div>
                         <div class="adrop-header">교사 수여 뱃지</div>
                         <div id="awardBadgeItems"><!-- dynamically populated --></div>
@@ -2544,7 +2544,7 @@ function updateDashboard(){
     f.forEach(s=>{
         // ⭐ '카페인 섭취 안 함' 기록이 있으면 미기록으로 카운트하지 않음
         const hasTodayCafRecord=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(today));
-        if(!hasTodayCafRecord&&getYestSleep(s.학번)===null)nr++;
+        if(!hasTodayCafRecord&&!hasSleepRecordOnWakeDate(s.학번,today))nr++;
         const ac=avgCafForDates(s.학번,dates7),lim=getLimit(s.학번);
         if(ac>0&&ac/lim>=1.0)cw++;
         const as=avgSleepForDates(s.학번,dates7);
@@ -3122,7 +3122,7 @@ function filterStudents(){
             let cafMatch=true, sleepMatch=true, awardMatch=true, recordMatch=true;
             if(hasRecordFilter){
                 const hasCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd));
-                const hasSleep=sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd);
+                const hasSleep=hasSleepRecordOnWakeDate(s.학번,fd);
                 const recorded=hasCaf||hasSleep;
                 if(activeFilters.record.has('recorded')&&activeFilters.record.has('notRecorded'))recordMatch=true;
                 else if(activeFilters.record.has('recorded'))recordMatch=recorded;
@@ -3155,7 +3155,7 @@ function filterStudents(){
             if(hasAwardFilter){
                 const af=activeFilters.award;
                 const hasTodayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd));
-                const hasTodaySleep=sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd);
+                const hasTodaySleep=hasSleepRecordOnWakeDate(s.학번,fd);
                 const sAwards=getManualAwardsFor(s.학번);
                 // 자동 뱃지 그룹 (OR)
                 const hasAutoFilter=af.has('auto_today_caf')||af.has('auto_today_sleep');
@@ -3187,8 +3187,8 @@ function updateBadges(){
     const d7=getStudentDates();
     const n=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
     n('badgeAll',studentsData.length);
-    n('cntRecorded',studentsData.filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))||sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd)).length);
-    n('cntNotRecorded',studentsData.filter(s=>!caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))&&!sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd)).length);
+    n('cntRecorded',studentsData.filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))||hasSleepRecordOnWakeDate(s.학번,fd)).length);
+    n('cntNotRecorded',studentsData.filter(s=>!caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))&&!hasSleepRecordOnWakeDate(s.학번,fd)).length);
 
     // 카페인 단계별 카운트
     const getCafStage=s=>{
@@ -3230,7 +3230,7 @@ function updateBadges(){
     // 뱃지 카운트
     const fd2=getStudentFilterDate();
     n('cntAuto_today_caf',   studentsData.filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd2))).length);
-    n('cntAuto_today_sleep', studentsData.filter(s=>sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd2)).length);
+    n('cntAuto_today_sleep', studentsData.filter(s=>hasSleepRecordOnWakeDate(s.학번,fd2)).length);
     n('cntAwardNoTeacher',   studentsData.filter(s=>getManualAwardsFor(s.학번).length===0).length);
     // 개별 뱃지별 카운트
     challengeBadges.filter(b=>!b.auto).forEach(b=>{
@@ -3308,7 +3308,7 @@ function _syncAwardUI(){
         // 선택된 뱃지 이름들로 버튼 제목 업데이트
         const labels=[];
         if(activeFilters.award.has('auto_today_caf'))labels.push('카페인 오늘기록');
-        if(activeFilters.award.has('auto_today_sleep'))labels.push('수면 오늘기록');
+        if(activeFilters.award.has('auto_today_sleep'))labels.push('지난밤 수면 기록');
         if(activeFilters.award.has('awardNoTeacher'))labels.push('수여없음');
         activeFilters.award.forEach(k=>{
             if(!k.startsWith('badge_'))return;
@@ -3474,9 +3474,9 @@ function renderStudentGrid(students){
         const sleepSt=getSleepStatusInfo(as);
         // 오늘 기록 여부
         const todayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(filterDate));
-        const todaySleep=sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===filterDate);
+        const todaySleep=hasSleepRecordOnWakeDate(s.학번,filterDate);
         const todayCafBadge=todayCaf?'<span class="rec-badge rec-ok">✓ 기록</span>':'<span class="rec-badge rec-none">오늘 미기록</span>';
-        const todaySleepBadge=todaySleep?'<span class="rec-badge rec-ok">✓ 기록</span>':'<span class="rec-badge rec-none">오늘 미기록</span>';
+        const todaySleepBadge=todaySleep?'<span class="rec-badge rec-ok" title="선택 날짜에 기상한 수면">지난밤 기록 ✓</span>':'<span class="rec-badge rec-none" title="선택 날짜에 기상한 수면">지난밤 미기록</span>';
         const targetCafText=getTargetCafText(s.학번);
         const targetSleepText=getTargetSleepText(s.학번);
         // ⭐ 카페인 표시: 기록 있고 0mg → "카페인 섭취 안 함", 기록 없으면 "미기록"
@@ -3940,6 +3940,18 @@ function shiftDateString(dateStr,offset){
     d.setDate(d.getDate()+offset);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
+function getSleepWakeDate(r){
+    const explicit=String(r?.기상날짜||r?.wakeDate||'').trim();
+    const parts=explicit.match(/^(\d{4})[.\/-]\s*(\d{1,2})[.\/-]\s*(\d{1,2})/);
+    if(parts)return parts[1]+'-'+parts[2].padStart(2,'0')+'-'+parts[3].padStart(2,'0');
+    const date=String(r?.날짜||r?.date||'');
+    const start=formatSleepTime(r?.취침||r?.sleepTime||'');
+    const end=formatSleepTime(r?.기상||r?.wakeTime||'');
+    return date&&start&&end?shiftDateString(date,end<=start?1:0):'';
+}
+function hasSleepRecordOnWakeDate(id,date){
+    return sleepData.some(r=>String(r.학번)===String(id)&&getSleepWakeDate(r)===date);
+}
 function getSleepLifeDate(r){
     const sleepDate=String(r?.날짜||r?.date||'');
     const sleepTime=formatSleepTime(r?.취침||r?.sleepTime||r?.start||'');
@@ -4367,7 +4379,7 @@ function exportStudentExcel(){
     const rows=[
         [`교사용 모니터링 다운로드 - 기간: ${rangeLabel}`],
         [],
-        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','오늘수면기록','목표카페인(mg)','목표취침','목표기상','자동뱃지','교사수여뱃지','교사수여코멘트']
+        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','지난밤수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지','교사수여뱃지','교사수여코멘트']
     ];
 
     students.forEach(s=>{
@@ -4378,7 +4390,7 @@ function exportStudentExcel(){
         const cafSI=getCafStatusInfo(ac,lim,hasRecCSV);
         const sleepSI=getSleepStatusInfo(as);
         const todayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))?'O':'X';
-        const todaySleep=sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd)?'O':'X';
+        const todaySleep=hasSleepRecordOnWakeDate(s.학번,fd)?'O':'X';
         const info=getPersonalInfo(s.학번);
         // 뱃지 정보
         const autoList=evaluateAwards(s.학번,d7,fd);
@@ -4431,7 +4443,7 @@ function exportStudentToSheet(){
 
     // ─── 요약 시트 (학생당 1행, 뱃지현황 별도시트 없음) ───
     const summaryRows=[
-        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','오늘수면기록','목표카페인(mg)','목표취침','목표기상','자동뱃지수','교사수여뱃지수','자동뱃지목록','교사수여뱃지목록','교사수여코멘트']
+        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','지난밤수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지수','교사수여뱃지수','자동뱃지목록','교사수여뱃지목록','교사수여코멘트']
     ];
 
     // 드롭다운 값 수집
@@ -4448,7 +4460,7 @@ function exportStudentToSheet(){
         const cafSI=getCafStatusInfo(ac,lim,hasRec);
         const sleepSI=getSleepStatusInfo(as);
         const todayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))?'O':'X';
-        const todaySleep=sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd)?'O':'X';
+        const todaySleep=hasSleepRecordOnWakeDate(s.학번,fd)?'O':'X';
         const info=getPersonalInfo(s.학번);
         const autoList=evaluateAwards(s.학번,d7,fd);
         const manualList=getManualAwardsFor(s.학번);
@@ -6309,9 +6321,9 @@ function saveAwardSettings() {
 function evaluateAutoTodayBadges(studentId, baseDate) {
     const earned = [];
     const todayCaf   = caffeineData.some(c  => c.학번  === studentId && c.섭취시간.startsWith(baseDate));
-    const todaySleep = sleepData.some(sl => sl.학번 === studentId && sl.날짜 === baseDate);
+    const todaySleep = hasSleepRecordOnWakeDate(studentId,baseDate);
     if (todayCaf)   earned.push({ id:'today_caf',   name:'카페인 오늘 기록', image:'☕', bg:'#ecfdf5', color:'#059669' });
-    if (todaySleep) earned.push({ id:'today_sleep', name:'수면 오늘 기록',   image:'😴', bg:'#eff6ff', color:'#2563eb' });
+    if (todaySleep) earned.push({ id:'today_sleep', name:'지난밤 수면 기록',   image:'😴', bg:'#eff6ff', color:'#2563eb' });
     return earned;
 }
 // 하위 호환 래퍼 (기존 evaluateAwards 호출 유지)
