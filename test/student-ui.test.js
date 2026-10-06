@@ -106,3 +106,17 @@ for (const kind of ['Caffeine', 'Sleep']) {
     assert.equal(context[kind === 'Caffeine' ? 'caffeineLogs' : 'sleepLogs'].length, 1);
   });
 }
+
+test('automatic refresh waits two minutes and skips hidden pages', () => {
+  let callback, period, reads=0;
+  const context=vm.createContext({stopAutoRefresh(){},setInterval(fn,ms){callback=fn;period=ms;return 1;},silentRefresh(){reads++;},document:{hidden:true},autoRefreshInterval:null});
+  vm.runInContext(extract('startAutoRefresh')+'\nstartAutoRefresh();',context);
+  assert.equal(period,120000);
+  callback(); assert.equal(reads,0);
+  context.document.hidden=false; callback(); assert.equal(reads,1);
+});
+test('app version checks never create an update announcement', () => {
+  const context=vm.createContext({document:{lastModified:'new',createElement(){assert.fail('update toast');}},localStorage:{getItem:()=> 'old',setItem(){}}});
+  vm.runInContext(extract('checkAppVersion')+'\ncheckAppVersion();',context);
+  assert.doesNotMatch(html,/앱이 업데이트 되었습니다/);
+});

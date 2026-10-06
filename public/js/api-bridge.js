@@ -74,9 +74,16 @@
     var key = JSON.stringify([sessionGeneration, action, params]);
     var share = role === 'student' && sharedReads.has(action);
     if (share && pendingReads.has(key)) return pendingReads.get(key);
-    var request = requestJson('/api/' + role + '/action', {
+    var requestOptions = {
       method: 'POST',
       body: JSON.stringify({ action: action, params: params, ...(expectedSubject ? { expectedSubject: expectedSubject } : {}) }),
+    };
+    var request = requestJson('/api/' + role + '/action', requestOptions).catch(async function(error) {
+      var retryableRead = role === 'student' && ['getStudentBootstrap', 'getStats', 'getFilteredStats', 'getCaffeineLogs', 'getSleepLogs'].includes(action);
+      if (!retryableRead || !['GAS_UNAVAILABLE', 'NETWORK_ERROR'].includes(error.code) || generation !== sessionGeneration) throw error;
+      await new Promise(function(resolve) { setTimeout(resolve, 600); });
+      if (generation !== sessionGeneration) throw publicError('STALE_SESSION', '로그인 정보가 변경되었습니다.', 409);
+      return requestJson('/api/' + role + '/action', requestOptions);
     }).then(function(payload) {
       if (role === 'student' && expectedSubject && generation === sessionGeneration
           && (payload.subject?.studentId !== expectedSubject.studentId || payload.subject?.name !== expectedSubject.name)) {

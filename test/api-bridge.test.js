@@ -253,3 +253,27 @@ test('writes are never deduplicated and completed reads are fetched again', asyn
   window.google.script.run.saveSleepData({ id: '1' });
   assert.equal(calls, 4);
 });
+
+test('transient student reads retry once while writes are never replayed', async () => {
+  let calls=0;
+  const {window}=loadBridge({fetchImpl:async()=>{calls++;return calls===1?response({success:false,error:'GAS_UNAVAILABLE'},502):response({success:true,data:[{id:'saved'}]});}});
+  const result=await new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCaffeineLogs('0'));
+  assert.equal(result[0].id,'saved'); assert.equal(calls,2);
+  calls=0;
+  const failed=loadBridge({fetchImpl:async()=>{calls++;return response({success:false,error:'GAS_UNAVAILABLE'},502);}}).window;
+  await new Promise(resolve=>failed.google.script.run.withFailureHandler(resolve).saveCaffeineData({}));
+  assert.equal(calls,1);
+});
+
+test('changing session during a read retry never sends the old student request again', async () => {
+  let calls=0, firstFailure;
+  const first = new Promise(resolve=>{firstFailure=resolve;});
+  const {window}=loadBridge({fetchImpl:async()=>{calls++;firstFailure();return response({success:false,error:'GAS_UNAVAILABLE'},502);}});
+  let settled=false;
+  window.google.script.run.withSuccessHandler(()=>{settled=true;}).withFailureHandler(()=>{settled=true;}).getCaffeineLogs('0');
+  await first;
+  await new Promise(resolve=>setImmediate(resolve));
+  window.appAuth.invalidateSession();
+  await new Promise(resolve=>setTimeout(resolve,650));
+  assert.equal(calls,1); assert.equal(settled,false);
+});
