@@ -47,6 +47,31 @@ test('DB load completion reruns the current query', () => {
   assert.deepEqual(queries, ['아메리카노']);
 });
 
+test('public DB remains searchable when the live Google request fails', async () => {
+  let fail;
+  const elements = { dbTotalCount: {}, dbSearchInput: { value: '아메리카노' } };
+  const runner = {
+    withSuccessHandler() { return this; },
+    withFailureHandler(handler) { fail = handler; return this; }, getCaffeineDB() {},
+  };
+  const queries = [];
+  const context = vm.createContext({
+    document: { getElementById: id => elements[id] },
+    localStorage: { getItem: () => null, setItem() {} },
+    google: { script: { run: runner } }, console: { error() {} },
+    fetch: async () => ({ ok: true, json: async () => [{ f: '아메리카노', mg: 100 }] }),
+    CAFFEINE_DB: [], caffeineDbLoading: false,
+    searchCaffeineDb: query => queries.push(query),
+  });
+  vm.runInContext(extract('loadCaffeineDbFromGAS') + '\nloadCaffeineDbFromGAS();', context);
+  await new Promise(resolve => setImmediate(resolve));
+  fail(new Error('GAS_TIMEOUT'));
+  assert.equal(context.CAFFEINE_DB.length, 1);
+  assert.equal(elements.dbTotalCount.textContent, '1건');
+  assert.equal(context.caffeineDbLoading, false);
+  assert.deepEqual(queries, ['아메리카노', '아메리카노']);
+});
+
 test('session reset clears previous student records, settings and rendered private content', () => {
   const container = { innerHTML: 'previous student inquiry', className: 'changed', style: { cssText: 'display:block' } };
   const field = { value: 'previous student weight', checked: true, disabled: false };

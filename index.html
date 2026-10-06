@@ -3144,11 +3144,29 @@
 
       if (countEl) countEl.textContent = '로딩 중...';
       caffeineDbLoading = true;
+      let receivedLiveDb = false;
+      // 공용 음료 정보만 포함한 배포 DB로 Google 서버 지연 중에도 검색 가능.
+      if (typeof fetch === 'function') {
+        fetch('/public/data/caffeine-db.json')
+          .then(response => { if (!response.ok) throw new Error('DB snapshot unavailable'); return response.json(); })
+          .then(data => {
+            if (receivedLiveDb || !Array.isArray(data) || !data.length) return;
+            CAFFEINE_DB = data;
+            caffeineDbLoading = false;
+            if (countEl) countEl.textContent = data.length.toLocaleString() + '건';
+            try {
+              localStorage.setItem('caffeine_db_cache', JSON.stringify(data));
+              localStorage.setItem('caffeine_db_cache_time', String(Date.now()));
+            } catch(e) {}
+            searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
+          }).catch(() => {});
+      }
 
       google.script.run
         .withSuccessHandler(function(result) {
           caffeineDbLoading = false;
           if (result && result.success && Array.isArray(result.data)) {
+            receivedLiveDb = true;
             CAFFEINE_DB = result.data;
             const cnt = CAFFEINE_DB.length;
             if (countEl) countEl.textContent = cnt.toLocaleString() + '건';
@@ -3159,14 +3177,14 @@
             } catch(e) {}
             searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
           } else {
-            if (countEl) countEl.textContent = '로드 실패';
+            if (countEl && !CAFFEINE_DB.length) countEl.textContent = '로드 실패';
             console.error('카페인 DB 로드 실패:', result);
             searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
           }
         })
         .withFailureHandler(function(err) {
           caffeineDbLoading = false;
-          if (countEl) countEl.textContent = '로드 실패';
+          if (countEl && !CAFFEINE_DB.length) countEl.textContent = '로드 실패';
           console.error('getCaffeineDB 오류:', err);
           searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
         })
