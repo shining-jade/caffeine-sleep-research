@@ -451,7 +451,9 @@
             </div>
 
             <p id="selectedDrink" class="text-gray-500 text-sm text-center py-1">음료를 선택하거나 직접 입력해주세요</p>
-            <button type="button" onclick="resetCaffeineForm()" class="self-end px-3 py-2 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl">입력 초기화</button>
+            <div class="flex justify-end">
+              <button type="button" onclick="resetCaffeineForm()" class="px-3 py-2 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl">입력 초기화</button>
+            </div>
 
             <input type="text" id="drinkName" placeholder="음료 이름 (예: 이디야 아메리카노)"
               class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400">
