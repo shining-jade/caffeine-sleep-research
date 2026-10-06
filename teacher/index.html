@@ -3947,7 +3947,7 @@ function getSleepWakeDate(r){
     const date=String(r?.날짜||r?.date||'');
     const start=formatSleepTime(r?.취침||r?.sleepTime||'');
     const end=formatSleepTime(r?.기상||r?.wakeTime||'');
-    return date&&start&&end?shiftDateString(date,end<=start?1:0):'';
+    return date&&/^\d{2}:\d{2}$/.test(start)&&/^\d{2}:\d{2}$/.test(end)?shiftDateString(date,end<=start?1:0):'';
 }
 function hasSleepRecordOnWakeDate(id,date){
     return sleepData.some(r=>String(r.학번)===String(id)&&getSleepWakeDate(r)===date);
