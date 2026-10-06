@@ -221,10 +221,6 @@ function getKSTDate() {
 // Students 시트 구조: A:학년, B:반, C:번호, D:이름, E:학번ID
 function checkLogin(studentId, name) {
   try {
-    safeLog_('=== 로그인 시도 ===');
-    safeLog_('입력된 학번: "' + studentId + '"');
-    safeLog_('입력된 이름: "' + name + '"');
-
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("students");
 
@@ -233,21 +229,16 @@ function checkLogin(studentId, name) {
       return { success: false, message: "학생 명단 시트를 찾을 수 없습니다." };
     }
 
-    const data = sheet.getDataRange().getValues();
-    safeLog_('students 시트 데이터 행 수: ' + (data.length - 1) + '명');
-
-    // 처음 5개 행 로그 출력 (디버깅용)
-    for (let i = 1; i < Math.min(6, data.length); i++) {
-      safeLog_(`${i}행 - E열(학번): "${data[i][4]}", D열(이름): "${data[i][3]}"`);
-    }
-
-    for (let i = 1; i < data.length; i++) {
+    const lastRow = sheet.getLastRow();
+    const data = lastRow > 1 ? sheet.getRange(2, 4, lastRow - 1, 2).getValues() : [];
+    const inputId = normalizeId(studentId);
+    const inputName = String(name).trim();
+    for (let i = 0; i < data.length; i++) {
       // ⭐ normalizeId로 숫자(1101.0) → "1101" 처리
-      const rowId   = normalizeId(data[i][4]);  // E열: 학번
-      const rowName = String(data[i][3]).trim(); // D열: 이름
-      const inputId = normalizeId(studentId);
+      const rowId   = normalizeId(data[i][1]);  // E열: 학번
+      const rowName = String(data[i][0]).trim(); // D열: 이름
 
-      if (rowId === inputId && rowName === name.trim()) {
+      if (rowId === inputId && rowName === inputName) {
         safeLog_('✅ 로그인 성공: ' + i + '행에서 일치');
         // 비수치 학번(교직원·교생)은 "학번_이름" 복합키로 고유화
         const uniqueId = /^\d+$/.test(inputId) ? inputId : inputId + '_' + name.trim();

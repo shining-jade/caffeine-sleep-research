@@ -4,7 +4,8 @@ export async function restoreStudentSession({ getSession, onAuthenticated, onUna
     if (!session?.authenticated || !session.studentId || !session.name) throw new Error('Unauthenticated.');
     await onAuthenticated(session);
     return session;
-  } catch {
+  } catch (error) {
+    if (error?.code === 'STALE_SESSION') return null;
     await onUnauthenticated();
     return null;
   }

@@ -187,3 +187,69 @@ test('API bridge public source contains no upstream URL or secret names', () => 
   assert.doesNotMatch(SOURCE, /script\.google\.com\/macros\/s\//i);
   assert.doesNotMatch(SOURCE, /GAS_API_URL|GAS_SHARED_SECRET|SESSION_SECRET|TEACHER_PASSWORD_HASH/);
 });
+
+test('duplicate in-flight student reads share one request and both receive results', async () => {
+  const pending = [];
+  const { window } = loadBridge({ fetchImpl: () => new Promise(resolve => pending.push(resolve)) });
+  const values = [];
+  window.google.script.run.withSuccessHandler(v => values.push(v)).getStats('1101');
+  window.google.script.run.withSuccessHandler(v => values.push(v)).getStats('1101');
+  assert.equal(pending.length, 1);
+  pending[0](response({ success: true, data: 7 }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(values, [7, 7]);
+});
+
+test('old student success and failure responses are discarded after a new login', async () => {
+  const pending = [];
+  const { window } = loadBridge({ fetchImpl: url => url.endsWith('/login')
+    ? Promise.resolve(response({ success: true })) : new Promise(resolve => pending.push(resolve)) });
+  let callbacks = 0;
+  let expired = 0;
+  window.appAuth.onSessionExpired(() => expired++);
+  const runner = window.google.script.run.withSuccessHandler(() => callbacks++).withFailureHandler(() => callbacks++);
+  runner.getStats('1101');
+  runner.getSleepLogs('1101');
+  await window.appAuth.loginStudent('1102', '다른학생');
+  pending[0](response({ success: true, data: { private: 'previous student' } }));
+  pending[1](response({ success: false }, 401));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(callbacks, 0);
+  assert.equal(expired, 0);
+});
+
+test('student data from a cookie changed by another tab never reaches the current screen', async () => {
+  const { window } = loadBridge({ fetchImpl: async url => url.endsWith('/login')
+    ? response({ success: true, studentId: '1101', name: '학생A' })
+    : response({ success: true, subject: { studentId: '1102', name: '학생B' }, data: ['private B record'] }) });
+  await window.appAuth.loginStudent('1101', '학생A');
+  let shown = false;
+  let expired = 0;
+  window.appAuth.onSessionExpired(() => expired++);
+  window.google.script.run.withSuccessHandler(() => { shown = true; }).withFailureHandler(() => {}).getCaffeineLogs('1101');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(shown, false);
+  assert.equal(expired, 1);
+});
+
+test('delayed session restoration cannot overwrite a completed new login', async () => {
+  let restore;
+  const { window } = loadBridge({ fetchImpl: url => url.endsWith('/session')
+    ? new Promise(resolve => { restore = resolve; })
+    : Promise.resolve(response({ success: true, studentId: '1102', name: '학생B' })) });
+  const session = window.appAuth.getSession().catch(error => error);
+  await window.appAuth.loginStudent('1102', '학생B');
+  restore(response({ success: true, studentId: '1101', name: '학생A' }));
+  assert.equal((await session).code, 'STALE_SESSION');
+});
+
+test('writes are never deduplicated and completed reads are fetched again', async () => {
+  let calls = 0;
+  const { window } = loadBridge({ fetchImpl: async () => { calls++; return response({ success: true, data: [] }); } });
+  const read = () => new Promise(resolve => window.google.script.run.withSuccessHandler(resolve).getStats('1101'));
+  await read();
+  await read();
+  window.google.script.run.saveSleepData({ id: '1' });
+  window.google.script.run.saveSleepData({ id: '1' });
+  assert.equal(calls, 4);
+});

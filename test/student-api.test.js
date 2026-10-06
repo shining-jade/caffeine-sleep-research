@@ -49,6 +49,16 @@ function studentCookie(overrides = {}) {
   return `caffeine_session=${encodeURIComponent(token)}`;
 }
 
+test('student API refuses a screen identity that differs from the current cookie before reading data', async () => {
+  const res = response();
+  await createActionHandler({ callGas: async () => assert.fail('must not fetch another student data'), now: () => NOW })(
+    request('POST', JSON.stringify({ action: 'getStats', params: ['1102'],
+      expectedSubject: { studentId: '1102', name: '다른학생' } }), studentCookie()), res,
+  );
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.json().error, 'SESSION_CHANGED');
+});
+
 test('student API rejects unsupported login method', async () => {
   const res = response();
   await createLoginHandler({ callGas: async () => assert.fail('not called'), now: () => NOW })(
@@ -169,7 +179,7 @@ test('student API forwards successful action with session identity only', async 
   assert.deepEqual(forwarded.subject, { studentId: '1101', name: '테스트학생' });
   assert.deepEqual(forwarded.params, [{ studentId: '1101', name: '테스트학생', mg: 40 }]);
   assert.equal(JSON.stringify(forwarded).includes('9999'), false);
-  assert.deepEqual(res.json(), { success: true, data: { saved: true } });
+  assert.deepEqual(res.json(), { success: true, data: { saved: true }, subject: { studentId: '1101', name: '테스트학생' } });
 });
 
 test('student API maps upstream failure safely', async () => {

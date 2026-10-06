@@ -874,7 +874,7 @@
                 ⚖️ 내 몸무게 (kg)
               </label>
               <div class="flex gap-2">
-                <input type="number" id="userWeight" value="60" oninput="updateLimitDisplay()"
+                <input type="number" id="userWeight" placeholder="불러오는 중..." disabled oninput="updateLimitDisplay()"
                   class="flex-1 min-w-0 p-4 border-2 border-gray-200 rounded-xl text-lg font-bold outline-none focus:ring-2 focus:ring-indigo-400">
                 <button onclick="saveAllGoals()"
                   class="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold active:scale-95 transition-transform whitespace-nowrap flex-shrink-0">
@@ -1196,6 +1196,7 @@
     let quickMenus = [];
     // ── 식약처 카페인 DB (2,319건 인라인) ──
     let CAFFEINE_DB = []; // caffeine_db 시트에서 GAS로 로드
+    let caffeineDbLoading = false;
     let _dbSearchSelected = null; // 현재 DB 검색에서 선택된 항목
 
     let caffeineLogs = [];
@@ -1290,8 +1291,55 @@
     }
 
     // 로그인 후 앱 진입 공통 함수 (최초 로그인 & 세션 복구 모두 사용)
+    let privateUiDefaults = [];
+    let privateFormDefaults = [];
+
+    function resetStudentData() {
+      stopAutoRefresh();
+      caffeineLogs = [];
+      sleepLogs = [];
+      teacherAwards = [];
+      lastDashboardData = null;
+      window._weightLoaded = false;
+      window.currentAIAnalysis = null;
+      window.currentAnalysisPeriod = null;
+      caffeineDbLoading = false;
+      userWeight = 60;
+      userLimit = 150;
+      SLEEP_CFG = { ageGroup: 'teen', sleepSevere: 7, sleepWarn: 8, sleepGood: 10, sleepMax: 11 };
+      sleepChoices = { smartphone: '', activity: '', latency: '', awakenings: '', daytime: '' };
+      pendingDelete = { type: null, id: null };
+      editingId = null;
+      editingType = null;
+      if (caffeineChart) { caffeineChart.destroy(); caffeineChart = null; }
+      if (sleepChart) { sleepChart.destroy(); sleepChart = null; }
+      privateUiDefaults.forEach(saved => {
+        const element = document.getElementById(saved.id);
+        if (!element) return;
+        element.innerHTML = saved.html;
+        element.className = saved.className;
+        element.style.cssText = saved.style;
+      });
+      privateFormDefaults.forEach(saved => {
+        saved.element.value = saved.value;
+        saved.element.checked = saved.checked;
+        saved.element.disabled = saved.disabled;
+        if (saved.className !== undefined) saved.element.className = saved.className;
+        if (saved.style !== undefined) saved.element.style.cssText = saved.style;
+      });
+      ['newMsgModal', 'studentReplyModal', 'updateNotification', 'initialSetupModal', 'newReplyModal',
+        'infoAlertModal', 'overwriteConfirmModal', 'weightConfirmModal'].forEach(id => document.getElementById(id)?.remove());
+      document.getElementById('teacherBadgeModal')?.style.setProperty('display', 'none', 'important');
+      ['editModalOverlay', 'caffeineWarningModal', 'deleteConfirmModal'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.style.display = 'none';
+      });
+      document.getElementById('calendarDetailPanel')?.classList.add('hidden');
+    }
+
     // isRestore: true면 세션 복구(카메라 복귀), false면 최초 로그인
     function enterApp(res, isRestore) {
+      if (!user || user.studentId !== res.studentId || user.name !== res.name) resetStudentData();
       user = res;
       saveSession(res);
 
@@ -1334,7 +1382,7 @@
         setTimeout(checkTeacherAwards, 2500);
         setTimeout(loadBadgeConfig, 800);
         // 카메라 복귀 파일이 세팅될 짧은 여유만 둔다. 일반 재실행은 즉시 초기 데이터를 요청한다.
-        setTimeout(waitForCameraAnalysisThenLoad, 100);
+        setTimeout(() => { if (user === res) waitForCameraAnalysisThenLoad(); }, 100);
         return;
       }
 
@@ -1370,6 +1418,8 @@
       }
 
       if(btn) btn.innerText = "확인 중...";
+      if(btn?.disabled) return;
+      if(btn) btn.disabled = true;
       if(msg) msg.innerText = '';
 
       try {
@@ -1380,11 +1430,15 @@
           ? '등록되지 않은 정보입니다.'
           : '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.';
         if(btn) btn.innerText = "로그인";
+      } finally {
+        if(btn) btn.disabled = false;
       }
     }
 
     function applyWeightData(result) {
       if (!user || !user.studentId) return;
+      const input = document.getElementById('userWeight');
+      if (input) { input.disabled = false; input.placeholder = '몸무게 입력'; }
       if (result && result.success && result.weight) {
         userWeight = result.weight;
         userLimit = result.targetCaf || Math.round(userWeight * 2.5);
@@ -1415,15 +1469,21 @@
       // ── ⭐ 이미 체중 데이터 로드됐으면 재호출 방지 (세션 복구 시 중복 실행 차단) ──
       if (window._weightLoaded) return;
       window._weightLoaded = true;
+      const requestedStudentId = user.studentId;
+      const input = document.getElementById('userWeight');
+      if (input) { input.disabled = true; input.placeholder = '불러오는 중...'; }
 
       google.script.run
         .withSuccessHandler(result => {
+          if (!user || user.studentId !== requestedStudentId) return;
           applyWeightData(result);
         })
         .withFailureHandler(err => {
-          if (!user || !user.studentId) return;
+          if (!user || user.studentId !== requestedStudentId) return;
+          window._weightLoaded = false;
+          if (input) { input.disabled = false; input.placeholder = '불러오기 실패'; }
           console.error('체중 정보 로드 실패:', err);
-          showWeightSetupModal();
+          showInfoModal('연결 오류', '저장된 몸무게를 불러오지 못했습니다. 잠시 후 다시 로그인해 주세요.');
         })
         .getWeightData(user.studentId);
     }
@@ -2481,11 +2541,13 @@
     }
 
     async function executeLogout() {
+      document.getElementById('mainApp')?.classList.add('hidden');
+      resetStudentData();
       let pushEndpoint = null;
       try {
         if (window.pushReminders) pushEndpoint = await window.pushReminders.unsubscribeCurrentDevice();
       } catch(e) {}
-      try { await window.appAuth.logout(pushEndpoint); } catch(e) {}
+      try { await window.appAuth.logout(pushEndpoint); } catch(e) { location.reload(); return; }
       user = null;
       clearSession(); // ⭐ 세션 삭제
       window._weightLoaded = false; // ⭐ 체중 로드 플래그 초기화
@@ -2529,7 +2591,7 @@
       if(sleepLogsContainer) sleepLogsContainer.innerHTML = '<p class="text-center py-8 text-gray-400 text-sm">기록이 없습니다.</p>';
 
       const userWeightInput = document.getElementById('userWeight');
-      if(userWeightInput) userWeightInput.value = '60';
+      if(userWeightInput) { userWeightInput.value = ''; userWeightInput.disabled = true; userWeightInput.placeholder = '불러오는 중...'; }
 
       const limitDisplay = document.getElementById('limitDisplay');
       if(limitDisplay) limitDisplay.innerText = '150';
@@ -2587,7 +2649,8 @@
       const weightInput = document.getElementById('userWeight');
       const limitDisplay = document.getElementById('limitDisplay');
       if(!weightInput || !limitDisplay) return;
-      const w = parseFloat(weightInput.value) || 60;
+      const w = parseFloat(weightInput.value);
+      if (!Number.isFinite(w) || w <= 0) { limitDisplay.innerText = '—'; return; }
       const limit = w * 2.5;
       userLimit = limit;
       limitDisplay.innerText = limit % 1 === 0 ? limit : limit.toFixed(1);
@@ -3056,6 +3119,7 @@
 
     // ── caffeine_db 시트 로드 함수 ─────────────────────────────
     function loadCaffeineDbFromGAS() {
+      if (caffeineDbLoading) return;
       const countEl = document.getElementById('dbTotalCount');
 
       // ⭐ localStorage 캐시 즉시 복원 (카메라 복귀 시 GAS 호출 없이 바로 사용 가능)
@@ -3064,18 +3128,23 @@
         const cachedTime = localStorage.getItem('caffeine_db_cache_time');
         const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
         if (cached && cachedTime && (Date.now() - parseInt(cachedTime)) < CACHE_TTL) {
-          CAFFEINE_DB = JSON.parse(cached);
+          const parsed = JSON.parse(cached);
+          if (!Array.isArray(parsed) || !parsed.length) throw new Error('Empty database cache');
+          CAFFEINE_DB = parsed;
           const cnt = CAFFEINE_DB.length;
           if (countEl) countEl.textContent = cnt.toLocaleString() + '건';
           console.log('카페인 DB 캐시 복원: ' + cnt + '건 (GAS 호출 생략)');
+          searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
           return; // ⭐ 캐시가 유효하면 GAS 호출 생략 → google.script.run 큐 비워둠
         }
       } catch(e) {}
 
       if (countEl) countEl.textContent = '로딩 중...';
+      caffeineDbLoading = true;
 
       google.script.run
         .withSuccessHandler(function(result) {
+          caffeineDbLoading = false;
           if (result && result.success && Array.isArray(result.data)) {
             CAFFEINE_DB = result.data;
             const cnt = CAFFEINE_DB.length;
@@ -3085,12 +3154,14 @@
               localStorage.setItem('caffeine_db_cache', JSON.stringify(CAFFEINE_DB));
               localStorage.setItem('caffeine_db_cache_time', String(Date.now()));
             } catch(e) {}
+            searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
           } else {
             if (countEl) countEl.textContent = '로드 실패';
             console.error('카페인 DB 로드 실패:', result);
           }
         })
         .withFailureHandler(function(err) {
+          caffeineDbLoading = false;
           if (countEl) countEl.textContent = '로드 실패';
           console.error('getCaffeineDB 오류:', err);
         })
@@ -3104,6 +3175,7 @@
       if (!panel) return;
       const isHidden = panel.classList.contains('hidden');
       panel.classList.toggle('hidden');
+      if (isHidden) loadCaffeineDbFromGAS();
       if (icon) {
         icon.classList.toggle('fa-chevron-down', !isHidden);
         icon.classList.toggle('fa-chevron-up', isHidden);
@@ -3180,6 +3252,11 @@
       const resultsEl = document.getElementById('dbSearchResults');
       if (!resultsEl) return;
       const q = query.trim();
+      if (q && !CAFFEINE_DB.length) {
+        resultsEl.innerHTML = '<p class="text-xs text-center text-gray-400 py-4">' +
+          (caffeineDbLoading ? '카페인 DB를 불러오는 중입니다...' : 'DB가 비어 있거나 불러오지 못했습니다. 검색창을 다시 열어 재시도하세요.') + '</p>';
+        return;
+      }
       if (q.length < 1) {
         resultsEl.innerHTML = '<p class="text-xs text-center text-gray-400 py-4">검색어를 입력하세요</p>';
         cancelDbVolume();
@@ -5229,6 +5306,22 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+      const privateIds = [
+        'caffeineLogsContainer', 'sleepLogsContainer', 'aiReportContainer',
+        'teacherMsgContainer', 'myInquiriesContainer', 'calendarGrid', 'calendarDetailContent',
+        'challengeBadgeGrid', 'tbModalEmojiRow', 'tbModalList',
+        'statusBadge', 'caffeineBadge', 'replyBubble', 'teacherBadgeBubble', 'msgUnreadBadge', 'msgBubble',
+        'dateRangeText', 'dashboardLimit', 'limitDisplay', 'targetSleepDisplay',
+        'badge-daily-caf', 'badge-daily-sleep', 'badge-challenge-msg',
+        'badge-streak-info', 'teacherDirectBadgeSection', 'editModalBody',
+      ];
+      privateUiDefaults = privateIds.map(id => {
+        const element = document.getElementById(id);
+        return element ? { id, html: element.innerHTML, className: element.className, style: element.style.cssText } : null;
+      }).filter(Boolean);
+      privateFormDefaults = Array.from(document.querySelectorAll('#mainApp input, #mainApp textarea, #mainApp select, #mainApp .sleep-choice-btn, #mainApp .condition-btn, #settingsTeenBtn, #settingsAdultBtn'))
+        .map(element => ({ element, value: element.value, checked: element.checked, disabled: element.disabled,
+          className: element.className, style: element.style.cssText }));
       checkAppVersion();
 
       // 부작용 섹션: 다른 항목 체크 시 "없음" 자동 해제
@@ -5250,6 +5343,7 @@
 
       window.appAuth.onSessionExpired(function() {
         user = null;
+        resetStudentData();
         clearSession();
         document.getElementById('bootPage')?.classList.add('hidden');
         document.getElementById('mainApp')?.classList.add('hidden');

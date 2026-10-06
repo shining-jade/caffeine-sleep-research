@@ -1,0 +1,72 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import test from 'node:test';
+
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+function extract(name) {
+  const start = html.indexOf(`    function ${name}(`);
+  const end = html.indexOf('\n    }', start) + 6;
+  return html.slice(start, end);
+}
+
+test('opening DB search loads the database without a previous cache', () => {
+  let loads = 0;
+  const panel = { classList: { contains: () => true, toggle() {} } };
+  const context = vm.createContext({
+    document: { getElementById: id => id === 'dbSearchPanel' ? panel : null },
+    loadCaffeineDbFromGAS: () => loads++,
+  });
+  vm.runInContext(extract('toggleDbSearch') + '\ntoggleDbSearch();', context);
+  assert.equal(loads, 1);
+});
+
+test('weight field does not display a fabricated default before profile loading', () => {
+  const field = html.match(/<input[^>]+id="userWeight"[^>]*>/)[0];
+  assert.doesNotMatch(field, /value="60"/);
+  assert.match(field, /placeholder="불러오는 중/);
+});
+
+test('DB load completion reruns the current query', () => {
+  let success;
+  const queries = [];
+  const elements = { dbTotalCount: {}, dbSearchInput: { value: '아메리카노' } };
+  const runner = {
+    withSuccessHandler(fn) { success = fn; return this; },
+    withFailureHandler() { return this; }, getCaffeineDB() {},
+  };
+  const context = vm.createContext({
+    document: { getElementById: id => elements[id] },
+    localStorage: { getItem: () => null, setItem() {} },
+    google: { script: { run: runner } }, console,
+    CAFFEINE_DB: [], caffeineDbLoading: false,
+    searchCaffeineDb: query => queries.push(query),
+  });
+  vm.runInContext(extract('loadCaffeineDbFromGAS') + '\nloadCaffeineDbFromGAS();', context);
+  success({ success: true, data: [{ f: '아메리카노', mg: 100 }] });
+  assert.deepEqual(queries, ['아메리카노']);
+});
+
+test('session reset clears previous student records, settings and rendered private content', () => {
+  const container = { innerHTML: 'previous student inquiry', className: 'changed', style: { cssText: 'display:block' } };
+  const field = { value: 'previous student weight', checked: true, disabled: false };
+  const context = vm.createContext({
+    window: { _weightLoaded: true, currentAIAnalysis: 'private report' },
+    document: { getElementById: id => id === 'myInquiriesContainer' ? container : null },
+    privateUiDefaults: [{ id: 'myInquiriesContainer', html: '', className: 'initial', style: '' }],
+    privateFormDefaults: [{ element: field, value: '', checked: false, disabled: true }],
+    caffeineLogs: [1], sleepLogs: [2], teacherAwards: [3], lastDashboardData: { private: true },
+    caffeineChart: null, sleepChart: null, userWeight: 55, userLimit: 137.5,
+    sleepChoices: {}, pendingDelete: {}, editingId: 'old', editingType: 'sleep',
+    caffeineDbLoading: true, stopAutoRefresh() {},
+    SLEEP_CFG: {},
+  });
+  vm.runInContext(extract('resetStudentData') + '\nresetStudentData();', context);
+  assert.equal(container.innerHTML, '');
+  assert.equal(field.value, '');
+  assert.equal(context.caffeineLogs.length, 0);
+  assert.equal(context.sleepLogs.length, 0);
+  assert.equal(context.teacherAwards.length, 0);
+  assert.equal(context.lastDashboardData, null);
+  assert.equal(context.window._weightLoaded, false);
+});
