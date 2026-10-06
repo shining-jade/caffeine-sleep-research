@@ -14,3 +14,14 @@ test('daily mean includes recorded zero but excludes missing students and sums m
  const r=ctx.getDailyCaffeineSummary(records,58,'2026-10-06');assert.equal(r.recorded,2);assert.equal(r.average,75);assert.equal(r.total,58);
  assert.equal(ctx.getDailyCaffeineSummary(records,58,'2026-10-05').average,null);
 });
+
+test('late data refresh cannot undo a newer confirmed hidden-student setting',()=>{
+ let success;const runner={withSuccessHandler(fn){success=fn;return this;},withFailureHandler(){return this;},getTeacherData(){}};
+ const ctx=vm.createContext({google:{script:{run:runner}},document:{getElementById:()=>({disabled:false,textContent:'',innerHTML:''})},console:{error(){},log(){}},updateVisibilityControls(){}});
+ vm.runInContext("let visibilityRevision=0;let hiddenStudentIds=new Set();let studentHideSelection=new Set();let studentsData=[],caffeineData=[],sleepData=[],infoData=[];",ctx);
+ const start=source.indexOf('function loadDataFromSheet(){');const end=source.indexOf('\nfunction ',start+10);
+ vm.runInContext(source.slice(start,end),ctx);ctx.loadDataFromSheet();
+ vm.runInContext("visibilityRevision++;hiddenStudentIds=new Set(['2410']);",ctx);
+ success({success:true,hiddenStudentIds:[],students:[],caffeine:[],sleep:[],info:[]});
+ assert.deepEqual(Array.from(vm.runInContext('hiddenStudentIds',ctx)),['2410']);
+});
