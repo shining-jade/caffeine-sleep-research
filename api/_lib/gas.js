@@ -24,7 +24,8 @@ export async function callGas({
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetchImpl(config.gasApiUrl, {
+    let url = config.gasApiUrl;
+    let options = {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
@@ -35,8 +36,25 @@ export async function callGas({
         subject,
       }),
       signal: controller.signal,
-      redirect: 'follow',
-    });
+      redirect: 'manual',
+    };
+    let response;
+    for (let redirects = 0; redirects <= 5; redirects++) {
+      response = await fetchImpl(url, options);
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
+      const location = response.headers.get('location');
+      if (!location || redirects === 5) throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');
+      const next = new URL(location, url);
+      if (next.protocol !== 'https:' || !['script.google.com', 'script.googleusercontent.com'].includes(next.hostname)) {
+        throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');
+      }
+      if (next.hostname === 'script.googleusercontent.com') {
+        options = { method: 'GET', signal: controller.signal, redirect: 'manual' };
+      } else if (options.method !== 'POST') {
+        throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');
+      }
+      url = next.href;
+    }
 
     if (!response.ok) {
       throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');

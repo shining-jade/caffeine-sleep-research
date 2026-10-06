@@ -46,6 +46,22 @@ test('callGas follows a successful Apps Script response', async () => {
   assert.deepEqual(await callGas({ ...request, fetchImpl }), { count: 3 });
 });
 
+test('script execution redirects retain POST, output redirects use GET without secret', async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    if (calls.length === 1) return new Response(null, { status: 302, headers: { Location: 'https://script.google.com/a/domain/macros/s/private-deployment/exec' } });
+    if (calls.length === 2) return new Response(null, { status: 302, headers: { Location: 'https://script.googleusercontent.com/macros/echo?key=output' } });
+    return new Response(JSON.stringify({ success: true, data: { success: true, data: [{ f: '커피' }] } }));
+  };
+  const result = await callGas({ ...request, action: 'getCaffeineDB', fetchImpl });
+  assert.equal(result.data.length, 1);
+  assert.equal(calls[1].options.method, 'POST');
+  assert.equal(calls[1].options.body, calls[0].options.body);
+  assert.equal(calls[2].options.method, 'GET');
+  assert.equal(calls[2].options.body, undefined);
+});
+
 test('callGas rejects upstream success false', async () => {
   const fetchImpl = async () => new Response(
     JSON.stringify({ success: false, error: 'private sheet detail' }),
@@ -58,6 +74,16 @@ test('callGas rejects upstream success false', async () => {
       && error.status === 502
       && !error.message.includes('private sheet detail'),
   );
+});
+
+test('redirects cannot send the gateway secret to another host', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return new Response(null, { status: 302, headers: { Location: 'https://example.com/collect' } });
+  };
+  await assert.rejects(callGas({ ...request, fetchImpl }), error => error.code === 'GAS_UNAVAILABLE');
+  assert.equal(calls, 1);
 });
 
 test('callGas rejects an HTML redirect page', async () => {
