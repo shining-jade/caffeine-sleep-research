@@ -46,6 +46,29 @@ test('callGas follows a successful Apps Script response', async () => {
   assert.deepEqual(await callGas({ ...request, fetchImpl }), { count: 3 });
 });
 
+test('DB retries a GET service response but never treats it as database data', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return new Response(JSON.stringify(calls === 1
+      ? { success: true, service: 'caffeine-sleep-api' }
+      : { success: true, data: { success: true, data: [{ f: '커피' }] } }));
+  };
+  const result = await callGas({ ...request, action: 'getCaffeineDB', fetchImpl });
+  assert.equal(result.data.length, 1);
+  assert.equal(calls, 2);
+});
+
+test('DB retries are bounded and writes are never replayed', async () => {
+  let calls = 0;
+  const fetchImpl = async () => { calls++; return new Response('unavailable', { status: 503 }); };
+  await assert.rejects(callGas({ ...request, action: 'getCaffeineDB', fetchImpl }));
+  assert.equal(calls, 3);
+  calls = 0;
+  await assert.rejects(callGas({ ...request, action: 'saveCaffeineData', fetchImpl }));
+  assert.equal(calls, 1);
+});
+
 test('script execution redirects retain POST, output redirects use GET without secret', async () => {
   const calls = [];
   const fetchImpl = async (url, options) => {

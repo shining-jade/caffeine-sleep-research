@@ -11,7 +11,40 @@ export class GasGatewayError extends Error {
   }
 }
 
-export async function callGas({
+let publicDbCache;
+let publicDbPending;
+
+export async function callGas(input) {
+  const sharedDb = input.action === 'getCaffeineDB' && !input.fetchImpl;
+  const key = sharedDb ? getRuntimeConfig().gasApiUrl : null;
+  if (sharedDb && publicDbCache?.key === key && publicDbCache.expires > Date.now()) return publicDbCache.value;
+  if (sharedDb && publicDbPending?.key === key) return publicDbPending.promise;
+  const promise = callGasReadWithRetry(input);
+  if (!sharedDb) return promise;
+  publicDbPending = { key, promise };
+  try {
+    const value = await promise;
+    if (value?.success === true && Array.isArray(value.data) && value.data.length) {
+      publicDbCache = { key, value, expires: Date.now() + 5 * 60 * 1000 };
+    }
+    return value;
+  } finally {
+    if (publicDbPending?.promise === promise) publicDbPending = null;
+  }
+}
+
+async function callGasReadWithRetry(input) {
+  const deadline = Date.now() + (input.timeoutMs ?? GAS_TIMEOUT_MS);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await callGasOnce({ ...input, timeoutMs: Math.max(1, deadline - Date.now()) });
+    } catch (error) {
+      if (input.action !== 'getCaffeineDB' || error.code !== 'GAS_UNAVAILABLE' || attempt >= 2 || Date.now() >= deadline) throw error;
+    }
+  }
+}
+
+async function callGasOnce({
   role,
   action,
   params,
@@ -45,7 +78,6 @@ export async function callGas({
       const location = response.headers.get('location');
       if (!location || redirects === 5) throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');
       const next = new URL(location, url);
-      if (action === 'getCaffeineDB') console.info('CAFFEINE_DB_REDIRECT', { status: response.status, method: options.method, host: next.hostname, path: next.pathname });
       if (next.protocol !== 'https:' || !['script.google.com', 'script.googleusercontent.com'].includes(next.hostname)) {
         throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');
       }
