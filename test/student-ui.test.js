@@ -4,12 +4,19 @@ import vm from 'node:vm';
 import test from 'node:test';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+test('incomplete history cannot replace authoritative dashboard totals', () => {
+  let refreshes = 0;
+  const context = vm.createContext({ caffeineHistoryLoaded:false, refreshData(){refreshes++;},
+    updateDashboard(){assert.fail('incomplete totals must not render');} });
+  vm.runInContext(extract('syncConfirmedCaffeineStats')+'\nsyncConfirmedCaffeineStats();',context);
+  assert.equal(refreshes,1);
+});
 test('confirmed caffeine deletion synchronizes totals and chart while preserving sleep', () => {
   let updated;
-  const context = vm.createContext({ caffeineLogs: [{time:'2026-10-06',amount:0},{time:'2025-10-06',amount:900}],
-    lastDashboardData: {todayTotal:150,labels:['10/05','10/06'],sleepData:[7,8]},
+  const context = vm.createContext({ caffeineHistoryLoaded:true, caffeineLogs: [{time:'2026-10-06',amount:0},{time:'2025-10-06',amount:900}],
+    lastDashboardData: {chartEndDate:'2026-10-06',todayTotal:150,labels:['10/05','10/06'],sleepData:[7,8]},
     getTodayKST:()=> '2026-10-06',getLogDateKST:x=>x,
-    document:{getElementById:()=>({value:'2026-10-06'})},
+    document:{getElementById:()=>({value:'2025-10-06'})},
     labelToISODate:x=>'2026-'+x.replace('/','-'),updateDashboard:x=>updated=x });
   vm.runInContext(extract('syncConfirmedCaffeineStats')+'\nsyncConfirmedCaffeineStats();',context);
   assert.equal(updated.todayTotal,0);

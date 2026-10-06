@@ -1202,7 +1202,8 @@
     let caffeineDbLoading = false;
     let _dbSearchSelected = null; // 현재 DB 검색에서 선택된 항목
 
-    let caffeineLogs = [];
+    let caffeineHistoryLoaded = false;
+    let caffeineLogs = []; caffeineHistoryLoaded = false;
     let confirmedPendingCaffeine = [];
     let pendingCaffeineSave = null;
     let sleepLogs = [];
@@ -1304,7 +1305,7 @@
 
     function resetStudentData() {
       stopAutoRefresh();
-      caffeineLogs = [];
+      caffeineLogs = []; caffeineHistoryLoaded = false;
       confirmedPendingCaffeine = [];
       pendingCaffeineSave = null;
       sleepLogs = [];
@@ -1531,7 +1532,7 @@
     function applyStudentBootstrap(data) {
       window._weightLoaded = true;
       applyWeightData(data.weight);
-      caffeineLogs = data.caffeineLogs || [];
+      caffeineLogs = data.caffeineLogs || []; caffeineHistoryLoaded = Array.isArray(data.caffeineLogs);
       confirmedPendingCaffeine = [];
       sleepLogs = data.sleepLogs || [];
       cacheStudentRecords();
@@ -2253,7 +2254,8 @@
         return;
       }
 
-      const endDate = new Date(input.value);
+      const queriedEndDate = input.value;
+      const endDate = new Date(queriedEndDate);
       const startDate = new Date(endDate);
       startDate.setDate(startDate.getDate() - 6);
 
@@ -2265,13 +2267,13 @@
       google.script.run
         .withSuccessHandler(res => {
           if(rangeText) rangeText.innerHTML = `<i class="fa-solid fa-calendar-check"></i> ${formatDate(startDate)} ~ ${formatDate(endDate)} 데이터 표시 중`;
-          updateDashboard(res);
+          updateDashboard(res, queriedEndDate);
         })
         .withFailureHandler(err => {
           if(rangeText) rangeText.innerHTML = `<i class="fa-solid fa-exclamation-triangle"></i> 데이터 조회 실패`;
           if(rangeText) rangeText.textContent = '최신 데이터 조회에 실패했습니다. 기존 기록은 유지됩니다. 조회 버튼으로 다시 확인해 주세요.';
         })
-        .getFilteredStats(user.studentId, input.value);
+        .getFilteredStats(user.studentId, queriedEndDate);
     }
 
     // 데이터 새로고침
@@ -2284,7 +2286,8 @@
     }
 
     // 대시보드 업데이트
-    function updateDashboard(data) {
+    function updateDashboard(data, chartEndDate) {
+      data = { ...data, chartEndDate: chartEndDate || data.chartEndDate || getTodayKST() };
       lastDashboardData = data || null;
       const todayTotal = data.todayTotal || 0;
 
@@ -2592,7 +2595,7 @@
       window._weightLoaded = false; // ⭐ 체중 로드 플래그 초기화
       try { sessionStorage.setItem('caffeineLoggedOut', '1'); } catch(e) {} // ⭐ 로그아웃 플래그
       stopAutoRefresh();
-      caffeineLogs = [];
+      caffeineLogs = []; caffeineHistoryLoaded = false;
       sleepLogs = [];
       window.currentAIAnalysis = null;
       userWeight = 60;
@@ -4003,6 +4006,7 @@
     }
 
     function syncConfirmedCaffeineStats() {
+      if (!caffeineHistoryLoaded) { refreshData(); return; }
       const today = getTodayKST();
       const totals = new Map();
       caffeineLogs.forEach(log => {
@@ -4012,9 +4016,9 @@
       const data = { ...(lastDashboardData || {}), todayTotal: totals.get(today) || 0, todayHasRecord: totals.has(today) };
       const labels = data.labels || [];
       // Dashboard labels are the seven calendar days ending on the selected date.
-      const endDate = document.getElementById('filterEndDate')?.value || today;
+      const endDate = data.chartEndDate || today;
       const dates = labels.map(label => {
-        let date = labelToISODate(label);
+        let date = `${endDate.slice(0, 4)}-${String(label).replace('/', '-')}`;
         if (date > endDate) date = `${Number(date.slice(0, 4)) - 1}${date.slice(4)}`;
         return date;
       });
@@ -4075,7 +4079,7 @@
       if(!user || !user.studentId) return;
       google.script.run
         .withSuccessHandler(logs => {
-          caffeineLogs = logs || []; confirmedPendingCaffeine = []; cacheStudentRecords('caffeineLogs');
+          caffeineLogs = logs || []; caffeineHistoryLoaded = true; confirmedPendingCaffeine = []; cacheStudentRecords('caffeineLogs');
           renderCaffeineLogs();
           if(showWarningAfter !== undefined) {
             const today = getTodayKST();
@@ -5093,7 +5097,7 @@
       const btn = document.getElementById('refreshBtn');
       if (btn) { btn.classList.add('animate-spin'); btn.style.pointerEvents = 'none'; }
       Promise.all([
-        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { caffeineLogs = logs || []; confirmedPendingCaffeine = []; cacheStudentRecords('caffeineLogs'); renderCaffeineLogs(); resolve(); }).withFailureHandler(() => { showRecordConnectionError('caffeine'); resolve(); }).getCaffeineLogs(user.studentId); }),
+        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { caffeineLogs = logs || []; caffeineHistoryLoaded = true; confirmedPendingCaffeine = []; cacheStudentRecords('caffeineLogs'); renderCaffeineLogs(); resolve(); }).withFailureHandler(() => { showRecordConnectionError('caffeine'); resolve(); }).getCaffeineLogs(user.studentId); }),
         new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { sleepLogs = logs || []; cacheStudentRecords('sleepLogs'); renderSleepLogs(); resolve(); }).withFailureHandler(() => { showRecordConnectionError('sleep'); resolve(); }).getSleepLogs(user.studentId); }),
         new Promise((resolve) => { google.script.run.withSuccessHandler(res => { updateDashboard(res); resolve(); }).withFailureHandler(() => resolve()).getStats(user.studentId); })
       ]).then(() => {
