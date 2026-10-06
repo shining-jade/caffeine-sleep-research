@@ -979,7 +979,7 @@
                     <div class="analysis-dropdown-menu" id="awardDrop">
                         <div class="adrop-header">오늘 기록 뱃지 (자동)</div>
                         <div class="adrop-item" onclick="toggleAwardItem('auto_today_caf')"><input type="checkbox" id="chk_auto_today_caf"><span class="adrop-dot" style="background:#059669;"></span>☕ 카페인 오늘 기록<span class="adrop-cnt" id="cntAuto_today_caf">0</span></div>
-                        <div class="adrop-item" onclick="toggleAwardItem('auto_today_sleep')"><input type="checkbox" id="chk_auto_today_sleep"><span class="adrop-dot" style="background:#2563eb;"></span>😴 지난밤 수면 기록<span class="adrop-cnt" id="cntAuto_today_sleep">0</span></div>
+                        <div class="adrop-item" onclick="toggleAwardItem('auto_today_sleep')"><input type="checkbox" id="chk_auto_today_sleep"><span class="adrop-dot" style="background:#2563eb;"></span>😴 수면 오늘 기록<span class="adrop-cnt" id="cntAuto_today_sleep">0</span></div>
                         <div class="adrop-divider"></div>
                         <div class="adrop-header">교사 수여 뱃지</div>
                         <div id="awardBadgeItems"><!-- dynamically populated --></div>
@@ -3378,7 +3378,7 @@ function _syncAwardUI(){
         // 선택된 뱃지 이름들로 버튼 제목 업데이트
         const labels=[];
         if(activeFilters.award.has('auto_today_caf'))labels.push('카페인 오늘기록');
-        if(activeFilters.award.has('auto_today_sleep'))labels.push('지난밤 수면 기록');
+        if(activeFilters.award.has('auto_today_sleep'))labels.push('수면 오늘 기록');
         if(activeFilters.award.has('awardNoTeacher'))labels.push('수여없음');
         activeFilters.award.forEach(k=>{
             if(!k.startsWith('badge_'))return;
@@ -4450,7 +4450,7 @@ function exportStudentExcel(){
     const rows=[
         [`교사용 모니터링 다운로드 - 기간: ${rangeLabel}`],
         [],
-        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','지난밤수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지','교사수여뱃지','교사수여코멘트']
+        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','오늘수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지','교사수여뱃지','교사수여코멘트']
     ];
 
     students.forEach(s=>{
@@ -4514,7 +4514,7 @@ function exportStudentToSheet(){
 
     // ─── 요약 시트 (학생당 1행, 뱃지현황 별도시트 없음) ───
     const summaryRows=[
-        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','지난밤수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지수','교사수여뱃지수','자동뱃지목록','교사수여뱃지목록','교사수여코멘트']
+        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','오늘수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지수','교사수여뱃지수','자동뱃지목록','교사수여뱃지목록','교사수여코멘트']
     ];
 
     // 드롭다운 값 수집
@@ -6395,7 +6395,7 @@ function evaluateAutoTodayBadges(studentId, baseDate) {
     const todayCaf   = caffeineData.some(c  => c.학번  === studentId && c.섭취시간.startsWith(baseDate));
     const todaySleep = hasSleepRecordOnWakeDate(studentId,baseDate);
     if (todayCaf)   earned.push({ id:'today_caf',   name:'카페인 오늘 기록', image:'☕', bg:'#ecfdf5', color:'#059669' });
-    if (todaySleep) earned.push({ id:'today_sleep', name:'지난밤 수면 기록',   image:'😴', bg:'#eff6ff', color:'#2563eb' });
+    if (todaySleep) earned.push({ id:'today_sleep', name:'수면 오늘 기록',   image:'😴', bg:'#eff6ff', color:'#2563eb' });
     return earned;
 }
 // 하위 호환 래퍼 (기존 evaluateAwards 호출 유지)
