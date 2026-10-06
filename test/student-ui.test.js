@@ -4,6 +4,20 @@ import vm from 'node:vm';
 import test from 'node:test';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+test('confirmed caffeine deletion synchronizes totals and chart while preserving sleep', () => {
+  let updated;
+  const context = vm.createContext({ caffeineLogs: [{time:'2026-10-06',amount:0},{time:'2025-10-06',amount:900}],
+    lastDashboardData: {todayTotal:150,labels:['10/05','10/06'],sleepData:[7,8]},
+    getTodayKST:()=> '2026-10-06',getLogDateKST:x=>x,
+    document:{getElementById:()=>({value:'2026-10-06'})},
+    labelToISODate:x=>'2026-'+x.replace('/','-'),updateDashboard:x=>updated=x });
+  vm.runInContext(extract('syncConfirmedCaffeineStats')+'\nsyncConfirmedCaffeineStats();',context);
+  assert.equal(updated.todayTotal,0);
+  assert.equal(updated.todayHasRecord,true);
+  assert.deepEqual(Array.from(updated.caffeineData),[0,0]);
+  assert.deepEqual(Array.from(updated.caffeineHasData),[false,true]);
+  assert.deepEqual(Array.from(updated.sleepData),[7,8]);
+});
 function extract(name) {
   const start = html.indexOf(`    function ${name}(`);
   const end = html.indexOf('\n    }', start) + 6;
@@ -143,7 +157,7 @@ test('app version checks never create an update announcement', () => {
 
 test('confirmed deletion removes only the matching record and renders without waiting for a read', () => {
   let rendered=0,cached=0;
-  const context=vm.createContext({caffeineLogs:[{id:'a'},{id:'b'}],sleepLogs:[{id:'a'}],renderCaffeineLogs(){rendered++;},renderSleepLogs(){},cacheStudentRecords(){cached++;},updateCaffeineBadge(){}});
+  const context=vm.createContext({caffeineLogs:[{id:'a'},{id:'b'}],sleepLogs:[{id:'a'}],renderCaffeineLogs(){rendered++;},renderSleepLogs(){},cacheStudentRecords(){cached++;},updateCaffeineBadge(){},syncConfirmedCaffeineStats(){}});
   vm.runInContext(extract('applyConfirmedDeletion')+"\napplyConfirmedDeletion('caffeine','a');",context);
   assert.equal(context.caffeineLogs.length,1); assert.equal(context.caffeineLogs[0].id,'b'); assert.equal(context.sleepLogs.length,1);
   assert.equal(rendered,1); assert.equal(cached,1);
@@ -181,7 +195,7 @@ test('consecutive confirmed caffeine saves include both amounts before history r
 
 test('confirmed save renders the trusted record immediately without needing a history request', () => {
   let rendered=0,cached=0;
-  const context=vm.createContext({caffeineLogs:[],cacheStudentRecords(){cached++;},renderCaffeineLogs(){rendered++;}});
+  const context=vm.createContext({caffeineLogs:[],cacheStudentRecords(){cached++;},renderCaffeineLogs(){rendered++;},syncConfirmedCaffeineStats(){}});
   vm.runInContext(extract('applyConfirmedCaffeineSave'),context);
   assert.equal(context.applyConfirmedCaffeineSave({record:{id:'server-id',name:'커피',amount:40,time:'2026-10-06T13:00'}}),true);
   assert.equal(context.caffeineLogs[0].id,'server-id');assert.equal(rendered,1);assert.equal(cached,1);
