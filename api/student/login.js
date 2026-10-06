@@ -63,7 +63,7 @@ export function createLoginHandler({
         name: normalizedName,
         exp: issuedAt + STUDENT_SESSION_SECONDS,
       }, issuedAt);
-      setSessionCookie(res, token, STUDENT_SESSION_SECONDS);
+      setSessionCookie(res, token, STUDENT_SESSION_SECONDS, "student");
       sendJson(res, 200, {
         success: true,
         authenticated: true,

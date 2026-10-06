@@ -46,7 +46,7 @@ export function createLoginHandler({
 
     const issuedAt = now();
     const token = createSession({ role: 'teacher', exp: issuedAt + SESSION_SECONDS }, issuedAt);
-    setSessionCookie(res, token, SESSION_SECONDS);
+    setSessionCookie(res, token, SESSION_SECONDS, "teacher");
     sendJson(res, 200, { success: true, authenticated: true, role: 'teacher' });
   };
 }

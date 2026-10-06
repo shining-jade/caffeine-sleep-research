@@ -14,7 +14,7 @@ export function createActionHandler({
     }
 
     try {
-      verifySession(readSessionCookie(req), 'teacher', now());
+      verifySession(readSessionCookie(req, "teacher"), 'teacher', now());
     } catch {
       sendJson(res, 401, { success: false, error: 'UNAUTHENTICATED' });
       return;

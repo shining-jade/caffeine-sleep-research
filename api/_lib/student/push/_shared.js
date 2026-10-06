@@ -2,7 +2,7 @@ import { sendJson } from '../../http.js';
 import { readSessionCookie, verifySession } from '../../session.js';
 
 export function readStudentSession(req, nowSeconds) {
-  return verifySession(readSessionCookie(req), 'student', nowSeconds);
+  return verifySession(readSessionCookie(req, "student"), 'student', nowSeconds);
 }
 
 export function sendPushError(res, error) {

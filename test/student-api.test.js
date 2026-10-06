@@ -46,7 +46,7 @@ function studentCookie(overrides = {}) {
     ...overrides,
   };
   const token = createSession(payload, Math.min(NOW, payload.exp - 1));
-  return `caffeine_session=${encodeURIComponent(token)}`;
+  return `caffeine_student_session=${encodeURIComponent(token)}`;
 }
 
 test('student API refuses a screen identity that differs from the current cookie before reading data', async () => {
@@ -125,7 +125,7 @@ test('student API issues secure cookie after valid login', async () => {
   const setCookie = res.getHeader('set-cookie');
   assert.match(setCookie, /HttpOnly; Secure; SameSite=Lax/);
   assert.match(setCookie, /Max-Age=7776000/);
-  const token = decodeURIComponent(setCookie.match(/^caffeine_session=([^;]+)/)[1]);
+  const token = decodeURIComponent(setCookie.match(/^caffeine_student_session=([^;]+)/)[1]);
   assert.equal(verifySession(token, 'student', NOW + 7_775_999).studentId, '1101');
   assert.throws(() => verifySession(token, 'student', NOW + 7_776_000), /expired session/i);
   assert.deepEqual(res.json(), {
@@ -203,7 +203,7 @@ test('student API session inspection never returns token', async () => {
   assert.deepEqual(res.json(), {
     authenticated: true, role: 'student', studentId: '1101', name: '테스트학생',
   });
-  assert.equal(res.body.includes('caffeine_session'), false);
+  assert.equal(res.body.includes('caffeine_student_session'), false);
 });
 
 test('student API session inspection renews the same student session for 90 days', async () => {
@@ -212,7 +212,7 @@ test('student API session inspection renews the same student session for 90 days
 
   const setCookie = res.getHeader('set-cookie');
   assert.match(setCookie, /Max-Age=7776000/);
-  const token = decodeURIComponent(setCookie.match(/^caffeine_session=([^;]+)/)[1]);
+  const token = decodeURIComponent(setCookie.match(/^caffeine_student_session=([^;]+)/)[1]);
   assert.deepEqual(verifySession(token, 'student', NOW + 7_775_999), {
     role: 'student', studentId: '1101', name: '테스트학생', exp: NOW + 7_776_000,
   });

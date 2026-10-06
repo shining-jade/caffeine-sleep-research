@@ -19,14 +19,14 @@ export function createSessionHandler({
 
     try {
       const issuedAt = now();
-      const session = verifySession(readSessionCookie(req), 'student', issuedAt);
+      const session = verifySession(readSessionCookie(req, "student"), 'student', issuedAt);
       const renewedToken = createSession({
         role: 'student',
         studentId: session.studentId,
         name: session.name,
         exp: issuedAt + STUDENT_SESSION_SECONDS,
       }, issuedAt);
-      setSessionCookie(res, renewedToken, STUDENT_SESSION_SECONDS);
+      setSessionCookie(res, renewedToken, STUDENT_SESSION_SECONDS, "student");
       sendJson(res, 200, {
         authenticated: true,
         role: 'student',
@@ -34,7 +34,7 @@ export function createSessionHandler({
         name: session.name,
       });
     } catch {
-      clearSessionCookie(res);
+      clearSessionCookie(res, "student", req);
       sendJson(res, 401, { authenticated: false });
     }
   };

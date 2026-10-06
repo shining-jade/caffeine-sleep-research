@@ -14,7 +14,7 @@ export function createLogoutHandler({
       return;
     }
     try {
-      const session = verifySession(readSessionCookie(req), 'student', now());
+      const session = verifySession(readSessionCookie(req, "student"), 'student', now());
       let body = null;
       try { body = await readJson(req); } catch { body = null; }
       if (body?.endpoint) {
@@ -23,7 +23,7 @@ export function createLogoutHandler({
         try { await callGas({ role: 'student', ...request }); } catch { /* Logout must still complete. */ }
       }
     } catch { /* An invalid session still receives a cleared cookie. */ }
-    clearSessionCookie(res);
+    clearSessionCookie(res, "student", req);
     sendJson(res, 200, { success: true });
   };
 }

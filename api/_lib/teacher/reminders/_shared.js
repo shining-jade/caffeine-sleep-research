@@ -2,7 +2,7 @@ import { sendJson } from '../../http.js';
 import { readSessionCookie, verifySession } from '../../session.js';
 
 export function requireTeacherSession(req, nowSeconds) {
-  return verifySession(readSessionCookie(req), 'teacher', nowSeconds);
+  return verifySession(readSessionCookie(req, "teacher"), 'teacher', nowSeconds);
 }
 
 export function sendReminderError(res, error, fallbackStatus = 500) {
