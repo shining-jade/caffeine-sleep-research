@@ -49,7 +49,7 @@
     button.type = 'button';
     button.textContent = '교사 로그아웃';
     button.addEventListener('click', async function() {
-      try { await window.appAuth.logout(); } finally { window.location.reload(); }
+      try { window.clearTeacherViewCache?.();await window.appAuth.logout(); } finally { window.location.reload(); }
     });
     var logoutHost = document.querySelector('.header-actions') || document.body;
     logoutHost.appendChild(button);
@@ -112,6 +112,7 @@
   document.addEventListener('DOMContentLoaded', async function() {
     ensureOverlay(true);
     window.appAuth.onSessionExpired(function() {
+      window.clearTeacherViewCache?.();
       if (enteredDashboard) {
         window.location.replace('/teacher');
         return;
@@ -123,6 +124,7 @@
       await window.appAuth.getSession();
       await enterDashboard();
     } catch (_error) {
+      window.clearTeacherViewCache?.();
       ensureOverlay();
       document.getElementById('teacherPassword')?.focus();
     }

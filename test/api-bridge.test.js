@@ -293,3 +293,18 @@ test('a confirmed write forces fresh history and an older snapshot cannot overwr
   finishOld(); const refreshedOld=await old;
   assert.equal(fresh[0].id,'new');assert.equal(refreshedOld[0].id,'new');
 });
+
+test('teacher requests are bounded and queued dashboard reads receive priority',async()=>{
+ const calls=[];const releases=[];const {window}=loadBridge({role:'teacher',fetchImpl:async(_url,options)=>{calls.push(JSON.parse(options.body).action);return new Promise(resolve=>releases.push(()=>resolve(response({success:true,data:{success:true}}))));}});
+ const invoke=action=>new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[action]());
+ const jobs=['getAwardSettings','getPendingBadges','getDismissedBadges','getTeacherData'].map(invoke);
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(calls.length,2);
+ releases.shift()();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls[2],'getTeacherData');
+ while(releases.length){releases.shift()();await new Promise(resolve=>setImmediate(resolve));}
+ await Promise.all(jobs);assert.equal(calls.length,4);
+});
+test('simultaneous teacher dashboard reads share a single request',async()=>{
+ let count=0;let release;const {window}=loadBridge({role:'teacher',fetchImpl:()=>{count++;return new Promise(resolve=>release=()=>resolve(response({success:true,data:{success:true}})));}});
+ const invoke=()=>new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getTeacherData());
+ const a=invoke(),b=invoke();await new Promise(resolve=>setImmediate(resolve));assert.equal(count,1);release();await Promise.all([a,b]);
+});

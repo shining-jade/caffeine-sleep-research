@@ -18,7 +18,7 @@ test('daily mean includes recorded zero but excludes missing students and sums m
 test('late data refresh cannot undo a newer confirmed hidden-student setting',()=>{
  let success;const runner={withSuccessHandler(fn){success=fn;return this;},withFailureHandler(){return this;},getTeacherData(){}};
  const ctx=vm.createContext({google:{script:{run:runner}},document:{getElementById:()=>({disabled:false,textContent:'',innerHTML:''})},console:{error(){},log(){}},updateVisibilityControls(){}});
- vm.runInContext("let visibilityRevision=0;let hiddenStudentIds=new Set();let studentHideSelection=new Set();let studentsData=[],caffeineData=[],sleepData=[],infoData=[];",ctx);
+ vm.runInContext("let teacherDataLoading=false;let visibilityRevision=0;let hiddenStudentIds=new Set();let studentHideSelection=new Set();let studentsData=[],caffeineData=[],sleepData=[],infoData=[];",ctx);
  const start=source.indexOf('function loadDataFromSheet(');const end=source.indexOf('\nfunction ',start+10);
  vm.runInContext(source.slice(start,end),ctx);ctx.loadDataFromSheet();
  vm.runInContext("visibilityRevision++;hiddenStudentIds=new Set(['2410']);",ctx);

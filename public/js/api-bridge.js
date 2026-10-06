@@ -69,19 +69,37 @@
     return payload;
   }
 
+  var teacherQueue=[];
+  var teacherActive=0;
+  function scheduleTeacherRead(run,action,generation){
+    return new Promise(function(resolve,reject){
+      var job={run:run,resolve:resolve,reject:reject,generation:generation};
+      if(action==='getTeacherData')teacherQueue.unshift(job);else teacherQueue.push(job);
+      drainTeacherQueue();
+    });
+  }
+  function drainTeacherQueue(){
+    while(teacherActive<2&&teacherQueue.length){
+      let job=teacherQueue.shift();
+      if(job.generation!==sessionGeneration){job.reject(publicError('STALE_SESSION','로그인 정보가 변경되었습니다.',409));continue;}
+      teacherActive++;
+      Promise.resolve().then(job.run).then(job.resolve,job.reject).finally(function(){teacherActive--;drainTeacherQueue();});
+    }
+  }
   function callAction(action, params) {
     var generation = sessionGeneration;
     var revision = readRevision;
     var isRead = action.startsWith('get');
     var expectedSubject = studentIdentity;
     var key = JSON.stringify([sessionGeneration, action, params]);
-    var share = role === 'student' && sharedReads.has(action);
+    var share = (role === 'student' && sharedReads.has(action)) || (role === 'teacher' && action === 'getTeacherData');
     if (share && pendingReads.has(key)) return pendingReads.get(key);
     var requestOptions = {
       method: 'POST',
       body: JSON.stringify({ action: action, params: params, ...(expectedSubject ? { expectedSubject: expectedSubject } : {}) }),
     };
-    var request = requestJson('/api/' + role + '/action', requestOptions).catch(async function(error) {
+    var runRequest=function(){return requestJson('/api/' + role + '/action', requestOptions);};
+    var request = (role==='teacher'?scheduleTeacherRead(runRequest,action,generation):runRequest()).catch(async function(error) {
       var retryableRead = role === 'student' && ['getStudentBootstrap', 'getStats', 'getFilteredStats', 'getCaffeineLogs', 'getSleepLogs'].includes(action);
       if (!retryableRead || !['GAS_UNAVAILABLE', 'NETWORK_ERROR'].includes(error.code) || generation !== sessionGeneration) throw error;
       await new Promise(function(resolve) { setTimeout(resolve, 600); });

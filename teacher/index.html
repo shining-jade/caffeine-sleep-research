@@ -1758,12 +1758,12 @@ function loadSettings(){
     updateCafPreview(); updateSleepPreview();
     document.getElementById('sleepWarningDetail').textContent=`7일 평균 ${S.sleepSevere}시간 미만`;
     // 뱃지 설정 로드 및 렌더
-    loadAwardSettings();
+
     loadManualAwards();
-    loadChallengeBadges();
+
     loadBadgeGroupLabels();   // 그룹 이름·이모지 복원
-    loadPendingBadges();
-    loadDismissedBadges();
+
+
     renderAwardSettingList();
     renderChallengeBadgeList();
     // 챌린지 설정 UI 복원
@@ -1774,9 +1774,9 @@ function loadSettings(){
     const sce=document.getElementById('setting_challengeEnd');
     if(sce&&S.challengeEnd)sce.value=S.challengeEnd;
     // 서버에서 뱃지 설정 로드 (v2)
-    loadBadgeConfigFromGAS();
+
     // 기존 자동뱃지 초기화 마이그레이션 (1회)
-    if(!localStorage.getItem('badgeMigrationV3'))migrateOldBadges();
+    // Legacy remote migration runs after primary data arrives.
 }
 function saveSettings(){
     const action=()=>{
@@ -1906,7 +1906,7 @@ function saveStudentVisibility(ids,hidden){
  google.script.run.withSuccessHandler(result=>{
   finish();
   if(!result?.success||!Array.isArray(result.hiddenStudentIds)){showTeacherModal('⚠️','저장 실패','숨김 설정을 저장하지 못했습니다. 다시 시도해주세요.','warning');return;}
-  visibilityRevision++;hiddenStudentIds=new Set(result.hiddenStudentIds.map(String));refreshAnalysisVisibility();
+  visibilityRevision++;clearTeacherViewCache();hiddenStudentIds=new Set(result.hiddenStudentIds.map(String));refreshAnalysisVisibility();
   document.getElementById('hiddenStudentsPanel')?.remove();
  }).withFailureHandler(()=>{finish();showTeacherModal('⚠️','저장 실패','서버 연결을 확인하고 다시 시도해주세요. 기존 설정은 유지됩니다.','warning');}).updateTeacherHiddenStudents(ids,hidden);
 }
@@ -2292,12 +2292,24 @@ function toggleAutoRefresh(enabled){
     }, ms);
 }
 
+const TEACHER_VIEW_CACHE='teacherResearchViewV1';
+function readTeacherViewCache(){try{const v=JSON.parse(sessionStorage.getItem(TEACHER_VIEW_CACHE)||'null');const age=v?Date.now()-v.savedAt:NaN;return v&&Number.isFinite(age)&&age>=0&&age<600000&&['students','caffeine','sleep','info'].every(k=>Array.isArray(v.data?.[k]))?v:null;}catch(_){return null;}}
+function clearTeacherViewCache(){try{sessionStorage.removeItem(TEACHER_VIEW_CACHE);}catch(_){}}
+window.clearTeacherViewCache=clearTeacherViewCache;
+function loadRemoteTeacherSettings(){
+ if(window.__teacherRemoteSettingsStarted)return;window.__teacherRemoteSettingsStarted=true;
+ loadAwardSettings();loadChallengeBadges();loadPendingBadges();loadDismissedBadges();loadBadgeConfigFromGAS();
+ if(!localStorage.getItem('badgeMigrationV3'))migrateOldBadges();
+}
+let teacherDataLoading=false;
 function loadDataFromSheet(onReady,onError){
+    if(teacherDataLoading){if(onError)onError(new Error('조회 중입니다. 잠시 기다려주세요.'));return;}
+    teacherDataLoading=true;
+    const cached=onReady?readTeacherViewCache():null;
     const visibilityAtLoad=visibilityRevision;
     const btn=document.getElementById('refreshBtn');btn.disabled=true;btn.textContent='⏳ 로딩 중...';
-    document.getElementById('studentGrid').innerHTML='<div class="loading"><div class="spinner"></div><p style="color:#6b7280;">구글시트에서 데이터를 불러오는 중...</p></div>';
-    google.script.run
-        .withSuccessHandler(function(result){
+    if(!studentsData.length&&!cached)document.getElementById('studentGrid').innerHTML='<div class="loading"><div class="spinner"></div><p style="color:#6b7280;">구글시트에서 데이터를 불러오는 중...</p></div>';
+    const applyResult=function(result,isCached=false){
             try{
                 if(!result.success)throw new Error(result.error||'데이터 로드 실패');
                 if(onReady)window.teacherLoadingProgress?.(70,'학생·카페인·수면 데이터를 불러왔습니다');
@@ -2345,7 +2357,7 @@ function loadDataFromSheet(onReady,onError){
                 }
 
                 if(onReady)window.teacherLoadingProgress?.(90,'통계와 화면을 준비하고 있습니다');
-                document.getElementById('lastUpdate').textContent='마지막 업데이트: '+new Date().toLocaleString('ko-KR');
+                document.getElementById('lastUpdate').textContent=isCached?'최근 조회 자료: '+new Date(cached.savedAt).toLocaleString('ko-KR')+' · 최신 데이터 확인 중...':'마지막 업데이트: '+new Date().toLocaleString('ko-KR');
                 initFilters();
                 updateDashboard();
                 try { updateCaffeineTab(); } catch(e) { console.error('[카페인탭 오류]', e); }
@@ -2353,24 +2365,29 @@ function loadDataFromSheet(onReady,onError){
                 updateStudentGrid();
                 renderJourneyStatus();
                 // ⭐ _pendingSync 항목 자동 재시도 (이전 GAS 실패 복구)
-                retryPendingSyncs();
+                if(!isCached)retryPendingSyncs();
                 // 챌린지 달성 감지 실행
-                detectPendingBadges();
+                if(!isCached)detectPendingBadges();
                 // 뱃지 탭이 열려있으면 자동 갱신
                 if (document.getElementById('tab-awards')?.classList.contains('active')) {renderAwardsTab();renderPendingBadges();}
+                if(!isCached){try{sessionStorage.setItem(TEACHER_VIEW_CACHE,JSON.stringify({savedAt:Date.now(),data:{...result,hiddenStudentIds:[...hiddenStudentIds]}}));}catch(_){}loadRemoteTeacherSettings();}
                 if(onReady)onReady();
             }catch(err){
                 if(onError)onError(err);
-                document.getElementById('studentGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;background:white;border-radius:16px;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h3 style="color:#ef4444;margin-bottom:12px;">데이터를 불러오지 못했습니다</h3><p style="color:#6b7280;margin-bottom:20px;">'+err.message+'</p><button onclick="loadDataFromSheet()" class="btn btn-primary">🔄 다시 시도</button></div>';
-                ['totalStudents','notRecordedToday','caffeineWarning','sleepWarning'].forEach(function(id){document.getElementById(id).textContent='-';});
+                if(!studentsData.length)document.getElementById('studentGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;background:white;border-radius:16px;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h3 style="color:#ef4444;margin-bottom:12px;">데이터를 불러오지 못했습니다</h3><p style="color:#6b7280;margin-bottom:20px;">'+err.message+'</p><button onclick="loadDataFromSheet()" class="btn btn-primary">🔄 다시 시도</button></div>';
+                if(!studentsData.length)['totalStudents','notRecordedToday','caffeineWarning','sleepWarning'].forEach(function(id){document.getElementById(id).textContent='-';});
+                else document.getElementById('lastUpdate').textContent='화면 갱신에 실패했습니다. 기존 자료는 유지됩니다. 다시 시도해주세요.';
             }
-            btn.disabled=false;btn.textContent='🔄 데이터 새로고침';
-        })
+            if(!isCached){teacherDataLoading=false;btn.disabled=false;btn.textContent='🔄 데이터 새로고침';}
+        };
+    if(cached)applyResult(cached.data,true);
+    google.script.run.withSuccessHandler(result=>applyResult(result,false))
         .withFailureHandler(function(err){
             if(onError)onError(err);
-            document.getElementById('studentGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;background:white;border-radius:16px;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h3 style="color:#ef4444;margin-bottom:12px;">데이터를 불러오지 못했습니다</h3><p style="color:#6b7280;margin-bottom:20px;">'+err.message+'</p><button onclick="loadDataFromSheet()" class="btn btn-primary">🔄 다시 시도</button></div>';
-            ['totalStudents','notRecordedToday','caffeineWarning','sleepWarning'].forEach(function(id){document.getElementById(id).textContent='-';});
-            btn.disabled=false;btn.textContent='🔄 데이터 새로고침';
+            if(!studentsData.length)document.getElementById('studentGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;background:white;border-radius:16px;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h3 style="color:#ef4444;margin-bottom:12px;">데이터를 불러오지 못했습니다</h3><p style="color:#6b7280;margin-bottom:20px;">'+err.message+'</p><button onclick="loadDataFromSheet()" class="btn btn-primary">🔄 다시 시도</button></div>';
+            if(!studentsData.length)['totalStudents','notRecordedToday','caffeineWarning','sleepWarning'].forEach(function(id){document.getElementById(id).textContent='-';});
+            teacherDataLoading=false;btn.disabled=false;btn.textContent='🔄 데이터 새로고침';
+            if(studentsData.length)document.getElementById('lastUpdate').textContent='최신 조회에 실패했습니다. 기존 자료는 유지됩니다. 데이터 새로고침으로 다시 시도해주세요.';
         })
         .getTeacherData();
 }
@@ -2580,7 +2597,7 @@ function initFilters(){
     ['cafEndDate','sleepEndDate','studentEndDate','overviewEndDate'].forEach(id=>{const el=document.getElementById(id);if(el){if(!el.value)el.value=today;el.max=today;}});
     ['cafStartDate','sleepStartDate','studentStartDate','overviewStartDate','modalStartDate'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=weekAgo;});
 }
-function switchTab(n,el){document.querySelectorAll('.tab-button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));if(el)el.classList.add('active');document.getElementById('tab-'+n).classList.add('active');if(n==='inquiries'){inquiryFilter='unanswered';loadInquiries();loadSentMessages();}if(n==='awards'){renderAwardsTab();renderPendingBadges();}if(n==='settings'){renderChallengeBadgeList();}if(n==='reminders'&&window.teacherReminders){window.teacherReminders.initialize();}}
+function switchTab(n,el){document.querySelectorAll('.tab-button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));if(el)el.classList.add('active');document.getElementById('tab-'+n).classList.add('active');if(n==='inquiries'){inquiryFilter='unanswered';loadInquiries();loadSentMessages();}if(n==='awards'){loadRemoteTeacherSettings();renderAwardsTab();renderPendingBadges();}if(n==='settings'){loadRemoteTeacherSettings();renderChallengeBadgeList();}if(n==='reminders'&&window.teacherReminders){window.teacherReminders.initialize().catch(()=>{});}}
 
 function updateDashboard(){
     const g=msGet('gradeFilter'), c=msGet('classFilter');
@@ -4988,12 +5005,12 @@ window.startTeacherApp = function startTeacherApp(){
         else {const z=localStorage.getItem('dashZoom');if(z){const sl=document.getElementById('zoomSlider');if(sl)sl.value=z;applyZoom(z);}}
     }catch(e){}
     const ready=new Promise((resolve,reject)=>loadDataFromSheet(resolve,reject));
-    if(window.teacherReminders)window.teacherReminders.initialize();
+
     // 학생 답장 알림 체크 (로드 후 3초, 이후 2분마다)
-    setTimeout(checkStudentReplies, 3000);
+    ready.then(()=>setTimeout(checkStudentReplies,3000),()=>{});
     setInterval(checkStudentReplies, 120000);
     // 새 문의 알림 체크 (로드 후 5초, 이후 2분마다)
-    setTimeout(checkUnreadInquiries, 5000);
+    ready.then(()=>setTimeout(checkUnreadInquiries,5000),()=>{});
     setInterval(checkUnreadInquiries, 120000);
     return ready;
 };
