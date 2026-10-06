@@ -1572,7 +1572,7 @@
       loadInitialStudentData();
       const cachedTime = localStorage.getItem('caffeine_db_cache_time');
       const cacheTtl = 24 * 60 * 60 * 1000;
-      if (!cachedTime || (Date.now() - parseInt(cachedTime)) >= cacheTtl) loadCaffeineDbFromGAS();
+      if (!CAFFEINE_DB.length || !cachedTime || (Date.now() - parseInt(cachedTime)) >= cacheTtl) loadCaffeineDbFromGAS();
     }
 
     // 초기 설정 모달 (첫 로그인 시)
@@ -5376,7 +5376,14 @@
         onAuthenticated: function(savedSession) {
           try {
             const cached = localStorage.getItem('caffeine_db_cache');
-            if (cached) CAFFEINE_DB = JSON.parse(cached);
+            const cachedTime = Number(localStorage.getItem('caffeine_db_cache_time'));
+            if (cached && cachedTime && Date.now() - cachedTime < 24 * 60 * 60 * 1000) {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed) && parsed.length) {
+                CAFFEINE_DB = parsed;
+                document.getElementById('dbTotalCount').textContent = parsed.length.toLocaleString() + '건';
+              }
+            }
           } catch(e) {}
           enterApp(savedSession, true);
         },
