@@ -3546,7 +3546,7 @@ function renderStudentGrid(students){
         const todayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(filterDate));
         const todaySleep=hasSleepRecordOnWakeDate(s.학번,filterDate);
         const todayCafBadge=todayCaf?'<span class="rec-badge rec-ok">✓ 기록</span>':'<span class="rec-badge rec-none">오늘 미기록</span>';
-        const todaySleepBadge=todaySleep?'<span class="rec-badge rec-ok" title="선택 날짜에 기상한 수면">지난밤 기록 ✓</span>':'<span class="rec-badge rec-none" title="선택 날짜에 기상한 수면">지난밤 미기록</span>';
+        const todaySleepBadge=todaySleep?'<span class="rec-badge rec-ok" title="선택 날짜에 기상한 수면">✓ 기록</span>':'<span class="rec-badge rec-none" title="선택 날짜에 기상한 수면">오늘 미기록</span>';
         const targetCafText=getTargetCafText(s.학번);
         const targetSleepText=getTargetSleepText(s.학번);
         // ⭐ 카페인 표시: 기록 있고 0mg → "카페인 섭취 안 함", 기록 없으면 "미기록"
