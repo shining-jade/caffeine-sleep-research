@@ -18,11 +18,18 @@
   ].join('');
   document.head.appendChild(style);
 
-  function ensureOverlay() {
+  function ensureOverlay(checking) {
     var overlay = document.getElementById('teacherAuthOverlay');
-    if (overlay) return overlay;
+    if (overlay && !overlay.dataset.checking) return overlay;
+    if (overlay) overlay.remove();
     overlay = document.createElement('div');
     overlay.id = 'teacherAuthOverlay';
+    if (checking) {
+      overlay.dataset.checking = 'true';
+      overlay.innerHTML = '<div id="teacherAuthCard" role="status" aria-live="polite"><h1>로그인 상태 확인 중...</h1><p>잠시만 기다려주세요.</p></div>';
+      document.body.appendChild(overlay);
+      return overlay;
+    }
     overlay.innerHTML = '<form id="teacherAuthCard">'
       + '<h1>교사 화면 로그인</h1>'
       + '<p>교사 비밀번호를 입력해 주세요.</p>'
@@ -83,7 +90,7 @@
   }
 
   document.addEventListener('DOMContentLoaded', async function() {
-    ensureOverlay();
+    ensureOverlay(true);
     window.appAuth.onSessionExpired(function() {
       if (enteredDashboard) {
         window.location.replace('/teacher');
@@ -96,6 +103,7 @@
       await window.appAuth.getSession();
       enterDashboard();
     } catch (_error) {
+      ensureOverlay();
       document.getElementById('teacherPassword')?.focus();
     }
   });
