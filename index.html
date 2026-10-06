@@ -565,7 +565,7 @@
             <i class="fa-solid fa-list text-indigo-600"></i> 상세 섭취 기록
           </h4>
           <div id="caffeineLogsContainer" class="space-y-3">
-            <p class="text-center py-8 text-gray-400 text-sm">기록이 없습니다.</p>
+            <p class="text-center py-8 text-gray-400 text-sm">저장된 기록을 불러오는 중입니다.</p>
           </div>
         </div>
       </div>
@@ -718,7 +718,7 @@
             <i class="fa-solid fa-moon text-indigo-600"></i> 수면 누적 기록
           </h4>
           <div id="sleepLogsContainer" class="space-y-3">
-            <p class="text-center py-8 text-gray-400 text-sm">기록이 없습니다.</p>
+            <p class="text-center py-8 text-gray-400 text-sm">저장된 기록을 불러오는 중입니다.</p>
           </div>
         </div>
       </div>
@@ -1282,6 +1282,7 @@
       try { return localStorage.getItem('caffeineTab') || 'caffeine'; } catch(e) { return 'caffeine'; }
     }
     function clearSession() {
+      if (window.studentRecordCache) window.studentRecordCache.clear();
       try {
         localStorage.removeItem('caffeineUser');
         localStorage.removeItem('caffeineTab');
@@ -1345,6 +1346,15 @@
       if (!user || user.studentId !== res.studentId || user.name !== res.name) resetStudentData();
       user = res;
       saveSession(res);
+      const savedRecords = window.studentRecordCache && window.studentRecordCache.read(res);
+      if (savedRecords) {
+        if (Array.isArray(savedRecords.caffeineLogs)) caffeineLogs = savedRecords.caffeineLogs;
+        if (Array.isArray(savedRecords.sleepLogs)) sleepLogs = savedRecords.sleepLogs;
+        renderCaffeineLogs();
+        renderSleepLogs();
+        showRecordConnectionError('caffeine', true);
+        showRecordConnectionError('sleep', true);
+      }
 
       const loginPage = document.getElementById('loginPage');
       const mainApp = document.getElementById('mainApp');
@@ -1517,6 +1527,7 @@
       applyWeightData(data.weight);
       caffeineLogs = data.caffeineLogs || [];
       sleepLogs = data.sleepLogs || [];
+      cacheStudentRecords();
       renderCaffeineLogs();
       renderSleepLogs();
       updateDashboard(data.stats || {});
@@ -3963,11 +3974,31 @@
       }
     }
 
+    function cacheStudentRecords(kind) {
+      if (!user || !window.studentRecordCache) return;
+      if (!kind || kind === 'caffeineLogs') window.studentRecordCache.write(user, 'caffeineLogs', caffeineLogs);
+      if (!kind || kind === 'sleepLogs') window.studentRecordCache.write(user, 'sleepLogs', sleepLogs);
+    }
+
+    function showRecordConnectionError(kind, cached) {
+      const container = document.getElementById(kind === 'caffeine' ? 'caffeineLogsContainer' : 'sleepLogsContainer');
+      if (!container) return;
+      const logs = kind === 'caffeine' ? caffeineLogs : sleepLogs;
+      if (!logs.length) container.innerHTML = '';
+      const previous = container.querySelector('[data-record-status]');
+      if (previous) previous.remove();
+      const notice = document.createElement('p');
+      notice.dataset.recordStatus = 'true';
+      notice.className = 'text-center py-3 text-amber-700 text-sm';
+      notice.textContent = cached ? '마지막으로 불러온 기록입니다. 최신 기록을 확인하고 있습니다.' : '연결이 원활하지 않아 최신 기록을 불러오지 못했습니다. 기존 기록은 유지되며, 상단 새로고침으로 다시 확인할 수 있습니다.';
+      container.prepend(notice);
+    }
+
     function loadCaffeineLogs(showWarningAfter) {
       if(!user || !user.studentId) return;
       google.script.run
         .withSuccessHandler(logs => {
-          caffeineLogs = logs || [];
+          caffeineLogs = logs || []; cacheStudentRecords('caffeineLogs');
           renderCaffeineLogs();
           if(showWarningAfter !== undefined) {
             const today = getTodayKST();
@@ -3979,7 +4010,7 @@
           }
         })
         .withFailureHandler(err => {
-          caffeineLogs = []; renderCaffeineLogs();
+          showRecordConnectionError('caffeine');
           if(showWarningAfter !== undefined) showCaffeineWarning(showWarningAfter, showWarningAfter);
         })
         .getCaffeineLogs(user.studentId);
@@ -3989,14 +4020,14 @@
       if(!user || !user.studentId) return;
       google.script.run
         .withSuccessHandler(logs => {
-          sleepLogs = logs || [];
+          sleepLogs = logs || []; cacheStudentRecords('sleepLogs');
           renderSleepLogs();
           if(lastDashboardData) renderCharts(lastDashboardData);
           // 달력 탭이 활성화 상태면 달력도 업데이트
           const calTab = document.getElementById('tab-calendar');
           if (calTab && calTab.classList.contains('active')) renderCalendar();
         })
-        .withFailureHandler(err => { sleepLogs = []; renderSleepLogs(); if(lastDashboardData) renderCharts(lastDashboardData); })
+        .withFailureHandler(err => { showRecordConnectionError('sleep'); })
         .getSleepLogs(user.studentId);
     }
 
@@ -4962,23 +4993,24 @@
       google.script.run
         .withSuccessHandler(logs => {
           const oldLength = caffeineLogs.length;
-          caffeineLogs = logs || [];
-          if (caffeineLogs.length !== oldLength) { renderCaffeineLogs(); refreshData(); if (caffeineLogs.length > oldLength) showUpdateNotification('카페인 기록이 업데이트되었습니다'); }
+          caffeineLogs = logs || []; cacheStudentRecords('caffeineLogs');
+          renderCaffeineLogs();
+          if (caffeineLogs.length !== oldLength) { refreshData(); if (caffeineLogs.length > oldLength) showUpdateNotification('카페인 기록이 업데이트되었습니다'); }
         })
-        .withFailureHandler(err => { console.error('자동 새로고침 실패 (카페인):', err); })
+        .withFailureHandler(err => { showRecordConnectionError('caffeine'); })
         .getCaffeineLogs(user.studentId);
       google.script.run
         .withSuccessHandler(logs => {
           const oldLength = sleepLogs.length;
-          sleepLogs = logs || [];
+          sleepLogs = logs || []; cacheStudentRecords('sleepLogs');
+          renderSleepLogs();
           if (sleepLogs.length !== oldLength) {
-            renderSleepLogs();
             if(lastDashboardData) renderCharts(lastDashboardData);
             refreshData();
             if (sleepLogs.length > oldLength) showUpdateNotification('수면 기록이 업데이트되었습니다');
           }
         })
-        .withFailureHandler(err => { console.error('자동 새로고침 실패 (수면):', err); })
+        .withFailureHandler(err => { showRecordConnectionError('sleep'); })
         .getSleepLogs(user.studentId);
       // 문의 답변 감지
       checkReplyBubble();
@@ -5007,8 +5039,8 @@
       const btn = document.getElementById('refreshBtn');
       if (btn) { btn.classList.add('animate-spin'); btn.style.pointerEvents = 'none'; }
       Promise.all([
-        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { caffeineLogs = logs || []; renderCaffeineLogs(); resolve(); }).withFailureHandler(() => resolve()).getCaffeineLogs(user.studentId); }),
-        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { sleepLogs = logs || []; renderSleepLogs(); resolve(); }).withFailureHandler(() => resolve()).getSleepLogs(user.studentId); }),
+        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { caffeineLogs = logs || []; cacheStudentRecords('caffeineLogs'); renderCaffeineLogs(); resolve(); }).withFailureHandler(() => { showRecordConnectionError('caffeine'); resolve(); }).getCaffeineLogs(user.studentId); }),
+        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { sleepLogs = logs || []; cacheStudentRecords('sleepLogs'); renderSleepLogs(); resolve(); }).withFailureHandler(() => { showRecordConnectionError('sleep'); resolve(); }).getSleepLogs(user.studentId); }),
         new Promise((resolve) => { google.script.run.withSuccessHandler(res => { updateDashboard(res); resolve(); }).withFailureHandler(() => resolve()).getStats(user.studentId); })
       ]).then(() => {
         if(lastDashboardData) renderCharts(lastDashboardData);

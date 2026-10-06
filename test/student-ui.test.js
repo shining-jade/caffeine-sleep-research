@@ -95,3 +95,14 @@ test('session reset clears previous student records, settings and rendered priva
   assert.equal(context.lastDashboardData, null);
   assert.equal(context.window._weightLoaded, false);
 });
+
+for (const kind of ['Caffeine', 'Sleep']) {
+  test(`${kind} read failure preserves records instead of reporting an empty history`, () => {
+    let fail;
+    const runner = { withSuccessHandler() { return this; }, withFailureHandler(fn) { fail = fn; return this; }, getCaffeineLogs() {}, getSleepLogs() {} };
+    const context = vm.createContext({ user: { studentId: '0', name: '테스트' }, caffeineLogs: [{ id: 'saved' }], sleepLogs: [{ id: 'saved' }], google: { script: { run: runner } }, renderCaffeineLogs() {}, renderSleepLogs() {}, lastDashboardData: null, showRecordConnectionError() {}, cacheStudentRecords() {}, showCaffeineWarning() {} });
+    vm.runInContext(extract(`load${kind}Logs`) + `\nload${kind}Logs();`, context);
+    fail(new Error('GAS_UNAVAILABLE'));
+    assert.equal(context[kind === 'Caffeine' ? 'caffeineLogs' : 'sleepLogs'].length, 1);
+  });
+}

@@ -86,3 +86,24 @@ test('returned camera file starts analysis instead of waiting forever', () => {
   assert.equal(getStudentBootstrapAction({ analyzingVisible: true, cameraHasFile: true }), 'wait');
   assert.equal(getStudentBootstrapAction({ analyzingVisible: false, cameraHasFile: true }), 'analyze');
 });
+
+import { createStudentRecordCache } from '../public/js/student-startup.js';
+test('record snapshots restore only the authenticated matching student and name', () => {
+  const values = new Map();
+  const storage = { getItem:k=>values.get(k), setItem:(k,v)=>values.set(k,v), removeItem:k=>values.delete(k) };
+  const cache = createStudentRecordCache(storage);
+  const a = { studentId:'0', name:'테스트' }, b = { studentId:'1001',name:'다른학생' };
+  cache.write(a,'caffeineLogs',[{id:'saved'}]);
+  cache.write(a,'sleepLogs',[]);
+  assert.equal(createStudentRecordCache(storage).read(a).caffeineLogs[0].id,'saved');
+  assert.equal(cache.read(null),null);
+  assert.equal(cache.read(b),null);
+  assert.equal(cache.read(a),null);
+  cache.write(a,'caffeineLogs',[{id:'saved'}]);
+  assert.equal(cache.read({...a,name:'다른이름'}),null);
+  cache.write(a,'caffeineLogs',[{id:'saved'}]);
+  cache.write(a,'caffeineLogs',[]);
+  assert.deepEqual(cache.read(a).caffeineLogs,[]);
+  cache.clear();
+  assert.equal(cache.read(a),null);
+});

@@ -106,9 +106,10 @@ async function callGasOnce({
     if (payload.success !== true) {
       throw new GasGatewayError(502, 'GAS_REJECTED', 'The data service rejected the request.');
     }
-    if (action === 'getCaffeineDB' && !Object.hasOwn(payload, 'data')) {
-      const upstream = new URL(response.url || config.gasApiUrl);
-      console.warn('CAFFEINE_DB_MISSING_DATA', { keys: Object.keys(payload), host: upstream.hostname, path: upstream.pathname });
+    if (!Object.hasOwn(payload, 'data')) {
+      throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service returned an invalid response.');
+    }
+    if (['getCaffeineLogs', 'getSleepLogs'].includes(action) && !Array.isArray(payload.data)) {
       throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service returned an invalid response.');
     }
     return payload.data;

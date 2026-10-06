@@ -151,3 +151,9 @@ test('callGas never exposes URL secret or upstream body in its public error', as
     },
   );
 });
+
+test('personal record reads reject a health response instead of returning missing data', async () => {
+  for (const action of ['getCaffeineLogs', 'getSleepLogs', 'getStats']) {
+    await assert.rejects(callGas({ ...request, action, fetchImpl: async () => new Response(JSON.stringify({success:true,service:'caffeine-sleep-api'})) }), error => error.code === 'GAS_UNAVAILABLE');
+  }
+});
