@@ -45,6 +45,7 @@ export async function callGas({
       const location = response.headers.get('location');
       if (!location || redirects === 5) throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');
       const next = new URL(location, url);
+      if (action === 'getCaffeineDB') console.info('CAFFEINE_DB_REDIRECT', { status: response.status, method: options.method, host: next.hostname, path: next.pathname });
       if (next.protocol !== 'https:' || !['script.google.com', 'script.googleusercontent.com'].includes(next.hostname)) {
         throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');
       }
