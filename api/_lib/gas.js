@@ -35,11 +35,13 @@ export async function callGas(input) {
 
 async function callGasReadWithRetry(input) {
   const deadline = Date.now() + (input.timeoutMs ?? GAS_TIMEOUT_MS);
+  const teacherRead = input.role === 'teacher' && input.action === 'getTeacherData';
   for (let attempt = 0; ; attempt++) {
     try {
-      return await callGasOnce({ ...input, timeoutMs: Math.max(1, deadline - Date.now()) });
+      return await callGasOnce({ ...input, timeoutMs: Math.max(1, teacherRead && attempt === 0 ? Math.min(25000, deadline - Date.now()) : deadline - Date.now()) });
     } catch (error) {
-      if (input.action !== 'getCaffeineDB' || error.code !== 'GAS_UNAVAILABLE' || attempt >= 2 || Date.now() >= deadline) throw error;
+      const retryable = teacherRead ? ['GAS_UNAVAILABLE','GAS_TIMEOUT'].includes(error.code) && attempt < 1 : input.action === 'getCaffeineDB' && error.code === 'GAS_UNAVAILABLE' && attempt < 2;
+      if (!retryable || Date.now() >= deadline) throw error;
     }
   }
 }

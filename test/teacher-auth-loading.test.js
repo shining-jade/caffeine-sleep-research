@@ -18,3 +18,8 @@ test('data load failure preserves loading overlay and does not report 100 percen
  const x=setup(async()=>({}),async()=>{throw new Error('network')});const progress=[];const update=x.window.teacherLoadingProgress;x.window.teacherLoadingProgress=(n,label)=>{progress.push(n);update(n,label)};
  await x.ready();assert.equal(x.nodes.has('teacherAuthOverlay'),true);assert.ok(!progress.includes(100));assert.ok(!x.nodes.get('teacherAuthOverlay').innerHTML.includes('type="password"'));
 });
+
+test('rejected teacher session clears recent private view and never starts cached dashboard',async()=>{
+ const x=setup(async()=>{throw new Error('expired')});let cleared=0;x.window.clearTeacherViewCache=()=>cleared++;
+ await x.ready();assert.equal(cleared,1);assert.equal(x.started,0);
+});

@@ -157,3 +157,9 @@ test('personal record reads reject a health response instead of returning missin
     await assert.rejects(callGas({ ...request, action, fetchImpl: async () => new Response(JSON.stringify({success:true,service:'caffeine-sleep-api'})) }), error => error.code === 'GAS_UNAVAILABLE');
   }
 });
+
+test('teacher primary read retries transient upstream failure once without retrying mutations',async()=>{
+ let calls=0;const fetchImpl=async()=>{calls++;return calls===1?new Response('temporary',{status:502}):new Response(JSON.stringify({success:true,data:{success:true,students:[]}}));};
+ const result=await callGas({role:'teacher',action:'getTeacherData',params:[],fetchImpl});assert.equal(result.success,true);assert.equal(calls,2);
+ calls=0;await assert.rejects(callGas({role:'teacher',action:'updateTeacherHiddenStudents',params:[['2410'],true],fetchImpl:async()=>{calls++;return new Response('temporary',{status:502})}}));assert.equal(calls,1);
+});
