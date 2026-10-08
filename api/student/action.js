@@ -44,6 +44,10 @@ export function createActionHandler({
 
     try {
       const data = await callGas({ role: 'student', ...normalized });
+      if (normalized.params[0]?._sync && data?.success !== true) {
+        sendJson(res, 409, { success: false, error: data?.error || 'SYNC_UNCONFIRMED' });
+        return;
+      }
       sendJson(res, 200, { success: true, data, subject: normalized.subject });
     } catch (error) {
       const status = Number.isInteger(error?.status) ? error.status : 500;

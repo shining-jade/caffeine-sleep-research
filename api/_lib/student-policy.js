@@ -29,6 +29,11 @@ export function normalizeStudentRequest(action, params, session) {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
       throw new Error('The first action parameter must be a payload object.');
     }
+    if (payload._sync !== undefined) {
+      if (!['saveCaffeineData', 'saveSleepData', 'saveInitialSetup'].includes(action)
+          || !payload._sync || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(payload._sync.mutationId || '')
+          || (action === 'saveInitialSetup' && (typeof payload._sync.baseVersion !== 'string' || payload._sync.baseVersion.length > 100))) throw new Error('Invalid sync metadata');
+    }
     normalizedParams[0] = {
       ...payload,
       studentId: session.studentId,

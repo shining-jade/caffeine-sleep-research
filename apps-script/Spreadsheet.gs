@@ -5,7 +5,7 @@ function getSpreadsheet_() {
 }
 
 // Native table append grows the table atomically and ignores ARRAYFORMULA spill rows.
-function appendRecordRow_(sheet, values, replaceRow) {
+function appendRecordRow_(sheet, values, replaceRow, confirmation) {
   var tableIds = {
     students: '2014874531', caffeine: '2029527919', sleep: '363107583',
     info: '1885862728', inquiries: '1093000658', teacher_awards: '1664194152',
@@ -15,7 +15,8 @@ function appendRecordRow_(sheet, values, replaceRow) {
     inquiries: 1181027465, teacher_awards: 1683406443, teacher_messages: 2044179537, ai_reports: 1501207574 };
   var tableId = tableIds[sheet.getName()];
   // A recovery-created sheet has a new ID and no existing native table.
-  if (!tableId || sheet.getSheetId() !== sheetIds[sheet.getName()]) {
+  var nativeTable = tableId && sheet.getSheetId() === sheetIds[sheet.getName()];
+  if (!nativeTable && !confirmation) {
     if (replaceRow) return sheet.getRange(replaceRow, 1, 1, values.length).setValues([values]);
     return sheet.appendRow(values);
   }
@@ -33,8 +34,8 @@ function appendRecordRow_(sheet, values, replaceRow) {
   });
   var request = replaceRow
     ? { updateCells: { start: { sheetId: sheet.getSheetId(), rowIndex: replaceRow-1, columnIndex: 0 }, rows: [{ values: cells }], fields: 'userEnteredValue' } }
-    : { appendCells: { sheetId: sheet.getSheetId(), tableId: tableId, rows: [{ values: cells }], fields: 'userEnteredValue' } };
-  try { Sheets.Spreadsheets.batchUpdate({ requests: [request] }, sheet.getParent().getId()); }
+    : { appendCells: { sheetId: sheet.getSheetId(), ...(nativeTable ? { tableId: tableId } : {}), rows: [{ values: cells }], fields: 'userEnteredValue' } };
+  try { Sheets.Spreadsheets.batchUpdate({ requests: confirmation ? [request, confirmation] : [request] }, sheet.getParent().getId()); }
   catch (error) { throw new Error('TABLE_APPEND_FAILED'); }
   return sheet;
 }

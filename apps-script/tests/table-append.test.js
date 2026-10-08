@@ -47,3 +47,10 @@ test('table append rejects upstream failures without fallback or duplicate write
   assert.throws(()=>context.appendRecordRow_({getName:()=> 'caffeine',getSheetId:()=>1399656889,getParent:()=>({getId:()=> 'sheet-id'}),appendRow(){assert.fail('no fallback');}},['value']),/TABLE_APPEND_FAILED/);
   assert.equal(calls,1);
 });
+
+test('sleep replacement commits its receipt in the same batch',async()=>{
+ let batch;const {context}=await loadAppsScript({files:['Spreadsheet.gs'],globals:{Sheets:{Spreadsheets:{batchUpdate(body){batch=body;}}}}});
+ const confirmation={updateCells:{start:{sheetId:55,rowIndex:1,columnIndex:2},rows:[{values:[{userEnteredValue:{stringValue:'committed'}}]}],fields:'userEnteredValue'}};
+ context.appendRecordRow_({getName:()=> 'sleep',getSheetId:()=>630091192,getParent:()=>({getId:()=> 'test'})},['2026-10-08 12:00:00'],2,confirmation);
+ assert.equal(batch.requests.length,2);assert.equal(batch.requests[1],confirmation);
+});

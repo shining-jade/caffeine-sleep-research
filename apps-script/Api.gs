@@ -147,13 +147,13 @@ function dispatchStudentAction_(action, params, subject) {
     safeParams[0].time = normalizeCaffeineTime_(safeParams[0].time);
   }
   if (action === 'saveCaffeineData' || action === 'saveSleepData') safeParams[0].id = Utilities.getUuid();
-  var execute = function() {
+  var execute = function(syncConfirmation) {
     if (rule === 'caffeineRecord') requireOwnedRecord_('caffeine', safeParams[0], subject);
     if (rule === 'sleepRecord') requireOwnedRecord_('sleep', safeParams[0], subject);
     if (rule === 'caffeinePayload') requireOwnedRecord_('caffeine', safeParams[0].id, subject);
     if (rule === 'sleepPayload') requireOwnedRecord_('sleep', safeParams[0].id, subject);
     if (rule === 'messageRow') requireOwnedRow_('teacher_messages', safeParams[0], subject);
-    var result = invokeAction_(action, safeParams);
+    var result = action === 'saveSleepData' && syncConfirmation ? saveSleepData(safeParams[0], syncConfirmation) : invokeAction_(action, safeParams);
     if (action === 'saveCaffeineData' && result && result.success === true) {
       var saved = safeParams[0];
       result.record = { id: saved.id, name: saved.drink, amount: Number(saved.mg), time: saved.time, reason: saved.reason || '', symptom: saved.symptom || '' };

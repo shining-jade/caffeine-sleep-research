@@ -208,3 +208,8 @@ test('confirmed save renders the trusted record immediately without needing a hi
   assert.equal(context.caffeineLogs[0].id,'server-id');assert.equal(rendered,1);assert.equal(cached,1);
   assert.equal(context.applyConfirmedCaffeineSave({success:true}),false);
 });
+
+test('caffeine badge updates independently of save warning state',()=>{
+ const badge={};const context=vm.createContext({document:{getElementById:()=>badge},caffeineLogs:[{time:'today',amount:160}],getTodayKST:()=> 'today',getLogDateKST:x=>x,userLimit:150});
+ vm.runInContext(extract('updateCaffeineBadge')+'\nupdateCaffeineBadge();',context);assert.match(badge.innerText,/160mg/);
+});

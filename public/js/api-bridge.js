@@ -10,6 +10,18 @@
   var sessionGeneration = 0;
   var studentIdentity = null;
   var pendingReads = new Map();
+  var sync = role === 'student' && window.StudentSync ? window.StudentSync.create({
+    send: function(action, payload) { return callAction(action, [payload]); },
+    online: function() { return navigator.onLine !== false; },
+    onChange: function(rows) { window.dispatchEvent(new CustomEvent('student-sync-change', { detail: rows })); },
+  }) : null;
+  if (sync) {
+    window.studentSync = sync;
+    window.addEventListener('online', function() { sync.flush(true); });
+    window.addEventListener('pageshow', function() { sync.flush(); });
+    document.addEventListener('visibilitychange', function() { if (!document.hidden) sync.flush(); });
+    setInterval(function() { if (!document.hidden) sync.flush(); }, 15000);
+  }
   var readRevision = 0;
   var sharedReads = new Set([
     'getStudentBootstrap', 'getWeightData', 'getStats', 'getFilteredStats', 'getCaffeineLogs', 'getSleepLogs',
@@ -21,6 +33,7 @@
     sessionGeneration++;
     pendingReads.clear();
     studentIdentity = null;
+    if (sync) sync.setSubject(null);
   }
 
   function publicError(code, message, status) {
@@ -143,7 +156,17 @@
         return function invokeAction() {
           var generation = sessionGeneration;
           var params = Array.prototype.slice.call(arguments);
-          callAction(String(property), params)
+          var action = String(property);
+          var localId = action.startsWith('update') ? params[0]?.id : params[0];
+          var localOperation = sync && typeof localId === 'string' && localId.startsWith('local_') && ['updateCaffeineData','updateSleepData','deleteCaffeineData','deleteSleepData'].includes(action);
+          var invocation = localOperation ? (action.startsWith('update') ? sync.editPending(localId.slice(6), params[0]) : sync.cancelPending(localId.slice(6))).then(function() { return {success:true,localSaved:true}; }) : sync && window.StudentSync.actions.has(action)
+            ? sync.enqueue(action, params[0])
+            : callAction(action, params).then(function(value) { return sync && action.startsWith('get') ? sync.capture(action, value) : value; })
+              .catch(function(error) {
+                if (sync && action.startsWith('get') && ['NETWORK_ERROR','GAS_TIMEOUT','GAS_UNAVAILABLE'].includes(error.code)) return sync.read(action);
+                throw error;
+              });
+          invocation
             .then(function onSuccess(value) {
               if (generation !== sessionGeneration) return;
               if (typeof successHandler === 'function') successHandler(value);
@@ -188,9 +211,18 @@
       });
     },
     getSession: function getSession() {
-      return authenticate('/api/' + role + '/session', { method: 'GET' });
+      return authenticate('/api/' + role + '/session', { method: 'GET' }).catch(function(error) {
+        if (!sync || error.code !== 'NETWORK_ERROR' || navigator.onLine !== false) throw error;
+        var cached;
+        try { cached = JSON.parse(localStorage.getItem('studentOfflineSession')); } catch (_) {}
+        if (!cached?.studentId || !cached?.name) throw error;
+        studentIdentity = { studentId: cached.studentId, name: cached.name };
+        sync.setSubject(studentIdentity);
+        return { ...cached, offline: true };
+      });
     },
     logout: function logout(endpoint) {
+      if (role === 'student') { try { localStorage.removeItem('studentOfflineSession'); } catch (_) {} }
       invalidateSession();
       var body = role === 'student' && typeof endpoint === 'string' && endpoint.length > 0
         ? { endpoint: endpoint }
@@ -248,6 +280,12 @@
       if (generation !== sessionGeneration) throw publicError('STALE_SESSION', '로그인 정보가 변경되었습니다.', 409);
       if (role === 'student' && payload.studentId && payload.name) {
         studentIdentity = { studentId: payload.studentId, name: payload.name };
+        if (sync) {
+          sync.setSubject(studentIdentity);
+          try { localStorage.setItem('studentOfflineSession', JSON.stringify(payload)); } catch (_) {}
+          sync.flush();
+          if (navigator.storage?.persist) navigator.storage.persist().catch(function() {});
+        }
       }
       return payload;
     }).catch(function(error) {

@@ -26,7 +26,7 @@ function syncLedgerFind_(key) {
   if (sheet.getLastRow() < 2) return null;
   var match = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).createTextFinder(key).matchEntireCell(true).findNext();
   if (!match) return null;
-  var row = sheet.getRange(match.getRow(), 1, 1, 6).getValues()[0];
+  var row = (Sheets.Spreadsheets.Values.get(sheet.getParent().getId(), "'_sync_receipts'!A" + match.getRow() + ':F' + match.getRow(), {valueRenderOption:'UNFORMATTED_VALUE'}).values || [[]])[0];
   return { row: match.getRow(), key: row[0], digest: row[1], state: row[2], id: row[3], result: row[5] ? JSON.parse(row[5]) : null };
 }
 function syncLedgerPending_(key, digest, id) {
@@ -41,7 +41,9 @@ function syncLedgerCommit_(entry, result) {
 }
 function syncProfileState_(subject) {
   var sheet = getSpreadsheet_().getSheetByName('info');
-  var rows = sheet.getDataRange().getValues();
+  // Sheets API writes bypass SpreadsheetApp's per-execution read cache.
+  var rows = Sheets.Spreadsheets.Values.get(sheet.getParent().getId(), "'info'!A:K", { valueRenderOption: 'UNFORMATTED_VALUE', dateTimeRenderOption: 'SERIAL_NUMBER' }).values || [];
+  rows = rows.map(function(row) { return Array.from({length:11},function(_,i){return row[i] == null ? '' : row[i];}); });
   for (var i = 1; i < rows.length; i++) {
     if (normalizeId(rows[i][5]) === normalizeId(subject.studentId)) {
       return { sheet: sheet, row: i + 1, values: rows[i].slice(0, 11), version: syncHash_(rows[i].slice(6, 11)) };
@@ -66,6 +68,10 @@ function syncCells_(values) {
     return { userEnteredValue: typeof value === 'number' ? { numberValue: value } : { stringValue: String(value == null ? '' : value) } };
   });
 }
+function syncConfirmation_(entry, receipt) {
+  return { updateCells: { start: { sheetId: syncLedger_().getSheetId(), rowIndex: entry.row - 1, columnIndex: 2 },
+    rows: [{ values: syncCells_(['committed', entry.id, receipt.committedAt, JSON.stringify(receipt)]) }], fields: 'userEnteredValue' } };
+}
 function syncSaveProfile_(payload, subject, entry, receipt) {
   var state = syncProfileState_(subject);
   if (payload._sync.baseVersion !== state.version) return { success: false, error: 'SYNC_CONFLICT' };
@@ -79,8 +85,7 @@ function syncSaveProfile_(payload, subject, entry, receipt) {
     : { appendCells: { sheetId: state.sheet.getSheetId(), rows: [{ values: cells }], fields: 'userEnteredValue' } };
   // Native table appends must supply sheetId as well as the known production table.
   if (!state.row && state.sheet.getSheetId() === 1695164716) write.appendCells.tableId = '1885862728';
-  var confirmation = { updateCells: { start: { sheetId: syncLedger_().getSheetId(), rowIndex: entry.row - 1, columnIndex: 2 },
-    rows: [{ values: syncCells_(['committed', entry.id, receipt.committedAt, JSON.stringify(receipt)]) }], fields: 'userEnteredValue' } };
+  var confirmation = syncConfirmation_(entry, receipt);
   Sheets.Spreadsheets.batchUpdate({ requests: [write, confirmation] }, state.sheet.getParent().getId());
   return receipt;
 }
@@ -99,6 +104,11 @@ function runSyncedMutation_(action, payload, subject, execute) {
   if (!entry) entry = syncLedgerPending_(key, digest, payload.id);
   var receipt = { success: true, mutationId: meta.mutationId, recordId: payload.id, committedAt: new Date().toISOString() };
   if (action === 'saveInitialSetup') return syncSaveProfile_(payload, subject, entry, receipt);
+  if (action === 'saveSleepData') {
+    // Sleep is replaceable by date: data and receipt must commit together.
+    var saved = execute(syncConfirmation_(entry, receipt));
+    return saved && saved.success === true ? receipt : saved || {success:false,error:'SYNC_UNCONFIRMED'};
+  }
   var result;
   if (syncRecordExists_(action, payload.id, subject)) result = { success: true };
   else result = execute();

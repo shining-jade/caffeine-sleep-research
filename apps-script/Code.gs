@@ -316,7 +316,7 @@ function getWakeDateFromSleepPayload(payload) {
   return Utilities.formatDate(d, 'Asia/Seoul', 'yyyy-MM-dd');
 }
 
-function saveSleepData(payload) {
+function saveSleepData(payload, syncConfirmation) {
   try {
     // payload 검증
     if (!payload) {
@@ -442,7 +442,7 @@ function saveSleepData(payload) {
       payload.latency || '',     // P: 수면 잠들기 소요시간
       payload.awakenings || '',  // Q: 수면 중 각성
       payload.daytime || ''      // R: 낮 졸림
-    ], existingRowIndex > 0 ? existingRowIndex : null);
+    ], existingRowIndex > 0 ? existingRowIndex : null, syncConfirmation);
 
     safeLog_(`✅ 수면 기록 저장 완료: 학번=${payload.studentId}, 날짜=${payload.date}, 덮어쓰기=${wasUpdated}`);
     safeLog_('=== saveSleepData 종료 ===');
