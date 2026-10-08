@@ -4951,8 +4951,7 @@ function buildPDFSendHTML(){
     return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><style>${styles}
         body{margin:0;background:white;font-family:'Pretendard',Arial,sans-serif;}
         #pdfOnlyContent{display:block!important;position:static!important;left:auto!important;top:auto!important;width:800px!important;background:white!important;}
-    </style></head><body>${clonedContent.outerHTML}<script type="module" src="/public/js/caffeine-companies.js"></script>
-</body></html>`;
+    </style></head><body>${clonedContent.outerHTML}</body></html>`;
 }
 
 function sendPDFToStudent(pdfOptions){
@@ -7538,5 +7537,6 @@ function renderJourneyStatus(){
 }
 
 </script>
+<script type="module" src="/public/js/caffeine-companies.js"></script>
 </body>
 </html>
