@@ -176,6 +176,37 @@ test('teacher API session inspection and logout are role-safe', async () => {
   assert.match(logoutRes.getHeader('set-cookie'), /Max-Age=0/);
 });
 
+test('teacher API accepts chart-sized PDF bodies only for authenticated PDF sends', async () => {
+  const calls = [];
+  const handler = createActionHandler({ callGas: async (input) => { calls.push(input); return { success: true }; }, now: () => NOW });
+  const html = `<html><img src="data:image/png;base64,${'x'.repeat(512 * 1024)}"></html>`;
+  const body = JSON.stringify({ action: 'saveTeacherPdfAndSendMessage', params: [{ studentId: '0', html }] });
+  const denied = response();
+  await handler(request('POST', body), denied);
+  assert.equal(denied.statusCode, 401);
+  assert.equal(calls.length, 0);
+  const accepted = response();
+  await handler(request('POST', body, roleCookie()), accepted);
+  assert.equal(accepted.statusCode, 200);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].params[0].html, html);
+});
+
+test('teacher API keeps ordinary actions at 256 KiB and bounds PDF sends at 4 MiB', async () => {
+  let calls = 0;
+  const handler = createActionHandler({ callGas: async () => { calls += 1; }, now: () => NOW });
+  for (const [action, value] of [
+    ['sendTeacherMessage', '한'.repeat(90 * 1024)],
+    ['saveTeacherPdfAndSendMessage', 'x'.repeat(4 * 1024 * 1024)],
+  ]) {
+    const res = response();
+    await handler(request('POST', JSON.stringify({ action, params: [{ html: value }] }), roleCookie()), res);
+    assert.equal(res.statusCode, 413);
+    assert.equal(res.json().error, 'PAYLOAD_TOO_LARGE');
+  }
+  assert.equal(calls, 0);
+});
+
 test('teacher reminder actions are allowlisted without admitting scheduler actions', () => {
   assert.deepEqual(normalizeTeacherRequest('getReminderAdminConfig', []).params, []);
   assert.deepEqual(normalizeTeacherRequest('saveReminderAdminConfig', [{ enabled: false }]).params, [{ enabled: false }]);
