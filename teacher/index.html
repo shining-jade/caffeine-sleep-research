@@ -255,7 +255,7 @@
             @page{margin:16mm 8mm 10mm;}
             body>*{display:none !important;}
             body,html{background:#ffffff !important;}
-            #pdfOnlyContent{display:block !important;padding:8px 20px 14px;background:#ffffff !important;}
+            #pdfOnlyContent{display:block !important;width:auto !important;max-width:100%;box-sizing:border-box;padding:8px 20px 14px;background:#ffffff !important;}
             *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
             .ai-fallback-badge{display:none !important;}
 
@@ -266,8 +266,8 @@
 
             .pdf-stats{display:flex;gap:8px;margin-bottom:10px;flex-wrap:nowrap;width:100%;}
             .pdf-stat{background:#f9fafb;padding:7px 10px;border-radius:8px;flex:1;min-width:0;}
-            .pdf-stat-label{font-size:10px;color:#6b7280;margin-bottom:2px;white-space:nowrap;}
-            .pdf-stat-value{font-size:13px;font-weight:700;color:#1f2937;white-space:nowrap;}
+            .pdf-stat-label{font-size:10px;color:#6b7280;margin-bottom:2px;white-space:normal;overflow-wrap:anywhere;}
+            .pdf-stat-value{font-size:13px;font-weight:700;color:#1f2937;white-space:normal;overflow-wrap:anywhere;}
             #pdf_yestSleep{font-size:10px;line-height:1.2;letter-spacing:0;white-space:normal;word-break:keep-all;}
             .pdf-section-title{font-size:14px;font-weight:700;color:#1f2937;margin:10px 0 6px;border-left:4px solid #6366f1;padding-left:10px;}
             .pdf-ai-box{background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;padding:10px 12px;margin-bottom:10px;page-break-inside:auto;break-inside:auto;}
@@ -280,7 +280,9 @@
             .pdf-chart-wrap{page-break-inside:avoid;break-inside:avoid;margin-bottom:8px;}
             .pdf-chart-wrap .pdf-section-title{page-break-after:avoid;break-after:avoid;}
             .pdf-chart-wrap canvas{width:100% !important;height:185px !important;}
-            .data-table{width:100%;border-collapse:collapse;margin-top:6px;}
+            .data-table{width:100%;table-layout:fixed;border-collapse:collapse;margin-top:6px;}
+            .data-table th,.data-table td{white-space:normal;overflow-wrap:anywhere;}
+            .data-table .status-badge{white-space:normal;}
             .data-table th{background:#6366f1 !important;color:white !important;padding:7px 10px;font-size:11px;text-align:left;border-radius:0 !important;}
             .data-table td{padding:6px 10px;border-bottom:1px solid #e5e7eb;font-size:11px;}
             .status-badge,.badge-caf-ok,.badge-caf-low,.badge-caf-warn,.badge-caf-over,
@@ -310,6 +312,8 @@
             #pdf_patternSection{break-inside:avoid;page-break-inside:avoid;margin-top:18px;}
             #pdf_patternSection .pdf-section-title{break-after:avoid;page-break-after:avoid;margin-top:0;}
             .pdf-pattern-grid{break-inside:avoid;page-break-inside:avoid;}
+            .pdf-pattern-grid>div{min-width:0;overflow-wrap:anywhere;}
+            #pdf_patternSection img{max-width:100%;}
             /* 뱃지 PDF */
             .pdf-award-section{page-break-inside:avoid;margin-top:14px;}
             .pdf-award-section>div:first-child{font-size:10px !important;margin-bottom:4px !important;}
@@ -4950,7 +4954,7 @@ function buildPDFSendHTML(){
     const styles = Array.from(document.querySelectorAll('style')).map(s => s.textContent).join('\n');
     return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><style>${styles}
         body{margin:0;background:white;font-family:'Pretendard',Arial,sans-serif;}
-        #pdfOnlyContent{display:block!important;position:static!important;left:auto!important;top:auto!important;width:800px!important;background:white!important;}
+        #pdfOnlyContent{display:block!important;position:static!important;left:auto!important;top:auto!important;width:auto!important;max-width:100%;box-sizing:border-box;background:white!important;}
     </style></head><body>${clonedContent.outerHTML}</body></html>`;
 }
 
