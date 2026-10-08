@@ -2158,86 +2158,7 @@ function saveSleepSettings(settings) {
 
 // ---------------------------------------------------------------------------
 // Teacher message attachments / PDF delivery
-// Later declarations intentionally replace the earlier message functions.
-// ---------------------------------------------------------------------------
-function ensureTeacherMessageSheet_() {
-  const ss = getSpreadsheet_();
-  let sheet = ss.getSheetByName('teacher_messages');
-  const headers = [
-    'timestamp', 'studentId', 'studentName', 'title', 'content',
-    'readStatus', 'readTime', 'studentReply', 'studentReplyTime', 'studentReplyRead',
-    'attachmentName', 'attachmentUrl', 'attachmentType'
-  ];
-  if (!sheet) {
-    sheet = ss.insertSheet('teacher_messages');
-    appendRecordRow_(sheet, headers);
-    return sheet;
-  }
-  const width = sheet.getLastColumn();
-  if (width < headers.length) {
-    sheet.getRange(1, width + 1, 1, headers.length - width).setValues([headers.slice(width)]);
-  }
-  return sheet;
-}
-
-function formatTeacherMsgDate_(value) {
-  if (!value) return '';
-  return value instanceof Date
-    ? Utilities.formatDate(value, 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss')
-    : String(value);
-}
-
-function readTeacherMessageRow_(row, rowIndex, includeStudent) {
-  const item = {
-    rowIndex: rowIndex,
-    timestamp: formatTeacherMsgDate_(row[0]),
-    title: String(row[3] || ''),
-    content: String(row[4] || ''),
-    readStatus: String(row[5] || '미읽음'),
-    readTime: formatTeacherMsgDate_(row[6]),
-    studentReply: String(row[7] || ''),
-    studentReplyTime: formatTeacherMsgDate_(row[8]),
-    studentReplyRead: String(row[9] || ''),
-    attachmentName: String(row[10] || ''),
-    attachmentUrl: String(row[11] || ''),
-    attachmentType: String(row[12] || '')
-  };
-  if (includeStudent) {
-    item.studentId = String(row[1] || '');
-    item.studentName = String(row[2] || '');
-  }
-  return item;
-}
-
-function sendTeacherMessage(data) {
-  try {
-    const sheet = ensureTeacherMessageSheet_();
-    const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    appendRecordRow_(sheet, [
-      ts,
-      String(data.studentId),
-      String(data.studentName),
-      String(data.title),
-      String(data.content),
-      '미읽음',
-      '',
-      '',
-      '',
-      '',
-      String(data.attachmentName || ''),
-      String(data.attachmentUrl || ''),
-      String(data.attachmentType || '')
-    ]);
-    return { success: true };
-  } catch (err) {
-    safeLog_('sendTeacherMessage error: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Teacher message attachments / PDF delivery
-// Final declarations override the earlier message functions above.
+// Shared message helpers preserve attachment metadata for both dashboards.
 // ---------------------------------------------------------------------------
 function ensureTeacherMessageSheet_() {
   const ss = getSpreadsheet_();
@@ -2381,105 +2302,6 @@ function saveTeacherPdfAndSendMessage(data) {
     ]);
     return { success: true, fileName: file.getName(), fileUrl: file.getUrl(), fileId: file.getId() };
 
-    const msgResult_unused = sendTeacherMessage({
-      studentId: data.studentId,
-      studentName: data.studentName,
-      title: data.title || '건강 기록 PDF',
-      content: data.content || '건강 기록 PDF를 확인해 주세요.',
-      attachmentName: file.getName(),
-      attachmentUrl: file.getUrl(),
-      attachmentType: 'pdf'
-    });
-    if (!msgResult || !msgResult.success) {
-      throw new Error((msgResult && msgResult.error) || '메시지 전송에 실패했습니다.');
-    }
-    return { success: true, fileName: file.getName(), fileUrl: file.getUrl(), fileId: file.getId() };
-  } catch (err) {
-    safeLog_('saveTeacherPdfAndSendMessage error: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-function getSentTeacherMessages() {
-  try {
-    const sheet = ensureTeacherMessageSheet_();
-    const rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) return { success: true, data: [] };
-    const result = [];
-    for (let i = 1; i < rows.length; i++) {
-      result.push(readTeacherMessageRow_(rows[i], i + 1, true));
-    }
-    result.reverse();
-    return { success: true, data: result };
-  } catch (err) {
-    safeLog_('getSentTeacherMessages error: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-function getTeacherMessages(studentId) {
-  try {
-    const sheet = ensureTeacherMessageSheet_();
-    const rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) return { success: true, data: [] };
-    const result = [];
-    for (let i = 1; i < rows.length; i++) {
-      if (normalizeId(rows[i][1]) === normalizeId(studentId)) {
-        result.push(readTeacherMessageRow_(rows[i], i + 1, false));
-      }
-    }
-    result.reverse();
-    return { success: true, data: result };
-  } catch (err) {
-    safeLog_('getTeacherMessages error: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-function saveTeacherPdfAndSendMessage(data) {
-  try {
-    if (!data || !data.studentId || !data.studentName || !data.html) {
-      throw new Error('PDF 전송 정보가 부족합니다.');
-    }
-    const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd_HHmmss');
-    const fileName = String(data.fileName || ('health-report-' + data.studentId + '-' + ts + '.pdf')).replace(/[\\/:*?"<>|]/g, '_');
-    const htmlBlob = Utilities.newBlob(String(data.html), 'text/html', fileName.replace(/\.pdf$/i, '.html'));
-    const pdfBlob = htmlBlob.getAs(MimeType.PDF).setName(fileName);
-    const file = DriveApp.createFile(pdfBlob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-    const sheet = ensureTeacherMessageSheet_();
-    const msgTs = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    appendRecordRow_(sheet, [
-      msgTs,
-      String(data.studentId),
-      String(data.studentName),
-      String(data.title || '건강 기록 PDF'),
-      String(data.content || '건강 기록 PDF를 확인해 주세요.') + '\n\nPDF 링크: ' + file.getUrl(),
-      '미읽음',
-      '',
-      '',
-      '',
-      '',
-      file.getName(),
-      file.getUrl(),
-      'pdf'
-    ]);
-    return { success: true, fileName: file.getName(), fileUrl: file.getUrl(), fileId: file.getId() };
-
-    const msgResult = sendTeacherMessage({
-      studentId: data.studentId,
-      studentName: data.studentName,
-      title: data.title || '건강 기록 PDF',
-      content: data.content || '건강 기록 PDF를 확인해 주세요.',
-      attachmentName: file.getName(),
-      attachmentUrl: file.getUrl(),
-      attachmentType: 'pdf'
-    });
-    if (!msgResult || !msgResult.success) {
-      throw new Error((msgResult && msgResult.error) || '메시지 전송에 실패했습니다.');
-    }
-    return { success: true, fileName: file.getName(), fileUrl: file.getUrl(), fileId: file.getId() };
   } catch (err) {
     safeLog_('saveTeacherPdfAndSendMessage error: ' + err.message);
     return { success: false, error: err.message };
@@ -5722,90 +5544,18 @@ function exportDataToNewSheet(params) {
  * 교사가 특정 학생에게 메시지 발송
  * data: { studentId, studentName, title, content }
  */
-function sendTeacherMessage(data) {
-  try {
-    const ss = getSpreadsheet_();
-    let sheet = ss.getSheetByName('teacher_messages');
-    if (!sheet) {
-      sheet = ss.insertSheet('teacher_messages');
-      appendRecordRow_(sheet, ['타임스탬프','학번','이름','제목','내용','읽음여부','읽은시간','학생답장','학생답장시간','학생답장읽음']);
-    }
-    const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    appendRecordRow_(sheet, [ts, String(data.studentId), String(data.studentName), String(data.title), String(data.content), '미읽음', '', '', '', '']);
-    return { success: true };
-  } catch (err) {
-    safeLog_('❌ sendTeacherMessage 오류: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
+
 
 /**
  * 교사용: 발송한 전체 메시지 목록 조회
  */
-function getSentTeacherMessages() {
-  try {
-    const ss = getSpreadsheet_();
-    const sheet = ss.getSheetByName('teacher_messages');
-    if (!sheet) return { success: true, data: [] };
-    const rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) return { success: true, data: [] };
-    const result = [];
-    for (let i = 1; i < rows.length; i++) {
-      result.push({
-        rowIndex:         i + 1,
-        timestamp:        rows[i][0] ? (rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][0])) : '',
-        studentId:        String(rows[i][1] || ''),
-        studentName:      String(rows[i][2] || ''),
-        title:            String(rows[i][3] || ''),
-        content:          String(rows[i][4] || ''),
-        readStatus:       String(rows[i][5] || '미읽음'),
-        readTime:         rows[i][6] ? (rows[i][6] instanceof Date ? Utilities.formatDate(rows[i][6], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][6])) : '',
-        studentReply:     String(rows[i][7] || ''),
-        studentReplyTime: rows[i][8] ? (rows[i][8] instanceof Date ? Utilities.formatDate(rows[i][8], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][8])) : '',
-        studentReplyRead: String(rows[i][9] || '')
-      });
-    }
-    result.reverse();
-    return { success: true, data: result };
-  } catch (err) {
-    safeLog_('❌ getSentTeacherMessages 오류: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
+
 
 /**
  * 학생용: 자신에게 온 메시지 조회
  * 시트 열: A타임스탬프 B학번 C이름 D제목 E내용 F읽음여부 G읽은시간 H학생답장 I학생답장시간 J학생답장읽음
  */
-function getTeacherMessages(studentId) {
-  try {
-    const ss = getSpreadsheet_();
-    const sheet = ss.getSheetByName('teacher_messages');
-    if (!sheet) return { success: true, data: [] };
-    const rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) return { success: true, data: [] };
-    const result = [];
-    for (let i = 1; i < rows.length; i++) {
-      if (normalizeId(rows[i][1]) === normalizeId(studentId)) {
-        result.push({
-          rowIndex:         i + 1,
-          timestamp:        rows[i][0] ? (rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][0])) : '',
-          title:            String(rows[i][3] || ''),
-          content:          String(rows[i][4] || ''),
-          readStatus:       String(rows[i][5] || '미읽음'),
-          readTime:         rows[i][6] ? (rows[i][6] instanceof Date ? Utilities.formatDate(rows[i][6], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][6])) : '',
-          studentReply:     String(rows[i][7] || ''),
-          studentReplyTime: rows[i][8] ? (rows[i][8] instanceof Date ? Utilities.formatDate(rows[i][8], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][8])) : ''
-        });
-      }
-    }
-    result.reverse();
-    return { success: true, data: result };
-  } catch (err) {
-    safeLog_('❌ getTeacherMessages 오류: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
+
 
 /**
  * 학생용: 메시지 읽음 처리

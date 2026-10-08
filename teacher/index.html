@@ -5054,13 +5054,20 @@ function formatMsgDate(ts) {
     return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}.(${days[d.getDay()]})`;
 }
 
-function formatTeacherMsgContent(content) {
-    const safe = String(content || '')
+function formatTeacherMsgContent(content, message = {}) {
+    const attachmentUrl = String(message.attachmentUrl || '').trim();
+    let text = String(content || '');
+    const bodyUrls = text.match(/https?:\/\/[^\s<]+/gi) || [];
+    if (/^https?:\/\/\S+$/i.test(attachmentUrl) && !bodyUrls.includes(attachmentUrl)) text += '\n\n' + attachmentUrl;
+    const escape = value => String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-    return safe.replace(/(https?:\/\/[^\s<]+)/g, url => {
-        const label = url.includes('drive.google.com') ? 'PDF 열기' : '링크 열기';
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    const safe = escape(text);
+    return safe.replace(/(https?:\/\/[^\s<]+)/gi, url => {
+        const label = url.includes('drive.google.com') || (url === escape(attachmentUrl) && message.attachmentType === 'pdf') ? 'PDF 열기' : '링크 열기';
         return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;background:#3b82f6;color:white;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;text-decoration:none;">📎 ${label}</a>`;
     });
 }
@@ -5357,7 +5364,7 @@ function loadSentMessages() {
                             </div>
                         </div>
                         <div style="font-size:12px;color:#9ca3af;margin-top:4px;">${formatMsgDate(m.timestamp)} ${readTime}</div>
-                        <div style="font-size:13px;color:#374151;margin-top:8px;white-space:pre-wrap;">${formatTeacherMsgContent(m.content)}</div>
+                        <div style="font-size:13px;color:#374151;margin-top:8px;white-space:pre-wrap;">${formatTeacherMsgContent(m.content, m)}</div>
                         ${replySection}
                     </div>
                 </div>`;

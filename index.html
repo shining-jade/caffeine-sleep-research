@@ -5219,13 +5219,20 @@
       return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}.(${days[d.getDay()]})`;
     }
 
-    function formatTeacherMsgContent(content) {
-      const safe = String(content || '')
+    function formatTeacherMsgContent(content, message = {}) {
+      const attachmentUrl = String(message.attachmentUrl || '').trim();
+      let text = String(content || '');
+      const bodyUrls = text.match(/https?:\/\/[^\s<]+/gi) || [];
+      if (/^https?:\/\/\S+$/i.test(attachmentUrl) && !bodyUrls.includes(attachmentUrl)) text += '\n\n' + attachmentUrl;
+      const escape = value => String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-      return safe.replace(/(https?:\/\/[^\s<]+)/g, url => {
-        const label = url.includes('drive.google.com') ? 'PDF 열기' : '링크 열기';
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+      const safe = escape(text);
+      return safe.replace(/(https?:\/\/[^\s<]+)/gi, url => {
+        const label = url.includes('drive.google.com') || (url === escape(attachmentUrl) && message.attachmentType === 'pdf') ? 'PDF 열기' : '링크 열기';
         return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;background:#10b981;color:white;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;text-decoration:none;">📎 ${label}</a>`;
       });
     }
@@ -5319,7 +5326,7 @@
                 ${isNew ? '<span style="background:#10b981;color:white;font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;">NEW</span>' : ''}
               </div>
               <div class="text-xs text-gray-400 mb-2">${formatMsgDate(m.timestamp)}</div>
-              <div class="text-sm text-gray-700 whitespace-pre-wrap">${formatTeacherMsgContent(m.content)}</div>
+              <div class="text-sm text-gray-700 whitespace-pre-wrap">${formatTeacherMsgContent(m.content, m)}</div>
               ${replySection}
             </div>`;
           }).join('');
@@ -5357,7 +5364,7 @@
         <div style="border:1px solid #d1fae5;border-radius:12px;padding:14px;margin-bottom:10px;background:#f0fdf4;">
           <div style="font-weight:700;font-size:15px;color:#1f2937;margin-bottom:4px;">${m.title}</div>
           <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;">${formatMsgDate(m.timestamp)}</div>
-          <div style="font-size:13px;color:#374151;white-space:pre-wrap;line-height:1.6;">${formatTeacherMsgContent(m.content)}</div>
+          <div style="font-size:13px;color:#374151;white-space:pre-wrap;line-height:1.6;">${formatTeacherMsgContent(m.content, m)}</div>
         </div>`).join('');
 
       box.innerHTML = `
