@@ -1952,10 +1952,13 @@ function setModalPeriod(mode){modalPeriodMode=mode;['7','14','30','custom'].forE
 
 function getLimit(id){if(S.cafMaxFixed>0)return S.cafMaxFixed;const i=infoData.find(i=>i.학번===id);return Math.min((i?i.몸무게:60)*2.5,400);}
 function getPersonalInfo(id){return infoData.find(i=>i.학번===id)||null;}
-function getTargetCafText(id){
+function getTargetCafLimit(id){
     const info=getPersonalInfo(id);
-    const target=info&&Number.isFinite(info.목표카페인)&&info.목표카페인>0?info.목표카페인:getLimit(id);
-    return target?`${Math.round(target)}mg`:'-';
+    return info&&Number.isFinite(info.목표카페인)&&info.목표카페인>0?info.목표카페인:null;
+}
+function getTargetCafText(id){
+    const target=getTargetCafLimit(id);
+    return target!==null?`${Math.round(target)}mg`:'미설정';
 }
 function getTargetSleepText(id){
     const info=getPersonalInfo(id);
@@ -3648,7 +3651,8 @@ function refreshModalData(){
     const labels=dates.map(d=>d.substring(5));
     const cafData=dates.map(d=>caffeineData.filter(c=>c.학번===currentStudentId&&c.섭취시간.startsWith(d)).reduce((a,b)=>a+b.함량,0));
     const sleepD=dates.map(d=>{const r=findSleepForLifeDate(currentStudentId,d);return r?r.시간:null;});
-    const limLine=new Array(dates.length).fill(lim);
+    const targetCafLimit=getTargetCafLimit(currentStudentId);
+    const limLine=targetCafLimit!==null?new Array(dates.length).fill(targetCafLimit):[];
     const targetSleepHours=getTargetSleepHours(currentStudentId);
     const targetSleepLine=targetSleepHours?new Array(dates.length).fill(targetSleepHours):[];
     if(charts.dual)charts.dual.destroy();
@@ -3656,12 +3660,12 @@ function refreshModalData(){
         type:'bar',
         data:{labels,datasets:[
             {label:'카페인 (mg)',pointStyle:'rect',data:cafData,backgroundColor:cafData.map(v=>{const p=(v/lim)*100;return p>=S.cafOver?'rgba(239,68,68,0.8)':p>=S.cafWarn?'rgba(245,158,11,0.8)':'rgba(99,102,241,0.8)';}),borderWidth:0,borderRadius:5,yAxisID:'y'},
-            {label:`최대섭취량 (${Math.round(lim)}mg)`,pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.4)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,yAxisID:'y'},
+            {label:targetCafLimit!==null?`최대섭취량 (${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.4)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,yAxisID:'y'},
             {label:'수면시간 (h)',pointStyle:'circle',data:sleepD,type:'line',borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.12)',borderWidth:3,fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:sleepD.map(v=>v!==null?getSleepStatusInfo(v).color:'transparent'),yAxisID:'y2',spanGaps:true},
             ...(targetSleepHours?[{label:`목표수면 (${targetSleepHours}h)`,pointStyle:'circle',data:targetSleepLine,type:'line',borderColor:'rgba(59,130,246,0.7)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[])
         ]},
         options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-            plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12}},tooltip:{callbacks:{label:ctx=>{if(ctx.dataset.label.includes('최대섭취량'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0)return `카페인: ${ctx.raw}mg`;return ctx.raw!==null?`수면: ${ctx.raw}h`:'수면: 미기록';}}}},
+            plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12,filter:item=>item.text!=='목표 미설정'}},tooltip:{callbacks:{label:ctx=>{if(ctx.dataset.label.includes('최대섭취량'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0)return `카페인: ${ctx.raw}mg`;return ctx.raw!==null?`수면: ${ctx.raw}h`:'수면: 미기록';}}}},
             scales:{y:{beginAtZero:true,position:'left',title:{display:true,text:'카페인 (mg)',color:'#6366f1'}},y2:{beginAtZero:true,position:'right',max:14,title:{display:true,text:'수면 (h)',color:'#10b981'},grid:{drawOnChartArea:false}}}}
     });
 
@@ -4780,7 +4784,8 @@ function exportPDF(options){
     pdfDiv.style.cssText='display:block;position:fixed;left:-9999px;top:0;width:800px;background:white;';
     const cafData=dates.map(d=>caffeineData.filter(c=>c.학번===currentStudentId&&c.섭취시간.startsWith(d)).reduce((a,b)=>a+b.함량,0));
     const sleepArr=dates.map(d=>{const r=findSleepForLifeDate(currentStudentId,d);return r?r.시간:null;});
-    const limLine=new Array(dates.length).fill(lim);
+    const targetCafLimit=getTargetCafLimit(currentStudentId);
+    const limLine=targetCafLimit!==null?new Array(dates.length).fill(targetCafLimit):[];
     const targetSleepHours=getTargetSleepHours(currentStudentId);
     const targetSleepLine=targetSleepHours?new Array(dates.length).fill(targetSleepHours):[];
     if(charts.pdfDual)charts.pdfDual.destroy();
@@ -4788,11 +4793,11 @@ function exportPDF(options){
         type:'bar',
         data:{labels:dates.map(d=>d.substring(5)),datasets:[
             {label:'카페인(mg)',pointStyle:'rect',data:cafData,backgroundColor:cafData.map(v=>{const p=(v/lim)*100;return p>=S.cafOver?'rgba(239,68,68,0.8)':p>=S.cafWarn?'rgba(245,158,11,0.8)':'rgba(99,102,241,0.8)';}),borderWidth:0,borderRadius:4,yAxisID:'y'},
-            {label:`최대섭취량(${Math.round(lim)}mg)`,pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.5)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false,yAxisID:'y'},
+            {label:targetCafLimit!==null?`최대섭취량(${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.5)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false,yAxisID:'y'},
             {label:'수면(h)',pointStyle:'circle',data:sleepArr,type:'line',borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.12)',borderWidth:2,pointRadius:4,fill:false,yAxisID:'y2',spanGaps:true},
             ...(targetSleepHours?[{label:`목표수면(${targetSleepHours}h)`,pointStyle:'circle',data:targetSleepLine,type:'line',borderColor:'rgba(59,130,246,0.65)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[])
         ]},
-        options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:10,boxHeight:10}}},scales:{y:{beginAtZero:true,position:'left'},y2:{beginAtZero:true,position:'right',max:14,grid:{drawOnChartArea:false}}}}
+        options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:10,boxHeight:10,filter:item=>item.text!=='목표 미설정'}}},scales:{y:{beginAtZero:true,position:'left'},y2:{beginAtZero:true,position:'right',max:14,grid:{drawOnChartArea:false}}}}
     });
 
     // 생활 패턴 차트 → 이미지 캡처 후 PDF 영역에 삽입
@@ -4895,12 +4900,12 @@ function buildStaticPdfDualChartHTML(){
     return `<div style="height:200px;position:relative;padding:4px 8px 26px 26px;box-sizing:border-box;background:white;">
         <div style="height:18px;text-align:center;font-size:9px;color:#6b7280;">
             <span style="display:inline-block;width:7px;height:7px;background:#ef4444;margin-right:3px;"></span>카페인(mg)
-            <span style="display:inline-block;width:14px;border-top:2px dashed rgba(239,68,68,.55);margin:0 3px 2px 12px;"></span>최대섭취량(${Math.round(limValue)}mg)
+            ${limValue>0?`<span style="display:inline-block;width:14px;border-top:2px dashed rgba(239,68,68,.55);margin:0 3px 2px 12px;"></span>최대섭취량(${Math.round(limValue)}mg)`:''}
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;margin:0 3px 0 12px;"></span>수면(h)
             ${targetSleep ? `<span style="display:inline-block;width:14px;border-top:2px dashed rgba(59,130,246,.65);margin:0 3px 2px 12px;"></span>목표수면(${targetSleep}h)` : ''}
         </div>
         <div style="height:146px;position:relative;border-left:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;background:repeating-linear-gradient(to top,#fff 0,#fff 28px,#f3f4f6 29px);">
-            <div style="position:absolute;left:0;right:0;top:${cafLimitTop}%;border-top:2px dashed rgba(239,68,68,.45);"></div>
+            ${limValue>0?`<div style="position:absolute;left:0;right:0;top:${cafLimitTop}%;border-top:2px dashed rgba(239,68,68,.45);"></div>`:''}
             ${targetSleepTop == null ? '' : `<div style="position:absolute;left:0;right:0;top:${targetSleepTop}%;border-top:2px dashed rgba(59,130,246,.55);"></div>`}
             <div style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:4px;padding:0 16px 0 10px;box-sizing:border-box;">${bars}</div>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;left:10px;right:16px;top:0;bottom:0;width:calc(100% - 26px);height:100%;overflow:visible;">${sleepLineSvg}${sleepPointsSvg}</svg>
