@@ -1,7 +1,10 @@
 import { callGas as defaultCallGas } from '../_lib/gas.js';
-import { readJson, sendJson } from '../_lib/http.js';
+import { DEFAULT_MAX_BYTES, readJson, sendJson } from '../_lib/http.js';
 import { readSessionCookie, verifySession } from '../_lib/session.js';
 import { normalizeTeacherRequest } from '../_lib/teacher-policy.js';
+
+// Chart images are embedded in PDF HTML; stay below Vercel's 4.5 MB request limit.
+const PDF_MAX_BYTES = 4 * 1024 * 1024;
 
 export function createActionHandler({
   callGas = defaultCallGas,
@@ -22,7 +25,11 @@ export function createActionHandler({
 
     let body;
     try {
-      body = await readJson(req);
+      body = await readJson(req, {
+        maxBytes: PDF_MAX_BYTES,
+        maxBytesForBody: (value) => value?.action === 'saveTeacherPdfAndSendMessage'
+          ? PDF_MAX_BYTES : DEFAULT_MAX_BYTES,
+      });
     } catch (error) {
       sendJson(res, error.status || 400, { success: false, error: error.code || 'INVALID_REQUEST' });
       return;

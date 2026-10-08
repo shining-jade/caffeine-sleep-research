@@ -1,4 +1,4 @@
-const DEFAULT_MAX_BYTES = 256 * 1024;
+export const DEFAULT_MAX_BYTES = 256 * 1024;
 
 export class HttpError extends Error {
   constructor(status, code, message) {
@@ -9,7 +9,7 @@ export class HttpError extends Error {
   }
 }
 
-export async function readJson(req, { maxBytes = DEFAULT_MAX_BYTES } = {}) {
+export async function readJson(req, { maxBytes = DEFAULT_MAX_BYTES, maxBytesForBody } = {}) {
   const chunks = [];
   let total = 0;
 
@@ -22,11 +22,16 @@ export async function readJson(req, { maxBytes = DEFAULT_MAX_BYTES } = {}) {
     chunks.push(buffer);
   }
 
+  let body;
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+    body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
   } catch {
     throw new HttpError(400, 'INVALID_JSON', 'Request body must be valid JSON.');
   }
+  if (maxBytesForBody && total > maxBytesForBody(body)) {
+    throw new HttpError(413, 'PAYLOAD_TOO_LARGE', 'Request body is too large.');
+  }
+  return body;
 }
 
 export function sendJson(res, status, body) {
