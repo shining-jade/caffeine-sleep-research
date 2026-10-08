@@ -160,7 +160,12 @@ function dispatchStudentAction_(action, params, subject) {
     }
     return result;
   };
-  return STUDENT_MUTATIONS_[action] ? withScriptLock_(execute) : execute();
+  var synced = ['saveCaffeineData','saveSleepData','saveInitialSetup'].indexOf(action) >= 0 && safeParams[0] && safeParams[0]._sync;
+  var operation = synced ? function() { return runSyncedMutation_(action, safeParams[0], subject, execute); } : execute;
+  var result = STUDENT_MUTATIONS_[action] ? withScriptLock_(operation) : operation();
+  if (action === 'getWeightData' && result) result.syncVersion = syncProfileState_(subject).version;
+  if (action === 'getStudentBootstrap' && result && result.weight) result.weight.syncVersion = syncProfileState_(subject).version;
+  return result;
 }
 
 function dispatchTeacherAction_(action, params) {

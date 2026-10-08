@@ -6,6 +6,7 @@ const sources = [
   'apps-script/Security.gs',
   'apps-script/Ownership.gs',
   'apps-script/Reminders.gs',
+  'apps-script/Sync.gs',
   'apps-script/Api.gs',
   'apps-script/Code.gs',
 ];

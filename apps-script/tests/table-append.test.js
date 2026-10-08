@@ -35,6 +35,7 @@ test('table append targets native table rather than the formula spill end', asyn
   }});
   const sheet={getName:()=> 'info',getSheetId:()=>1695164716,getParent:()=>({getId:()=> 'sheet-id'}),appendRow(){assert.fail('must not append after formula spill');}};
   context.appendRecordRow_(sheet,['time',2,3,8,'학생',2308,52,130,'23:00','07:00','teen']);
+  assert.equal(request.requests[0].appendCells.sheetId,1695164716);
   assert.equal(request.requests[0].appendCells.tableId,'1885862728');
   assert.equal(request.requests[0].appendCells.rows[0].values.length,11);
   assert.equal(request.requests[0].appendCells.rows[0].values[6].userEnteredValue.numberValue,52);

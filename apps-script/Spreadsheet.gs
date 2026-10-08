@@ -33,7 +33,7 @@ function appendRecordRow_(sheet, values, replaceRow) {
   });
   var request = replaceRow
     ? { updateCells: { start: { sheetId: sheet.getSheetId(), rowIndex: replaceRow-1, columnIndex: 0 }, rows: [{ values: cells }], fields: 'userEnteredValue' } }
-    : { appendCells: { tableId: tableId, rows: [{ values: cells }], fields: 'userEnteredValue' } };
+    : { appendCells: { sheetId: sheet.getSheetId(), tableId: tableId, rows: [{ values: cells }], fields: 'userEnteredValue' } };
   try { Sheets.Spreadsheets.batchUpdate({ requests: [request] }, sheet.getParent().getId()); }
   catch (error) { throw new Error('TABLE_APPEND_FAILED'); }
   return sheet;
