@@ -236,3 +236,14 @@ test('DB selection retains company and original food name separately from displa
   assert.equal(selected[2].company,'메가커피');
   assert.equal(selected[2].foodName,'커피_아메리카노');
 });
+
+test('resume notifications skip offline and duplicate lifecycle events', () => {
+  let reads=0, now=30000;
+  const context=vm.createContext({user:{studentId:'0'},document:{hidden:false},navigator:{onLine:false},lastRefreshTime:0,Date:{now:()=>now},silentRefresh(){reads++;context.lastRefreshTime=now;}});
+  vm.runInContext(extract('refreshNotificationsOnResume'),context);
+  vm.runInContext('refreshNotificationsOnResume();',context); assert.equal(reads,0);
+  context.navigator.onLine=true;
+  vm.runInContext('refreshNotificationsOnResume();refreshNotificationsOnResume();',context); assert.equal(reads,1);
+  now+=15000; vm.runInContext('refreshNotificationsOnResume();',context); assert.equal(reads,2);
+  context.document.hidden=true; now+=15000; vm.runInContext('refreshNotificationsOnResume();',context); assert.equal(reads,2);
+});
