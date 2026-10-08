@@ -291,7 +291,10 @@ function saveCaffeineData(payload) {
       intakeTime,        // I: 섭취시간
       payload.id || '',      // J: 고유ID
       payload.reason || '',  // K: 섭취이유
-      payload.symptom || ''  // L: 부작용 경험
+      payload.symptom || '', // L: 부작용 경험
+      '',                    // M: 연구대상자코드 (기존 수식 유지)
+      String(payload.company || '').trim().slice(0, 120), // N: 업체명
+      String(payload.foodName || '').trim().slice(0, 240) // O: 원본 식품명
     ]);
 
     return { success: true };
@@ -781,7 +784,7 @@ function getCaffeineLogs(studentId, startDate, endDate) {
       return [];
     }
 
-    const data = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
+    const data = sheet.getRange(2, 1, lastRow - 1, Math.min(15, sheet.getLastColumn())).getValues();
     const logs = [];
 
     for (let i = 0; i < data.length; i++) {
@@ -812,6 +815,8 @@ function getCaffeineLogs(studentId, startDate, endDate) {
           amount: parseFloat(row[7]) || 0,     // H열: 함량
           time: timeStr,
           reason: row[10] || '',              // K열: 섭취이유
+          company: row[13] || '',
+          foodName: row[14] || '',
           symptom: row[11] || ''              // L열: 부작용 경험
         });
       }
@@ -3859,7 +3864,7 @@ function getTeacherData() {
     const caffeine = [];
 
     if (cafLastRow > 1) {
-      const cafRaw = cafSheet.getRange(2, 1, cafLastRow - 1, 12).getValues();
+      const cafRaw = cafSheet.getRange(2, 1, cafLastRow - 1, Math.min(15, cafSheet.getLastColumn())).getValues();
       for (let i = 0; i < cafRaw.length; i++) {
         const r = cafRaw[i];
         const cafRawId = String(r[4]).trim();  // E열: 전체학번
@@ -3883,6 +3888,8 @@ function getTeacherData() {
           함량:   parseFloat(r[7]) || 0, // H열
           섭취시간: timeStr,
           이유:   String(r[10] || ''),   // K열
+          업체명: String(r[13] || ''),
+          원본식품명: String(r[14] || ''),
           부작용: String(r[11] || '')    // L열
         });
       }

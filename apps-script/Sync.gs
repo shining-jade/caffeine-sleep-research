@@ -114,7 +114,7 @@ function runSyncedMutation_(action, payload, subject, execute) {
   else result = execute();
   if (!result || result.success !== true) return result || { success: false, error: 'SYNC_UNCONFIRMED' };
   receipt = Object.assign({}, result, receipt);
-  if (action === 'saveCaffeineData') receipt.record = { id: payload.id, name: payload.drink, amount: Number(payload.mg), time: payload.time, reason: payload.reason || '', symptom: payload.symptom || '' };
+  if (action === 'saveCaffeineData') receipt.record = { id: payload.id, name: payload.drink, company: payload.company || '', foodName: payload.foodName || '', amount: Number(payload.mg), time: payload.time, reason: payload.reason || '', symptom: payload.symptom || '' };
   syncLedgerCommit_(entry, receipt);
   return receipt;
 }

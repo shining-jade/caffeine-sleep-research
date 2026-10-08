@@ -210,7 +210,7 @@
   function localRecord(row) {
     const p = row.payload;
     const common = { id: row.receipt?.recordId || 'local_' + row.mutationId, localMutationId: row.mutationId, localPending: row.state !== 'synced', syncState: row.state };
-    if (row.action === 'saveCaffeineData') return { ...common, name: p.drink, amount: Number(p.mg), time: p.time, reason: p.reason || '', symptom: p.symptom || '' };
+    if (row.action === 'saveCaffeineData') return { ...common, name: p.drink, company: p.company || '', foodName: p.foodName || '', amount: Number(p.mg), time: p.time, reason: p.reason || '', symptom: p.symptom || '' };
     if (row.action === 'saveSleepData') return { ...p, ...common, date: p.date, start: p.sleepTime, end: p.wakeTime, wakeDate: p.wakeDate, hours: p.hours, condition: p.condition, memo: p.memo };
     return null;
   }

@@ -213,3 +213,26 @@ test('caffeine badge updates independently of save warning state',()=>{
  const badge={};const context=vm.createContext({document:{getElementById:()=>badge},caffeineLogs:[{time:'today',amount:160}],getTodayKST:()=> 'today',getLogDateKST:x=>x,userLimit:150});
  vm.runInContext(extract('updateCaffeineBadge')+'\nupdateCaffeineBadge();',context);assert.match(badge.innerText,/160mg/);
 });
+
+test('expired DB cache remains searchable offline without a network request', () => {
+  const elements = {dbTotalCount:{},dbSearchInput:{value:'메가'}};
+  const queries=[];
+  const context=vm.createContext({document:{getElementById:id=>elements[id]},navigator:{onLine:false},
+    localStorage:{getItem:key=>key==='caffeine_db_cache'?JSON.stringify([{f:'아메리카노',c:'메가커피',mg:100}]):'1'},
+    google:{script:{run:{withSuccessHandler(){assert.fail('offline must use saved DB');}}}},console,
+    CAFFEINE_DB:[],caffeineDbLoading:false,searchCaffeineDb:q=>queries.push(q)});
+  vm.runInContext(extract('loadCaffeineDbFromGAS')+'\nloadCaffeineDbFromGAS();',context);
+  assert.equal(context.CAFFEINE_DB.length,1);
+  assert.deepEqual(queries,['메가']);
+});
+
+test('DB selection retains company and original food name separately from display label', () => {
+  let selected;
+  const context=vm.createContext({_dbSearchSelected:{f:'커피_아메리카노',c:'메가커피',s:'100ml',mg:30,_displayName:'아메리카노'},
+    document:{getElementById:id=>id==='dbVolumeInput'?{value:'300'}:null},
+    setDrink:(...args)=>selected=args,cancelDbVolume(){},clearDbSearch(){}});
+  vm.runInContext(extract('applyDbDrink')+'\napplyDbDrink();',context);
+  assert.match(selected[0],/메가커피/);
+  assert.equal(selected[2].company,'메가커피');
+  assert.equal(selected[2].foodName,'커피_아메리카노');
+});

@@ -9,3 +9,10 @@ test('storage failure does not send or report local success',async()=>{let calls
 test('missing receipt does not mark a write as synchronized',async()=>{const x=setup(async()=>({success:true}));await x.sync.enqueue('saveCaffeineData',payload);await x.sync.flush();assert.equal([...x.rows.values()][0].state,'pending');});
 test('fresh server reads do not resurrect a previously deleted confirmed record',async()=>{const x=setup(async(_,p)=>({success:true,mutationId:p._sync.mutationId,recordId:'server-id',committedAt:'now'}));await x.sync.enqueue('saveCaffeineData',payload);await x.sync.flush();await x.sync.capture('getCaffeineLogs',[{id:'server-id',amount:0,time:payload.time}]);await x.sync.capture('getCaffeineLogs',[]);assert.equal((await x.sync.read('getCaffeineLogs')).length,0);});
 test('a second enqueue during an active send starts another automatic pass',async()=>{let unblock;let calls=0;const blocked=new Promise(r=>unblock=r);const x=setup(async(_,p)=>{calls++;if(calls===1)await blocked;return {success:true,mutationId:p._sync.mutationId,recordId:'server-'+calls,committedAt:'now'};});await x.sync.enqueue('saveCaffeineData',payload);await x.sync.enqueue('saveCaffeineData',{...payload,mg:10});unblock();await x.sync.flush();await x.sync.flush();assert.equal(calls,2);});
+
+test('offline queue retains DB company metadata through local feedback and transmission',async()=>{
+ let sent;const x=setup(async(_,p)=>{sent=p;return {success:true,mutationId:p._sync.mutationId,recordId:'id',committedAt:'now',record:{id:'id',name:p.drink,company:p.company,foodName:p.foodName,amount:p.mg,time:p.time}};});
+ const result=await x.sync.enqueue('saveCaffeineData',{...payload,company:'메가커피',foodName:'커피_아메리카노'});
+ assert.equal(result.record.company,'메가커피');assert.equal(result.record.foodName,'커피_아메리카노');
+ await x.sync.flush();assert.equal(sent.company,'메가커피');assert.equal(sent.foodName,'커피_아메리카노');
+});

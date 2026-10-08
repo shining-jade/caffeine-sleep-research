@@ -1892,8 +1892,8 @@
     }
 
     // 카페인 음료 선택
-    function setDrink(name, mg) {
-      selectedDrink = { drink: name, mg: mg };
+    function setDrink(name, mg, metadata = {}) {
+      selectedDrink = { drink: name, mg: mg, company: metadata.company || '', foodName: metadata.foodName || '' };
       document.getElementById('selectedDrink').innerHTML = `선택됨: <b>${name} (${mg}mg)</b>`;
       document.getElementById('drinkName').value = name;
       document.getElementById('customAmount').value = mg;
@@ -1986,6 +1986,8 @@
           studentId: user.studentId,
           name: user.name,
           drink: drinkName,
+          company: selectedDrink.drink === drinkName ? selectedDrink.company || '' : '',
+          foodName: selectedDrink.drink === drinkName ? selectedDrink.foodName || '' : '',
           mg: amount,
           time: time,
           reason: reason,
@@ -3201,7 +3203,7 @@
         const cached = localStorage.getItem('caffeine_db_cache');
         const cachedTime = localStorage.getItem('caffeine_db_cache_time');
         const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
-        if (cached && cachedTime && (Date.now() - parseInt(cachedTime)) < CACHE_TTL) {
+        if (cached) {
           const parsed = JSON.parse(cached);
           if (!Array.isArray(parsed) || !parsed.length) throw new Error('Empty database cache');
           CAFFEINE_DB = parsed;
@@ -3209,11 +3211,12 @@
           if (countEl) countEl.textContent = cnt.toLocaleString() + '건';
           console.log('카페인 DB 캐시 복원: ' + cnt + '건 (GAS 호출 생략)');
           searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
-          return; // ⭐ 캐시가 유효하면 GAS 호출 생략 → google.script.run 큐 비워둠
+          if ((typeof navigator !== 'undefined' && navigator.onLine === false) || (cachedTime && Date.now() - Number(cachedTime) < CACHE_TTL)) return;
         }
       } catch(e) {}
 
-      if (countEl) countEl.textContent = '로딩 중...';
+      if (typeof navigator !== 'undefined' && navigator.onLine === false && CAFFEINE_DB.length) return;
+      if (countEl && !CAFFEINE_DB.length) countEl.textContent = '로딩 중...';
       caffeineDbLoading = true;
       let receivedLiveDb = false;
       // 공용 음료 정보만 포함한 배포 DB로 Google 서버 지연 중에도 검색 가능.
@@ -3221,13 +3224,13 @@
         fetch('/public/data/caffeine-db.json')
           .then(response => { if (!response.ok) throw new Error('DB snapshot unavailable'); return response.json(); })
           .then(data => {
-            if (receivedLiveDb || !Array.isArray(data) || !data.length) return;
+            if (receivedLiveDb || CAFFEINE_DB.length || !Array.isArray(data) || !data.length) return;
             CAFFEINE_DB = data;
             caffeineDbLoading = false;
             if (countEl) countEl.textContent = data.length.toLocaleString() + '건';
             try {
               localStorage.setItem('caffeine_db_cache', JSON.stringify(data));
-              localStorage.setItem('caffeine_db_cache_time', String(Date.now()));
+              localStorage.setItem('caffeine_db_cache_time', '0');
             } catch(e) {}
             searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
           }).catch(() => {});
@@ -3261,6 +3264,8 @@
         })
         .getCaffeineDB();
     }
+
+    window.addEventListener('online', () => loadCaffeineDbFromGAS());
 
     // ── 카페인 DB 검색 함수들 ─────────────────────────────
     function toggleDbSearch() {
@@ -3559,7 +3564,8 @@
         drinkLabel = _dbSearchSelected._displayName;
       }
 
-      setDrink(drinkLabel, finalMg);
+      if (_dbSearchSelected.c) drinkLabel = `${_dbSearchSelected.c} · ${drinkLabel}`;
+      setDrink(drinkLabel, finalMg, {company: _dbSearchSelected.c || '', foodName: _dbSearchSelected.f || ''});
       cancelDbVolume();
       clearDbSearch();
       // 검색 패널 닫기
@@ -5512,7 +5518,7 @@
           try {
             const cached = localStorage.getItem('caffeine_db_cache');
             const cachedTime = Number(localStorage.getItem('caffeine_db_cache_time'));
-            if (cached && cachedTime && Date.now() - cachedTime < 24 * 60 * 60 * 1000) {
+            if (cached) {
               const parsed = JSON.parse(cached);
               if (Array.isArray(parsed) && parsed.length) {
                 CAFFEINE_DB = parsed;

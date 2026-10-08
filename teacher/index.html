@@ -797,6 +797,7 @@
             <div class="chart-card"><h3 class="chart-title">일별 평균 카페인 (<span id="cafChartLabel1">7일</span>)</h3><div class="chart-container"><canvas id="dailyCaffeineChart"></canvas></div><p id="cafDailyParticipation" style="font-size:12px;color:#6b7280;">기록한 학생만 평균에 포함됩니다. 0mg 기록은 포함됩니다.</p></div>
             <div class="chart-card"><h3 class="chart-title">카페인 단계별 학생 수 (<span id="cafChartLabel2">7일</span> 평균)</h3><div class="chart-container"><canvas id="gradeCaffeineChart"></canvas></div></div>
             <div class="chart-card"><h3 class="chart-title">음료 분류별 비율</h3><div class="chart-container"><canvas id="drinkTypeChart"></canvas></div></div>
+<div class="chart-card" style="grid-column:1/-1;"><h3 class="chart-title">업체별 섭취 현황</h3><p style="font-size:12px;color:#6b7280;margin-bottom:12px;">선택한 학년·반·조회기간·테스트 포함 설정을 따릅니다. DB 업체 기준이며 구매 지점 통계가 아닙니다. 섭취 안 함은 제외하고 디카페인 음료는 포함합니다.</p><div id="cafCompanySummary"></div><div id="cafCompanyTable" style="max-height:360px;overflow:auto;"></div></div>
             <div class="chart-card"><h3 class="chart-title">카페인 섭취 시간대</h3><div class="chart-container"><canvas id="caffeineTimeChart"></canvas></div></div>
             <div class="chart-card" style="grid-column:1/-1;"><h3 class="chart-title">☕ 카페인 섭취 이유 분포 <span style="font-size:13px;font-weight:400;color:#9ca3af;">(<span id="cafChartLabel3">7일</span> 기준 · 중복 선택 포함)</span></h3><div id="cafReasonNoData" style="display:none;text-align:center;padding:40px;color:#9ca3af;font-size:14px;">섭취 이유 데이터가 없습니다.</div><div class="chart-container" id="cafReasonWrap" style="height:260px;"><canvas id="cafReasonChart"></canvas></div></div>
             <div class="chart-card" style="grid-column:1/-1;">
@@ -2330,7 +2331,7 @@ function loadDataFromSheet(onReady,onError){
                 if(visibilityAtLoad===visibilityRevision)hiddenStudentIds=new Set((result.hiddenStudentIds||[]).map(String));
                 studentHideSelection.clear();updateVisibilityControls();
                 studentsData=(result.students||[]).map(s=>({학번:String(s.학번),이름:String(s.이름),학년:String(s.학년),반:String(s.반),번호:String(s.번호)}));
-                caffeineData=(result.caffeine||[]).map(c=>({학번:String(c.학번),음료명:String(c.음료명||''),함량:parseFloat(c.함량)||0,섭취시간:String(c.섭취시간||''),이유:String(c.이유||''),부작용:String(c.부작용||'')}));
+                caffeineData=(result.caffeine||[]).map(c=>({학번:String(c.학번),음료명:String(c.음료명||''),업체명:String(c.업체명||''),원본식품명:String(c.원본식품명||''),함량:parseFloat(c.함량)||0,섭취시간:String(c.섭취시간||''),이유:String(c.이유||''),부작용:String(c.부작용||'')}));
                 sleepData=(result.sleep||[]).map(s=>({학번:String(s.학번),날짜:String(s.날짜||''),기상날짜:String(s.wakeDate||s.기상날짜||''),취침:String(s.취침||''),기상:String(s.기상||''),시간:parseFloat(s.시간)||0,컨디션:String(s['수면 후 컨디션']||''),메모:String(s.메모||''),스마트폰:normalizeSleepUnitLabel(s.스마트폰),활동:normalizeSleepUnitLabel(s.활동),잠들기:normalizeSleepUnitLabel(s.잠들기),각성:String(s.각성||''),낮졸림:normalizeDaytimeLabel(s.낮졸림)}));
                 infoData=(result.info||[]).map(i=>({
                     학번:String(i.학번),
@@ -2682,6 +2683,7 @@ function resetSleepDate(){
 function updateCaffeineTab(){
     const {students,dates,filteredCaf,ids}=getCafTabFilter();
     const daysText=dates.length+'일';
+    if(window.caffeineCompanies)window.caffeineCompanies.render(filteredCaf);
     ['cafChartLabel1','cafChartLabel2','cafChartLabel3','cafChartLabel4'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=daysText;});
     const l7=dates.map(d=>d.substring(5));
     // 일별 평균 카페인
@@ -4949,7 +4951,8 @@ function buildPDFSendHTML(){
     return `<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><style>${styles}
         body{margin:0;background:white;font-family:'Pretendard',Arial,sans-serif;}
         #pdfOnlyContent{display:block!important;position:static!important;left:auto!important;top:auto!important;width:800px!important;background:white!important;}
-    </style></head><body>${clonedContent.outerHTML}</body></html>`;
+    </style></head><body>${clonedContent.outerHTML}<script type="module" src="/public/js/caffeine-companies.js"></script>
+</body></html>`;
 }
 
 function sendPDFToStudent(pdfOptions){

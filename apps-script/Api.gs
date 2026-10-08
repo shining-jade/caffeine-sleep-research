@@ -145,6 +145,10 @@ function dispatchStudentAction_(action, params, subject) {
   }
   if (action === 'saveCaffeineData' || action === 'updateCaffeineData') {
     safeParams[0].time = normalizeCaffeineTime_(safeParams[0].time);
+    if (action === 'saveCaffeineData') {
+      safeParams[0].company = String(safeParams[0].company || '').trim().slice(0, 120);
+      safeParams[0].foodName = String(safeParams[0].foodName || '').trim().slice(0, 240);
+    }
   }
   if (action === 'saveCaffeineData' || action === 'saveSleepData') safeParams[0].id = Utilities.getUuid();
   var execute = function(syncConfirmation) {
@@ -156,7 +160,7 @@ function dispatchStudentAction_(action, params, subject) {
     var result = action === 'saveSleepData' && syncConfirmation ? saveSleepData(safeParams[0], syncConfirmation) : invokeAction_(action, safeParams);
     if (action === 'saveCaffeineData' && result && result.success === true) {
       var saved = safeParams[0];
-      result.record = { id: saved.id, name: saved.drink, amount: Number(saved.mg), time: saved.time, reason: saved.reason || '', symptom: saved.symptom || '' };
+      result.record = { id: saved.id, name: saved.drink, company: saved.company || '', foodName: saved.foodName || '', amount: Number(saved.mg), time: saved.time, reason: saved.reason || '', symptom: saved.symptom || '' };
     }
     return result;
   };
