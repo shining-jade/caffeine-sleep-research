@@ -4,8 +4,21 @@ function getSpreadsheet_() {
   return SpreadsheetApp.openById(spreadsheetId);
 }
 
+// Keep numeric student IDs compatible with the students-sheet VLOOKUP keys.
+function studentIdCellValue_(value) {
+  var text = String(value == null ? '' : value).trim();
+  var number = Number(text);
+  return /^(0|[1-9][0-9]*)$/.test(text) && Number.isSafeInteger(number) ? number : text;
+}
+
 // Native table append grows the table atomically and ignores ARRAYFORMULA spill rows.
 function appendRecordRow_(sheet, values, replaceRow, confirmation) {
+  var idColumns = { caffeine: 4, sleep: 4, info: 5 };
+  var idColumn = idColumns[sheet.getName()];
+  if (idColumn !== undefined && values.length > idColumn) {
+    values = values.slice();
+    values[idColumn] = studentIdCellValue_(values[idColumn]);
+  }
   var tableIds = {
     students: '2014874531', caffeine: '2029527919', sleep: '363107583',
     info: '1885862728', inquiries: '1093000658', teacher_awards: '1664194152',

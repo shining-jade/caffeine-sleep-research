@@ -76,7 +76,7 @@ function syncSaveProfile_(payload, subject, entry, receipt) {
   var state = syncProfileState_(subject);
   if (payload._sync.baseVersion !== state.version) return { success: false, error: 'SYNC_CONFLICT' };
   var p = parseStudentId(normalizeId(subject.studentId));
-  var values = [getKSTTimestamp(), p.grade, p.class, p.number, subject.name, normalizeId(subject.studentId),
+  var values = [getKSTTimestamp(), p.grade, p.class, p.number, subject.name, studentIdCellValue_(subject.studentId),
     payload.weight, payload.targetCaf || '', payload.targetBedtime || '', payload.targetWakeTime || '', payload.ageGroup || 'teen'];
   receipt.version = syncHash_(values.slice(6, 11));
   var cells = syncCells_(values);

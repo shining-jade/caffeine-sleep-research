@@ -54,3 +54,11 @@ test('sleep replacement commits its receipt in the same batch',async()=>{
  context.appendRecordRow_({getName:()=> 'sleep',getSheetId:()=>630091192,getParent:()=>({getId:()=> 'test'})},['2026-10-08 12:00:00'],2,confirmation);
  assert.equal(batch.requests.length,2);assert.equal(batch.requests[1],confirmation);
 });
+
+test('numeric student identifiers remain numeric for research-code lookups while staff IDs stay text',async()=>{
+ let batch;const {context}=await loadAppsScript({files:['Spreadsheet.gs'],globals:{Sheets:{Spreadsheets:{batchUpdate(body){batch=body;}}}}});
+ const sheet={getName:()=> 'sleep',getSheetId:()=>630091192,getParent:()=>({getId:()=> 'test'})};
+ for(const id of ['0','2101']) {context.appendRecordRow_(sheet,['stamp','','','',id,'name']);assert.equal(batch.requests[0].appendCells.rows[0].values[4].userEnteredValue.numberValue,Number(id));}
+ context.appendRecordRow_(sheet,['stamp','','','','STAFF01','name']);assert.equal(batch.requests[0].appendCells.rows[0].values[4].userEnteredValue.stringValue,'STAFF01');
+ const info={getName:()=> 'info',getSheetId:()=>1695164716,getParent:()=>({getId:()=> 'test'})};context.appendRecordRow_(info,['stamp','','','','name','0']);assert.equal(batch.requests[0].appendCells.rows[0].values[5].userEnteredValue.numberValue,0);
+});
