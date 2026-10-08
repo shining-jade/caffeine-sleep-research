@@ -59,6 +59,12 @@
       #mainApp { box-shadow: 0 6px 28px rgba(79, 70, 229, 0.08); }
     }
 
+    /* A wider desktop canvas makes classroom demonstrations easier to follow. */
+    @media (min-width: 1024px) {
+      #mainApp, #mainApp > nav { max-width: 1200px; }
+      #deviceSyncStatus { max-width: 1176px; }
+    }
+
     /* 모든 직계 자식도 너비 초과 방지 */
     body > * {
       max-width: 100%;
