@@ -151,6 +151,7 @@
         .caf-level-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
         .settings-save-row{grid-column:1/-1;display:flex;align-items:center;gap:16px;}
         .settings-toast{display:none;padding:10px 18px;background:#10b981;color:white;border-radius:8px;font-size:13px;font-weight:600;}
+        .reminder-grid[hidden]{display:none;}
         .reminder-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start;}
         .reminder-wide{grid-column:1/-1;}
         .reminder-toggle{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid #f3f4f6;}
@@ -1190,10 +1191,10 @@
                 <div id="teacherReminderStatus" class="reminder-status">설정을 불러오는 중입니다…</div>
                 <div id="teacherReminderError" class="reminder-error" role="alert"></div>
             </div>
-            <button id="teacherReminderSaveButton" class="btn btn-primary" onclick="teacherReminders.saveConfig()">💾 알림 설정 저장</button>
+            <button id="teacherReminderSaveButton" disabled class="btn btn-primary" onclick="teacherReminders.saveConfig()">💾 알림 설정 저장</button>
         </div>
 
-        <div class="reminder-grid">
+        <div class="reminder-grid" hidden>
             <section class="settings-card">
                 <div class="settings-card-title">운영 설정</div>
                 <label class="reminder-toggle">

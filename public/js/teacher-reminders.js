@@ -118,6 +118,7 @@ function safeDashboardState(payload, extra = {}) {
   const byClass = {};
   for (const classId of CLASS_IDS) byClass[classId] = nonnegative(payload?.subscriberCounts?.byClass?.[classId]);
   return {
+    hasLoadedConfig: Boolean(payload?.config),
     config: normalizeLoadedConfig(payload?.config || defaultLoadedConfig()),
     subscriberCounts: {
       students: nonnegative(payload?.subscriberCounts?.students),
@@ -180,10 +181,16 @@ export function createTeacherReminders({
 
   async function initialize() {
     if (initializing) return initializing;
+    emit({ status: 'loading' });
     initializing = (async () => {
-      payload = await api.getConfig();
-      emit({ status: 'ready' });
-      return refreshTestStudent();
+      try {
+        payload = await api.getConfig();
+        emit({ status: 'ready' });
+        return refreshTestStudent();
+      } catch (error) {
+        emit({ status: 'load-error' });
+        throw error;
+      }
     })();
     try { return await initializing; } finally { initializing = null; }
   }
@@ -419,6 +426,9 @@ function readBrowserForm() {
 
 function renderBrowserState(state) {
   const config = state.config;
+  const grid = document.querySelector('#tab-reminders .reminder-grid');
+  if (grid) { grid.hidden = !state.hasLoadedConfig; grid.setAttribute('aria-busy', String(state.status === 'loading')); }
+  if (state.hasLoadedConfig && state.status !== 'loading' && state.status !== 'load-error') {
   element('teacherReminderEnabled').checked = config.enabled;
   element('teacherReminderSleepEnabled').checked = config.sleepEnabled;
   element('teacherReminderCaffeineEnabled').checked = config.caffeineEnabled;
@@ -436,7 +446,10 @@ function renderBrowserState(state) {
   setText('teacherReminderLastMetrics', `대상 ${state.lastRun.targeted} · 성공 ${state.lastRun.sent} · 만료 ${state.lastRun.expired} · 실패 ${state.lastRun.failed}`);
   setText('teacherReminderNextSleep', formatDateTime(state.nextRuns.sleep));
   setText('teacherReminderNextCaffeine', formatDateTime(state.nextRuns.caffeine));
+  }
   const messages = {
+    loading: state.hasLoadedConfig ? '저장된 설정을 표시하고 있습니다. 최신 정보를 확인하는 중입니다…' : '알림 설정을 불러오는 중입니다…',
+    'load-error': state.hasLoadedConfig ? '최신 정보를 불러오지 못했습니다. 기존 설정을 표시합니다.' : '알림 설정을 불러오지 못했습니다. 알림 설정 탭을 다시 열어 주세요.',
     ready: config.enabled ? '알림 운영 중' : '현재 학생 알림은 꺼져 있습니다.',
     saving: '설정을 저장하는 중입니다…',
     saved: '설정을 저장했습니다.',
@@ -447,7 +460,7 @@ function renderBrowserState(state) {
   };
   setText('teacherReminderStatus', messages[state.status] || '');
   const saveButton = element('teacherReminderSaveButton');
-  if (saveButton) saveButton.disabled = state.status === 'saving';
+  if (saveButton) saveButton.disabled = !state.hasLoadedConfig || ['loading', 'load-error', 'saving'].includes(state.status);
 
   const testStudent = state.testStudent;
   setText('teacherTestStudentSummary', `${testStudent.name} · 수면 가능 기기 ${testStudent.sleepDevices}대 · 카페인 가능 기기 ${testStudent.caffeineDevices}대`);

@@ -382,3 +382,36 @@ test('test student refresh and send errors use fixed safe messages', async () =>
   assert.equal(failed.testStudent.sendingType, null);
   assert.doesNotMatch(JSON.stringify(failed), /endpoint|provider/);
 });
+
+test('config loading retains confirmed data and identifies unknown initial values', async () => {
+  let resolveConfig;
+  const states = [];
+  const api = { getConfig: () => new Promise(resolve => { resolveConfig = resolve; }) };
+  const controller = createTeacherReminders({ api, onState: state => states.push(state) });
+  const first = controller.initialize();
+  assert.equal(states.at(-1).status, 'loading');
+  assert.equal(states.at(-1).hasLoadedConfig, false);
+  resolveConfig({ config: config(), subscriberCounts: { students: 5, devices: 6 } });
+  await first;
+  const next = controller.initialize();
+  assert.equal(states.at(-1).status, 'loading');
+  assert.equal(states.at(-1).hasLoadedConfig, true);
+  assert.equal(states.at(-1).subscriberCounts.students, 5);
+  assert.equal(states.at(-1).config.classPeriods[0].startDate, '2026-09-01');
+  resolveConfig({ config: config(), subscriberCounts: { students: 5, devices: 6 } });
+  await next;
+});
+
+test('config refresh failure keeps the confirmed dates and reports failure', async () => {
+  let fail = false;
+  const controller = createTeacherReminders({ api: { async getConfig() {
+    if (fail) throw new Error('offline');
+    return { config: config(), subscriberCounts: { students: 5 } };
+  } } });
+  await controller.initialize();
+  fail = true;
+  await assert.rejects(controller.initialize(), /offline/);
+  assert.equal(controller.getState().status, 'load-error');
+  assert.equal(controller.getState().subscriberCounts.students, 5);
+  assert.equal(controller.getState().config.classPeriods[0].startDate, '2026-09-01');
+});
