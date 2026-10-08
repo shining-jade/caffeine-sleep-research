@@ -35,6 +35,30 @@
       /* GAS iframe 너비 강제 100% */
       min-width: 0;
     }
+    /* Keep the student app readable on desktop with the same phone-sized flow. */
+    #mainApp {
+      width: 100%;
+      max-width: 440px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      background: #f3f4f6;
+    }
+    #mainApp > nav {
+      width: 100%;
+      max-width: 440px;
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
+    }
+    #deviceSyncStatus {
+      width: calc(100% - 24px);
+      max-width: 416px;
+    }
+    @media (min-width: 640px) {
+      body { background-color: #f4f6ff; }
+      #mainApp { box-shadow: 0 6px 28px rgba(79, 70, 229, 0.08); }
+    }
+
     /* 모든 직계 자식도 너비 초과 방지 */
     body > * {
       max-width: 100%;
@@ -239,7 +263,7 @@
         <button onclick="manualRefresh()"
           class="text-indigo-600 hover:text-indigo-700 active:scale-95 transition-all"
           id="refreshBtn"
-          title="데이터 새로고침">
+          title="구글시트의 최신 기록 가져오기" aria-label="구글시트의 최신 기록 가져오기">
           <i class="fa-solid fa-rotate-right text-xl"></i>
         </button>
         <div id="statusBadge" class="text-indigo-600 font-bold bg-indigo-50 px-3 py-1 rounded-lg text-xs">

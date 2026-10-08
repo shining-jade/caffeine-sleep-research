@@ -5,7 +5,7 @@
   const panel = document.createElement('section');
   panel.id = 'deviceSyncStatus';
   panel.setAttribute('aria-live', 'polite');
-  panel.style.cssText = 'display:none;position:sticky;top:0;z-index:40;padding:10px 14px;margin:8px 12px;border-radius:12px;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;font-size:12px;';
+  panel.style.cssText = 'display:none;position:sticky;top:0;z-index:40;padding:10px 14px;margin:8px auto;border-radius:12px;background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;font-size:12px;';
   const status = document.createElement('span');
   const button = document.createElement('button');
   button.textContent = '지금 전송';
