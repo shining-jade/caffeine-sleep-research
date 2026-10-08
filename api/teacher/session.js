@@ -14,10 +14,10 @@ export function createSessionHandler({
       return;
     }
     try {
-      verifySession(readSessionCookie(req), 'teacher', now());
+      verifySession(readSessionCookie(req, "teacher"), 'teacher', now());
       sendJson(res, 200, { authenticated: true, role: 'teacher' });
     } catch {
-      clearSessionCookie(res);
+      clearSessionCookie(res, "teacher", req);
       sendJson(res, 401, { authenticated: false });
     }
   };

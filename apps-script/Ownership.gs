@@ -56,7 +56,7 @@ function requireOwnedRow_(sheetName, rowIndex, subject) {
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
     .map(function(value) { return String(value || '').trim(); });
   var ownerColumn = findHeaderColumn_(headers, ['전체학번', '학번', 'studentId']);
-  var nameColumn = findHeaderColumn_(headers, ['성명', '이름', 'name']);
+  var nameColumn = findHeaderColumn_(headers, ['성명', '이름', 'name', 'studentName']);
   if (ownerColumn < 0 || nameColumn < 0) throw new Error('REQUEST_REJECTED');
   var values = sheet.getRange(normalizedRow, 1, 1, sheet.getLastColumn()).getValues()[0];
   if (!ownerMatchesSubject_(values[ownerColumn], values[nameColumn], subject)) {

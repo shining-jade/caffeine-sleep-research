@@ -15,7 +15,7 @@ export function createActionHandler({
 
     let session;
     try {
-      session = verifySession(readSessionCookie(req), 'student', now());
+      session = verifySession(readSessionCookie(req, "student"), 'student', now());
     } catch {
       sendJson(res, 401, { success: false, error: 'UNAUTHENTICATED' });
       return;
@@ -30,6 +30,11 @@ export function createActionHandler({
     }
 
     let normalized;
+    if (body?.expectedSubject && (body.expectedSubject.studentId !== session.studentId
+        || body.expectedSubject.name !== session.name)) {
+      sendJson(res, 409, { success: false, error: 'SESSION_CHANGED' });
+      return;
+    }
     try {
       normalized = normalizeStudentRequest(body?.action, body?.params, session);
     } catch {
@@ -39,7 +44,11 @@ export function createActionHandler({
 
     try {
       const data = await callGas({ role: 'student', ...normalized });
-      sendJson(res, 200, { success: true, data });
+      if (normalized.params[0]?._sync && data?.success !== true) {
+        sendJson(res, 409, { success: false, error: data?.error || 'SYNC_UNCONFIRMED' });
+        return;
+      }
+      sendJson(res, 200, { success: true, data, subject: normalized.subject });
     } catch (error) {
       const status = Number.isInteger(error?.status) ? error.status : 500;
       const code = typeof error?.code === 'string' ? error.code : 'INTERNAL_ERROR';

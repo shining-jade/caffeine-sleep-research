@@ -19,6 +19,14 @@
 - `/api/health`는 Apps Script 연결 여부만 확인하고 시트 데이터는 반환하지 않습니다.
 - Apps Script URL, 현재 시트 ID, 공유 비밀값, 교사 비밀번호, 학생 기록은 공개 번들에 포함되지 않습니다.
 
+## 기록 알림
+
+- 학생이 직접 동의한 기기에서만 아침 수면 기록과 저녁 카페인 기록 알림을 받을 수 있습니다.
+- 교사는 `/teacher`의 `알림 설정`에서 1~4반 운영 기간, 정시 알림 시간, 주말 포함 여부를 저장하고 집계 현황을 확인합니다.
+- 교사 미리보기는 현재 교사 브라우저에만 전송되며 학생 선택이나 일괄 시험 전송 기능은 없습니다.
+- 새 환경의 기본값은 전체 알림 꺼짐입니다. 배포와 기기 시험이 끝나기 전에는 켜지 않습니다.
+- 푸시 endpoint와 키는 비공개 시트에 저장되고, 공개 화면과 저장소에는 VAPID 개인키·Cron 비밀값·학생 건강 데이터가 포함되지 않습니다.
+
 ## Local commands
 
 ```text
@@ -29,4 +37,4 @@ npm run build:apps-script
 npm run verify
 ```
 
-환경 변수 이름은 [.env.example](.env.example), 배포 순서와 롤백 방법은 [docs/deployment-checklist.md](docs/deployment-checklist.md)를 참고하세요. 현재 챌린지와 뱃지 기능은 원본 그대로 보존하며, 세부 규칙 변경은 연결 안정화 후 별도 작업으로 진행합니다.
+환경 변수 이름은 [.env.example](.env.example), 기본 배포와 롤백은 [docs/deployment-checklist.md](docs/deployment-checklist.md), 알림 배포·기기 시험은 [docs/reminder-deployment-checklist.md](docs/reminder-deployment-checklist.md)를 참고하세요. 현재 챌린지와 뱃지 기능은 원본 그대로 보존하며, 세부 규칙 변경은 연결 안정화 후 별도 작업으로 진행합니다.

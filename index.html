@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
-  <title>카페인·수면 건강일지</title>
+  <title>카페인·수면 기록</title>
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="카페인·수면">
+  <link rel="manifest" href="/public/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/public/icons/apple-touch-icon.png">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -29,6 +35,36 @@
       /* GAS iframe 너비 강제 100% */
       min-width: 0;
     }
+    /* Keep the student app readable on desktop with the same phone-sized flow. */
+    #mainApp {
+      width: 100%;
+      max-width: 440px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      background: #f3f4f6;
+    }
+    #mainApp > nav {
+      width: 100%;
+      max-width: 440px;
+      left: 50%;
+      right: auto;
+      transform: translateX(-50%);
+    }
+    #deviceSyncStatus {
+      width: calc(100% - 24px);
+      max-width: 416px;
+    }
+    @media (min-width: 640px) {
+      body { background-color: #f4f6ff; }
+      #mainApp { box-shadow: 0 6px 28px rgba(79, 70, 229, 0.08); }
+    }
+
+    /* A wider desktop canvas makes classroom demonstrations easier to follow. */
+    @media (min-width: 1024px) {
+      #mainApp, #mainApp > nav { max-width: 1200px; }
+      #deviceSyncStatus { max-width: 1176px; }
+    }
+
     /* 모든 직계 자식도 너비 초과 방지 */
     body > * {
       max-width: 100%;
@@ -60,8 +96,6 @@
       position: relative;
       transition: all 0.2s;
     }
-    #refreshBtn:hover { transform: scale(1.1); }
-    #refreshBtn:active { transform: scale(0.95); }
 
     /* ══ 튜토리얼 오버레이 ══ */
     #tutorialOverlay { position:fixed; inset:0; z-index:9000; pointer-events:none; display:none; }
@@ -170,16 +204,30 @@
       margin-bottom:12px; box-shadow:0 1px 5px rgba(0,0,0,.07);
     }
   </style>
+  <script src="/public/js/student-feedback.js"></script>
+  <script src="/public/js/student-sync.js"></script>
   <script src="/public/js/api-bridge.js"></script>
+  <script src="/public/js/badge-journey.js"></script>
+  <script type="module" src="/public/js/install-guide.js"></script>
+  <script type="module" src="/public/js/push-reminders.js"></script>
+  <script type="module" src="/public/js/student-startup.js"></script>
 </head>
 <body class="pb-24">
 
+  <!-- 세션 확인 중에는 로그인 폼을 노출하지 않는다. -->
+  <div id="bootPage" class="min-h-screen flex items-center justify-center p-6 bg-white">
+    <div class="text-center text-gray-500" role="status" aria-live="polite">
+      <div class="text-6xl animate-pulse" aria-hidden="true">☕</div>
+      <p class="mt-5 text-sm font-bold">카페인·수면 기록을 여는 중...</p>
+    </div>
+  </div>
+
   <!-- 로그인 화면 -->
-  <div id="loginPage" class="min-h-screen flex items-center justify-center p-6 bg-white">
+  <div id="loginPage" style="display:none" class="hidden min-h-screen flex items-center justify-center p-6 bg-white">
     <div class="w-full max-w-sm text-center">
       <div class="mb-10">
         <span class="text-6xl">☕</span>
-        <h1 class="text-3xl font-bold mt-4 text-gray-800">카페인·수면 건강일지</h1>
+        <h1 class="text-3xl font-bold mt-4 text-gray-800">카페인·수면 기록</h1>
         <p class="text-gray-400 text-sm mt-2">카페인과 수면 습관을 함께 기록해요</p>
       </div>
       <div class="space-y-4">
@@ -196,6 +244,9 @@
         <p id="loginMsg" class="text-center text-xs text-red-500 font-bold h-4"></p>
       </div>
 
+      <button id="installGuideBtn" type="button" onclick="window.installGuide.open()"
+        class="mt-4 w-full border-2 border-indigo-100 bg-indigo-50 text-indigo-700 p-3 rounded-2xl font-bold text-sm active:scale-95 transition-transform">📲 앱 설치·알림 설정 방법</button>
+
       <!-- 튜토리얼 버튼 -->
       <button id="tutLoginBtn" onclick="startTutorial()"
         style="margin-top:28px;display:inline-flex;align-items:center;gap:8px;
@@ -209,24 +260,13 @@
   </div>
 
   <!-- 메인 앱 -->
-  <div id="mainApp" class="hidden">
+  <div id="mainApp" style="display:none" class="hidden">
     <header class="p-6 bg-white shadow-sm flex justify-between items-center sticky top-0 z-10 w-full min-w-0 overflow-hidden">
       <h2 id="userTitle" class="font-bold text-xl"></h2>
       <div class="flex items-center gap-3">
-        <button onclick="manualRefresh()"
-          class="text-indigo-600 hover:text-indigo-700 active:scale-95 transition-all"
-          id="refreshBtn"
-          title="데이터 새로고침">
-          <i class="fa-solid fa-rotate-right text-xl"></i>
-        </button>
         <div id="statusBadge" class="text-indigo-600 font-bold bg-indigo-50 px-3 py-1 rounded-lg text-xs">
           정상 상태
         </div>
-        <button onclick="logout()"
-          class="text-gray-400 hover:text-red-500 active:scale-95 transition-all"
-          title="로그아웃">
-          <i class="fa-solid fa-right-from-bracket text-lg"></i>
-        </button>
       </div>
     </header>
 
@@ -372,7 +412,7 @@
                 <div class="flex items-center gap-2">
                   <i class="fa-solid fa-database text-emerald-600"></i>
                   <span class="text-sm font-bold text-gray-700">카페인 DB 검색</span>
-                  <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold" id="dbTotalCount">2,319건</span>
+                  <span class="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full font-bold" id="dbTotalCount">검색 준비</span>
                 </div>
                 <button onclick="toggleDbSearch()" class="text-emerald-600 text-xs font-bold flex items-center gap-1">
                   <i id="dbSearchToggleIcon" class="fa-solid fa-chevron-up"></i>
@@ -435,6 +475,9 @@
             </div>
 
             <p id="selectedDrink" class="text-gray-500 text-sm text-center py-1">음료를 선택하거나 직접 입력해주세요</p>
+            <div class="flex justify-end">
+              <button type="button" onclick="resetCaffeineForm()" class="px-3 py-2 text-sm font-bold text-gray-600 bg-gray-100 rounded-xl">입력 초기화</button>
+            </div>
 
             <input type="text" id="drinkName" placeholder="음료 이름 (예: 이디야 아메리카노)"
               class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400">
@@ -546,7 +589,7 @@
             <i class="fa-solid fa-list text-indigo-600"></i> 상세 섭취 기록
           </h4>
           <div id="caffeineLogsContainer" class="space-y-3">
-            <p class="text-center py-8 text-gray-400 text-sm">기록이 없습니다.</p>
+            <p class="text-center py-8 text-gray-400 text-sm">저장된 기록을 불러오는 중입니다.</p>
           </div>
         </div>
       </div>
@@ -699,7 +742,7 @@
             <i class="fa-solid fa-moon text-indigo-600"></i> 수면 누적 기록
           </h4>
           <div id="sleepLogsContainer" class="space-y-3">
-            <p class="text-center py-8 text-gray-400 text-sm">기록이 없습니다.</p>
+            <p class="text-center py-8 text-gray-400 text-sm">저장된 기록을 불러오는 중입니다.</p>
           </div>
         </div>
       </div>
@@ -707,12 +750,12 @@
       <!-- [4탭: 달력] -->
       <div id="tab-calendar" class="tab-content space-y-4">
 
-        <!-- 뱃지 섹션 -->
+        <!-- 건강기록 여정 -->
         <div class="bg-white p-5 rounded-[2rem] shadow-sm">
           <h4 class="font-bold text-base mb-1 flex items-center gap-2">
-            <i class="fa-solid fa-award text-indigo-600"></i> 나의 건강 뱃지
+            <i class="fa-solid fa-seedling text-emerald-600"></i> 나의 건강기록 여정
           </h4>
-          <p class="text-xs text-indigo-400 font-semibold mb-3" id="badge-challenge-name"></p>
+          <p class="text-xs text-gray-500 mb-3" id="journey-stage-label">오늘도 내 생활을 천천히 살펴보세요.</p>
           <!-- 오늘의 실천 (고정) -->
           <div class="grid grid-cols-2 gap-3 mb-3">
             <div id="badge-daily-caf" class="flex items-center gap-3 p-3 rounded-2xl bg-gray-100 transition-all duration-500">
@@ -728,10 +771,14 @@
               </div>
             </div>
           </div>
-          <!-- 챌린지 뱃지 (동적 렌더 — 카페인 좌열 · 수면 우열) -->
-          <div id="challengeBadgeGrid" class="grid grid-cols-2 gap-3 items-start"></div>
-          <!-- 경고 / 응원 메시지 -->
-          <div id="badge-challenge-msg" class="hidden mt-3 p-3 rounded-xl flex items-start gap-2"></div>
+          <div class="rounded-2xl bg-emerald-50 border border-emerald-100 p-4 mb-3">
+            <p class="text-sm font-bold text-emerald-800" id="journey-total-days">지금까지 기록한 날을 확인하고 있어요.</p>
+            <p class="text-xs text-emerald-600 mt-1" id="journey-week-days"></p>
+            <div id="journey-week-dots" class="grid grid-cols-7 gap-1.5 mt-3"></div>
+          </div>
+          <p class="text-[11px] font-bold text-gray-500 mb-2">나의 기록 뱃지</p>
+          <div id="challengeBadgeGrid" class="grid grid-cols-2 gap-2"></div>
+          <div id="badge-challenge-msg" class="hidden mt-3 p-3 rounded-xl"></div>
           <div id="badge-streak-info" class="mt-3 text-xs text-center text-gray-400"></div>
           <!-- 선생님이 직접 주신 뱃지 -->
           <div id="teacherDirectBadgeSection" class="hidden mt-4 pt-4" style="border-top:1px solid #f3f4f6;">
@@ -804,11 +851,42 @@
                 <p class="text-sm font-bold text-gray-800" id="displayStudentInfo">-</p>
                 <p class="text-xs text-gray-500 mt-1">로그인된 계정</p>
               </div>
-              <button onclick="logout()"
-                class="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-bold hover:bg-red-600 transition-colors active:scale-95">
-                로그아웃
+              <button id="studentLogoutBtn" onclick="logout()"
+                class="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-xs font-bold hover:bg-gray-200 transition-colors active:scale-95">
+                학생 변경·로그아웃
               </button>
             </div>
+          </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-[2rem] shadow-sm" id="pushReminderSettings">
+          <h4 class="font-bold text-lg mb-2 flex items-center gap-2">
+            <span aria-hidden="true">🔔</span> 카페인·수면 기록 알림 받기
+          </h4>
+          <p class="text-xs text-gray-500 leading-relaxed mb-3">
+            아침에는 어젯밤 수면 기록을, 저녁에는 오늘의 카페인 기록을 확인하도록 알려드려요. 이미 기록했다면 알림을 보내지 않아요.
+          </p>
+          <div class="p-3 bg-indigo-50 border border-indigo-100 rounded-2xl mb-3">
+            <p id="pushPermissionStatus" class="text-xs font-bold text-indigo-700" aria-live="polite">알림 설정을 확인하는 중이에요.</p>
+          </div>
+          <button id="pushEnableBtn" type="button"
+            class="w-full py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold active:scale-95 transition-transform">
+            알림 켜기
+          </button>
+          <div id="pushPreferenceControls" class="space-y-3 mt-3" hidden>
+            <label class="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-xl">
+              <span><b class="block text-sm text-gray-800">☀️ 아침 수면 기록</b><span class="text-xs text-gray-500"><span id="pushSleepTime">08:00</span> 알림</span></span>
+              <input id="pushSleepEnabled" type="checkbox" class="w-5 h-5 accent-indigo-600" aria-label="아침 수면 기록 알림">
+            </label>
+            <label class="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-xl">
+              <span><b class="block text-sm text-gray-800">🌙 저녁 카페인 기록</b><span class="text-xs text-gray-500"><span id="pushCaffeineTime">20:00</span> 알림</span></span>
+              <input id="pushCaffeineEnabled" type="checkbox" class="w-5 h-5 accent-indigo-600" aria-label="저녁 카페인 기록 알림">
+            </label>
+            <button id="pushDisableBtn" type="button" class="w-full py-2.5 border border-gray-200 text-gray-600 rounded-xl text-xs font-bold">이 기기 알림 끄기</button>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-3">
+            <p class="text-[11px] text-gray-400">알림은 언제든 설정에서 끌 수 있어요.</p>
+            <button type="button" onclick="window.installGuide.open()" class="text-[11px] text-indigo-600 font-bold underline">설치 방법 보기</button>
           </div>
         </div>
 
@@ -823,7 +901,7 @@
                 ⚖️ 내 몸무게 (kg)
               </label>
               <div class="flex gap-2">
-                <input type="number" id="userWeight" value="60" oninput="updateLimitDisplay()"
+                <input type="number" id="userWeight" placeholder="불러오는 중..." disabled oninput="updateLimitDisplay()"
                   class="flex-1 min-w-0 p-4 border-2 border-gray-200 rounded-xl text-lg font-bold outline-none focus:ring-2 focus:ring-indigo-400">
                 <button onclick="saveAllGoals()"
                   class="px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold active:scale-95 transition-transform whitespace-nowrap flex-shrink-0">
@@ -1145,9 +1223,13 @@
     let quickMenus = [];
     // ── 식약처 카페인 DB (2,319건 인라인) ──
     let CAFFEINE_DB = []; // caffeine_db 시트에서 GAS로 로드
+    let caffeineDbLoading = false;
     let _dbSearchSelected = null; // 현재 DB 검색에서 선택된 항목
 
-    let caffeineLogs = [];
+    let caffeineHistoryLoaded = false;
+    let caffeineLogs = []; caffeineHistoryLoaded = false;
+    let confirmedPendingCaffeine = [];
+    let pendingCaffeineSave = null;
     let sleepLogs = [];
     let lastDashboardData = null;
     let badgeConfig = null; // 교사가 설정한 뱃지 구성 (getBadgeConfig에서 로드)
@@ -1227,6 +1309,9 @@
       try { return localStorage.getItem('caffeineTab') || 'caffeine'; } catch(e) { return 'caffeine'; }
     }
     function clearSession() {
+      confirmedPendingCaffeine = [];
+      pendingCaffeineSave = null;
+      if (window.studentRecordCache) window.studentRecordCache.clear();
       try {
         localStorage.removeItem('caffeineUser');
         localStorage.removeItem('caffeineTab');
@@ -1239,19 +1324,80 @@
     }
 
     // 로그인 후 앱 진입 공통 함수 (최초 로그인 & 세션 복구 모두 사용)
+    let privateUiDefaults = [];
+    let privateFormDefaults = [];
+
+    function resetStudentData() {
+      stopAutoRefresh();
+      caffeineLogs = []; caffeineHistoryLoaded = false;
+      confirmedPendingCaffeine = [];
+      pendingCaffeineSave = null;
+      sleepLogs = [];
+      teacherAwards = [];
+      lastDashboardData = null;
+      window._weightLoaded = false;
+      window.currentAIAnalysis = null;
+      window.currentAnalysisPeriod = null;
+      caffeineDbLoading = false;
+      userWeight = 60;
+      userLimit = 150;
+      SLEEP_CFG = { ageGroup: 'teen', sleepSevere: 7, sleepWarn: 8, sleepGood: 10, sleepMax: 11 };
+      sleepChoices = { smartphone: '', activity: '', latency: '', awakenings: '', daytime: '' };
+      pendingDelete = { type: null, id: null };
+      editingId = null;
+      editingType = null;
+      if (caffeineChart) { caffeineChart.destroy(); caffeineChart = null; }
+      if (sleepChart) { sleepChart.destroy(); sleepChart = null; }
+      privateUiDefaults.forEach(saved => {
+        const element = document.getElementById(saved.id);
+        if (!element) return;
+        element.innerHTML = saved.html;
+        element.className = saved.className;
+        element.style.cssText = saved.style;
+      });
+      privateFormDefaults.forEach(saved => {
+        saved.element.value = saved.value;
+        saved.element.checked = saved.checked;
+        saved.element.disabled = saved.disabled;
+        if (saved.className !== undefined) saved.element.className = saved.className;
+        if (saved.style !== undefined) saved.element.style.cssText = saved.style;
+      });
+      ['newMsgModal', 'studentReplyModal', 'updateNotification', 'initialSetupModal', 'newReplyModal',
+        'infoAlertModal', 'overwriteConfirmModal', 'weightConfirmModal'].forEach(id => document.getElementById(id)?.remove());
+      document.getElementById('teacherBadgeModal')?.style.setProperty('display', 'none', 'important');
+      ['editModalOverlay', 'caffeineWarningModal', 'deleteConfirmModal'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.style.display = 'none';
+      });
+      document.getElementById('calendarDetailPanel')?.classList.add('hidden');
+    }
+
     // isRestore: true면 세션 복구(카메라 복귀), false면 최초 로그인
     function enterApp(res, isRestore) {
+      if (!user || user.studentId !== res.studentId || user.name !== res.name) resetStudentData();
       user = res;
       saveSession(res);
+      const savedRecords = window.studentRecordCache && window.studentRecordCache.read(res);
+      if (savedRecords) {
+        if (Array.isArray(savedRecords.caffeineLogs)) caffeineLogs = savedRecords.caffeineLogs;
+        if (Array.isArray(savedRecords.sleepLogs)) sleepLogs = savedRecords.sleepLogs;
+        renderCaffeineLogs();
+        renderSleepLogs();
+        showRecordConnectionError('caffeine', true);
+        showRecordConnectionError('sleep', true);
+      }
 
       const loginPage = document.getElementById('loginPage');
       const mainApp = document.getElementById('mainApp');
+      const bootPage = document.getElementById('bootPage');
       const userTitle = document.getElementById('userTitle');
 
       if(loginPage) { loginPage.style.display = ''; loginPage.classList.add('hidden'); }
       if(mainApp) { mainApp.style.display = ''; mainApp.classList.remove('hidden'); }
+      if(bootPage) bootPage.classList.add('hidden');
       if(userTitle) userTitle.textContent = `${res.name} 님`;
       if (typeof hideTutFab === 'function') hideTutFab();
+      if (window.pushReminders) window.pushReminders.initialize(res);
 
       // ⭐ 세션 복구(카메라 복귀) 시: 화면만 보여주고 끝
       //    탭 전환·데이터 로드는 하지 않음 → onchange(analyzeDrinkImage)가 즉시 발화되도록
@@ -1268,44 +1414,19 @@
         if (tabEl) tabEl.classList.add('active');
         if (navEl) { navEl.classList.add('nav-active', 'text-indigo-600'); navEl.classList.remove('text-gray-300'); }
 
-        // ⭐ 나머지 초기화: 3000ms 딜레이로 onchange/visibilitychange 발화 여유 확보
-        //    분석 중이면 loadCaffeineLogs 등 GAS 호출을 추가 지연 (큐 경합 방지)
-        setTimeout(() => {
-          if (!user) return;
-          updateDisplayStudentInfo();
-          loadQuickMenuFromStorage();
-          initQuickMenuEditor();
-          renderQuickMenus();
-          setCurrentTime();
-          setToday();
-          checkAndLoadWeight();
-          startAutoRefresh();
-          setTimeout(checkReplyBubble, 1500);
-          setTimeout(checkMsgBubble, 2000);
-          setTimeout(checkTeacherAwards, 2500);
-          setTimeout(loadBadgeConfig, 800);
-
-          // ⭐ 분석 중이면 GAS 호출 계열(loadCaffeineLogs, loadSleepLogs, refreshData, loadCaffeineDbFromGAS)을
-          //    분석 완료까지 대기 후 실행 (최대 30초 폴링)
-          function _waitAnalysisDoneAndLoad() {
-            var analyzing = document.getElementById('aiAnalyzing');
-            var isAnalyzing = analyzing && !analyzing.classList.contains('hidden');
-            if (isAnalyzing) {
-              setTimeout(_waitAnalysisDoneAndLoad, 1000); // 1초마다 재확인
-            } else {
-              refreshData();
-              loadCaffeineLogs();
-              loadSleepLogs();
-              // ⭐ 캐시가 없거나 만료된 경우에만 DB 재로드 (분석 완료 후)
-              var cachedTime = localStorage.getItem('caffeine_db_cache_time');
-              var CACHE_TTL  = 24 * 60 * 60 * 1000;
-              if (!cachedTime || (Date.now() - parseInt(cachedTime)) >= CACHE_TTL) {
-                loadCaffeineDbFromGAS();
-              }
-            }
-          }
-          _waitAnalysisDoneAndLoad();
-        }, 3000);
+        updateDisplayStudentInfo();
+        loadQuickMenuFromStorage();
+        initQuickMenuEditor();
+        renderQuickMenus();
+        setCurrentTime();
+        setToday(true);
+        startAutoRefresh();
+        setTimeout(checkReplyBubble, 1500);
+        setTimeout(checkMsgBubble, 2000);
+        setTimeout(checkTeacherAwards, 2500);
+        setTimeout(loadBadgeConfig, 800);
+        // 카메라 복귀 파일이 세팅될 짧은 여유만 둔다. 일반 재실행은 즉시 초기 데이터를 요청한다.
+        setTimeout(() => { if (user === res) waitForCameraAnalysisThenLoad(); }, 100);
         return;
       }
 
@@ -1316,11 +1437,8 @@
       loadQuickMenuFromStorage();
       initQuickMenuEditor();
       renderQuickMenus();
-      setToday();
-      checkAndLoadWeight();
-      refreshData();
-      loadCaffeineLogs();
-      loadSleepLogs();
+      setToday(true);
+      loadInitialStudentData();
       startAutoRefresh();
       setTimeout(checkReplyBubble, 1500);
       setTimeout(checkMsgBubble, 2000);
@@ -1344,6 +1462,8 @@
       }
 
       if(btn) btn.innerText = "확인 중...";
+      if(btn?.disabled) return;
+      if(btn) btn.disabled = true;
       if(msg) msg.innerText = '';
 
       try {
@@ -1354,6 +1474,37 @@
           ? '등록되지 않은 정보입니다.'
           : '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.';
         if(btn) btn.innerText = "로그인";
+      } finally {
+        if(btn) btn.disabled = false;
+      }
+    }
+
+    function applyWeightData(result) {
+      if (!user || !user.studentId) return;
+      const input = document.getElementById('userWeight');
+      if (input) { input.disabled = false; input.placeholder = '몸무게 입력'; }
+      if (result && result.success && result.weight) {
+        userWeight = result.weight;
+        userLimit = result.targetCaf || Math.round(userWeight * 2.5);
+        const weightInput = document.getElementById('userWeight');
+        if (weightInput) weightInput.value = userWeight;
+        if (result.targetCaf) {
+          const tc = document.getElementById('targetCafInput');
+          if (tc) tc.value = result.targetCaf;
+        }
+        if (result.targetBedtime) {
+          const tb = document.getElementById('targetBedtimeInput');
+          if (tb) tb.value = result.targetBedtime;
+        }
+        if (result.targetWakeTime) {
+          const tw = document.getElementById('targetWakeTimeInput');
+          if (tw) tw.value = result.targetWakeTime;
+        }
+        if (result.ageGroup) changeSettingsAgeGroup(result.ageGroup);
+        updateLimitDisplay();
+        updateTargetSleepDisplay();
+      } else {
+        showWeightSetupModal();
       }
     }
 
@@ -1362,45 +1513,111 @@
       // ── ⭐ 이미 체중 데이터 로드됐으면 재호출 방지 (세션 복구 시 중복 실행 차단) ──
       if (window._weightLoaded) return;
       window._weightLoaded = true;
+      const requestedStudentId = user.studentId;
+      const input = document.getElementById('userWeight');
+      if (input) { input.disabled = true; input.placeholder = '불러오는 중...'; }
 
       google.script.run
         .withSuccessHandler(result => {
-          if (!user || !user.studentId) return;
-          if (result.success && result.weight) {
-            // 기존 데이터 로드 → 설정탭 UI에 반영
-            userWeight = result.weight;
-            userLimit = result.targetCaf || Math.round(userWeight * 2.5);
-            const weightInput = document.getElementById('userWeight');
-            if (weightInput) weightInput.value = userWeight;
-            if (result.targetCaf) {
-              const tc = document.getElementById('targetCafInput');
-              if (tc) tc.value = result.targetCaf;
-            }
-            if (result.targetBedtime) {
-              const tb = document.getElementById('targetBedtimeInput');
-              if (tb) tb.value = result.targetBedtime;
-            }
-            if (result.targetWakeTime) {
-              const tw = document.getElementById('targetWakeTimeInput');
-              if (tw) tw.value = result.targetWakeTime;
-            }
-            // 학생 개인 연령대 → SLEEP_CFG에 반영 및 설정탭 버튼 동기화
-            if (result.ageGroup) {
-              changeSettingsAgeGroup(result.ageGroup);
-            }
-            updateLimitDisplay();
-            updateTargetSleepDisplay();
-          } else {
-            // 첫 로그인 → 초기 설정 모달 표시
-            showWeightSetupModal();
-          }
+          if (!user || user.studentId !== requestedStudentId) return;
+          applyWeightData(result);
         })
         .withFailureHandler(err => {
-          if (!user || !user.studentId) return;
+          if (!user || user.studentId !== requestedStudentId) return;
+          window._weightLoaded = false;
+          if (input) { input.disabled = false; input.placeholder = '불러오기 실패'; }
           console.error('체중 정보 로드 실패:', err);
-          showWeightSetupModal();
+          showInfoModal('연결 오류', '저장된 몸무게를 불러오지 못했습니다. 잠시 후 다시 로그인해 주세요.');
         })
         .getWeightData(user.studentId);
+    }
+
+    function loadSleepSettingsLegacy() {
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.success && res.settings) {
+            SLEEP_CFG = res.settings;
+            changeSettingsAgeGroup(res.settings.ageGroup || 'teen');
+          }
+        })
+        .withFailureHandler(function() {})
+        .getSleepSettings();
+    }
+
+    function requestStudentBootstrap() {
+      return new Promise(function(resolve, reject) {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .getStudentBootstrap(user.studentId);
+      });
+    }
+
+    function applyStudentBootstrap(data) {
+      window._weightLoaded = true;
+      applyWeightData(data.weight);
+      caffeineLogs = data.caffeineLogs || []; caffeineHistoryLoaded = Array.isArray(data.caffeineLogs);
+      confirmedPendingCaffeine = [];
+      sleepLogs = data.sleepLogs || [];
+      cacheStudentRecords();
+      renderCaffeineLogs();
+      renderSleepLogs();
+      updateDashboard(data.stats || {});
+      if (data.sleepSettings && data.sleepSettings.success && data.sleepSettings.settings) {
+        SLEEP_CFG = data.sleepSettings.settings;
+        changeSettingsAgeGroup(data.sleepSettings.settings.ageGroup || 'teen');
+      }
+      if (lastDashboardData) renderCharts(lastDashboardData);
+    }
+
+    function loadLegacyStudentData() {
+      window._weightLoaded = false;
+      checkAndLoadWeight();
+      refreshData();
+      loadCaffeineLogs();
+      loadSleepLogs();
+      loadSleepSettingsLegacy();
+    }
+
+    function loadInitialStudentData() {
+      if (!window.studentStartup) {
+        loadLegacyStudentData();
+        return Promise.resolve(false);
+      }
+      return window.studentStartup.loadStudentBootstrap({
+        requestBootstrap: requestStudentBootstrap,
+        applyBootstrap: applyStudentBootstrap,
+        fallback: loadLegacyStudentData
+      });
+    }
+
+    function waitForCameraAnalysisThenLoad() {
+      if (!user) return;
+      const analyzing = document.getElementById('aiAnalyzing');
+      const analyzingVisible = Boolean(analyzing && !analyzing.classList.contains('hidden'));
+      const cameraHasFile = ['drinkCamera', 'drinkImage'].some(function(id) {
+        const input = document.getElementById(id);
+        return Boolean(input && input.files && input.files.length > 0);
+      });
+      const action = window.studentStartup
+        ? window.studentStartup.getStudentBootstrapAction({ analyzingVisible, cameraHasFile })
+        : (analyzingVisible ? 'wait' : 'load');
+      if (action === 'analyze') {
+        const cameraInput = ['drinkCamera', 'drinkImage']
+          .map(function(id) { return document.getElementById(id); })
+          .find(function(input) { return input && input.files && input.files.length > 0; });
+        if (cameraInput) analyzeDrinkImage({ target: cameraInput });
+        setTimeout(waitForCameraAnalysisThenLoad, 500);
+        return;
+      }
+      if (action === 'wait') {
+        setTimeout(waitForCameraAnalysisThenLoad, 500);
+        return;
+      }
+      loadInitialStudentData();
+      const cachedTime = localStorage.getItem('caffeine_db_cache_time');
+      const cacheTtl = 24 * 60 * 60 * 1000;
+      if (!CAFFEINE_DB.length || !cachedTime || (Date.now() - parseInt(cachedTime)) >= cacheTtl) loadCaffeineDbFromGAS();
     }
 
     // 초기 설정 모달 (첫 로그인 시)
@@ -1560,14 +1777,14 @@
       if (uiSleepHours) uiSleepHours.textContent = sleepHours.toFixed(1);
 
       const modal = document.getElementById('initialSetupModal');
-      if (modal) modal.remove();
+      // Keep inputs until durable local commit.
 
       // 선택한 연령대를 SLEEP_CFG에 즉시 반영 (설정탭 버튼도 동기화)
       changeSettingsAgeGroup(_setupAgeGroup);
 
       google.script.run
-        .withSuccessHandler(() => { showSaveCompleteModal('초기 설정이 저장되었습니다! 🎉'); refreshData(); })
-        .withFailureHandler(err => { showSaveCompleteModal('설정이 저장되었습니다.\n(로컬에만 저장됨)'); })
+        .withSuccessHandler(result => { if(modal)modal.remove(); showSaveCompleteModal(result.localSaved ? '휴대폰 저장 완료 · 구글시트 전송 대기' : '구글시트 반영 완료'); refreshData(); })
+        .withFailureHandler(err => { showInfoModal('저장 확인 필요', '휴대폰에 저장하지 못했습니다. 입력을 다시 확인해주세요.'); })
         .saveInitialSetup({
           studentId: user.studentId,
           name: user.name,
@@ -1667,8 +1884,8 @@
     }
 
     // 카페인 음료 선택
-    function setDrink(name, mg) {
-      selectedDrink = { drink: name, mg: mg };
+    function setDrink(name, mg, metadata = {}) {
+      selectedDrink = { drink: name, mg: mg, company: metadata.company || '', foodName: metadata.foodName || '' };
       document.getElementById('selectedDrink').innerHTML = `선택됨: <b>${name} (${mg}mg)</b>`;
       document.getElementById('drinkName').value = name;
       document.getElementById('customAmount').value = mg;
@@ -1709,14 +1926,23 @@
       }
 
       const btn = document.getElementById('saveCaffeineBtn');
-      if(btn) btn.innerText = "저장 중...";
+      if (btn && btn.disabled) return;
+      if(btn) { btn.disabled = true; btn.innerText = "저장 중..."; }
 
       const newLog = { id: Date.now(), name: drinkName, amount: amount, time: time, reason: reason };
-      caffeineLogs.push(newLog);
+      pendingCaffeineSave = newLog;
+      renderCaffeineLogs();
+      if (getLogDateKST(time) === getTodayKST()) {
+        const previewTotal = [...caffeineLogs, ...confirmedPendingCaffeine].filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + Number(log.amount || 0), 0) + amount;
+        showCaffeineWarning(amount, previewTotal, 'pending');
+      }
 
       google.script.run
-        .withSuccessHandler(() => {
-          if(btn) btn.innerText = "카페인 기록 완료";
+        .withSuccessHandler((response) => {
+          pendingCaffeineSave = null;
+          const appliedRecord = applyConfirmedCaffeineSave(response);
+          if (!appliedRecord) renderCaffeineLogs();
+          if(btn) { btn.disabled = false; btn.innerText = "카페인 기록 완료"; }
           document.getElementById('drinkName').value = '';
           document.getElementById('customAmount').value = '';
           document.querySelectorAll('input[name="caffeineReason"]').forEach(cb => cb.checked = false);
@@ -1728,23 +1954,32 @@
           selectedDrink = { drink: '', mg: 0 };
           // ⭐ 오늘 날짜 기록일 때만 섭취 경고 모달 표시
           // 과거 날짜 기록은 저장 완료 모달만 표시
+          if (!appliedRecord) confirmedPendingCaffeine.push({ time, amount });
           if(getLogDateKST(time) === getTodayKST()) {
-            loadCaffeineLogs(amount);
+            const knownTotal = caffeineLogs.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + Number(log.amount || 0), 0);
+            const warning = document.getElementById('caffeineWarningModal');
+            if (!warning || warning.style?.display !== 'none') showCaffeineWarning(amount, knownTotal + confirmedPendingCaffeine.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + log.amount, 0), response?.localSaved ? 'local' : 'confirmed');
+            if (!appliedRecord) loadCaffeineLogs();
           } else {
-            showSaveCompleteModal('✅ 카페인 기록이 저장되었습니다.');
-            loadCaffeineLogs();
+            showSaveCompleteModal(response?.localSaved ? '휴대폰 저장 완료 · 구글시트 전송 대기' : '구글시트 반영 완료');
+            if (!appliedRecord) loadCaffeineLogs();
           }
           refreshData();
         })
         .withFailureHandler(err => {
+          pendingCaffeineSave = null;
+          renderCaffeineLogs();
+          closeCaffeineWarning();
           showInfoModal('오류', '저장 중 오류가 발생했습니다. 다시 시도해주세요.');
-          if(btn) btn.innerText = "카페인 기록 완료";
+          if(btn) { btn.disabled = false; btn.innerText = "카페인 기록 완료"; }
           console.error(err);
         })
         .saveCaffeineData({
           studentId: user.studentId,
           name: user.name,
           drink: drinkName,
+          company: selectedDrink.drink === drinkName ? selectedDrink.company || '' : '',
+          foodName: selectedDrink.drink === drinkName ? selectedDrink.foodName || '' : '',
           mg: amount,
           time: time,
           reason: reason,
@@ -1891,6 +2126,8 @@
 
     // ⭐ 실제 수면 저장 실행 (중복 확인 후 공통으로 호출)
     function proceedSaveSleep(date, sleepStart, sleepEnd, memo, hours, btn, choices = {}) {
+      if (btn && btn.disabled) return;
+      if (btn) btn.disabled = true;
       const sleepStartTime = timePartFromDatetime(sleepStart);
       const sleepEndTime = timePartFromDatetime(sleepEnd);
       const wakeDate = datePartFromDatetime(sleepEnd);
@@ -1913,19 +2150,19 @@
         daytime:    String(choices.daytime    || '')
       };
 
-      console.log('전송할 데이터:', sleepData);
+      // Health record content is not written to console logs.
 
       google.script.run
         .withSuccessHandler((response) => {
-          console.log('✅ 수면 저장 성공:', response);
+
 
           if(response && response.updated) {
-            showSleepCompleteModal(hours, true);
+            showSleepCompleteModal(hours, true, response.localSaved);
           } else {
-            showSleepCompleteModal(hours, false);
+            showSleepCompleteModal(hours, false, response?.localSaved);
           }
 
-          if(btn) btn.innerText = "수면 기록 완료";
+          if(btn) { btn.disabled = false; btn.innerText = "수면 기록 완료"; }
 
           // ⭐ 최근 취침/기상 시간 학번별로 저장
           localStorage.setItem('lastSleepStart_' + user.studentId, sleepStartTime);
@@ -1943,10 +2180,10 @@
           refreshData();
         })
         .withFailureHandler(err => {
-          console.error('❌ 수면 저장 실패:', err, sleepData);
+          console.warn('수면 저장 실패:', err.code || 'SAVE_FAILED');
           const msg = err && err.message ? err.message : String(err || '알 수 없는 오류');
           showInfoModal('저장 실패', '수면 저장에 실패했습니다.\n\n' + msg);
-          if(btn) btn.innerText = "수면 기록 완료";
+          if(btn) { btn.disabled = false; btn.innerText = "수면 기록 완료"; }
         })
         .saveSleepData(sleepData);
     }
@@ -2018,7 +2255,7 @@
     }
 
     // 오늘 날짜로 설정
-    function setToday() {
+    function setToday(deferQuery) {
       const input = document.getElementById('filterEndDate');
       if(!input) return;
       const today = new Date();
@@ -2026,7 +2263,7 @@
       const month = String(today.getMonth() + 1).padStart(2, '0');
       const day = String(today.getDate()).padStart(2, '0');
       input.value = `${year}-${month}-${day}`;
-      applyDateFilter();
+      if (!deferQuery) applyDateFilter();
     }
 
     // 날짜 필터 적용
@@ -2043,7 +2280,8 @@
         return;
       }
 
-      const endDate = new Date(input.value);
+      const queriedEndDate = input.value;
+      const endDate = new Date(queriedEndDate);
       const startDate = new Date(endDate);
       startDate.setDate(startDate.getDate() - 6);
 
@@ -2055,13 +2293,13 @@
       google.script.run
         .withSuccessHandler(res => {
           if(rangeText) rangeText.innerHTML = `<i class="fa-solid fa-calendar-check"></i> ${formatDate(startDate)} ~ ${formatDate(endDate)} 데이터 표시 중`;
-          updateDashboard(res);
+          updateDashboard(res, queriedEndDate);
         })
         .withFailureHandler(err => {
           if(rangeText) rangeText.innerHTML = `<i class="fa-solid fa-exclamation-triangle"></i> 데이터 조회 실패`;
-          showInfoModal('오류', '데이터 조회에 실패했습니다. 다시 시도해주세요.');
+          if(rangeText) rangeText.textContent = '최신 데이터 조회에 실패했습니다. 기존 기록은 유지됩니다. 조회 버튼으로 다시 확인해 주세요.';
         })
-        .getFilteredStats(user.studentId, input.value);
+        .getFilteredStats(user.studentId, queriedEndDate);
     }
 
     // 데이터 새로고침
@@ -2074,7 +2312,8 @@
     }
 
     // 대시보드 업데이트
-    function updateDashboard(data) {
+    function updateDashboard(data, chartEndDate) {
+      data = { ...data, chartEndDate: chartEndDate || data.chartEndDate || getTodayKST() };
       lastDashboardData = data || null;
       const todayTotal = data.todayTotal || 0;
 
@@ -2344,13 +2583,13 @@
     function logout() { showLogoutConfirm(); }
 
     function showLogoutConfirm() {
-      document.getElementById('confirmModalIcon').innerText = '👋';
-      document.getElementById('confirmModalTitle').innerText = '로그아웃';
-      document.getElementById('deleteConfirmMessage').innerText = '로그아웃 하시겠습니까?';
-      document.getElementById('confirmActionBtn').innerText = '로그아웃';
-      document.getElementById('confirmActionBtn').className = 'flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold hover:bg-blue-600 transition';
+      document.getElementById('confirmModalIcon').innerText = '🔔';
+      document.getElementById('confirmModalTitle').innerText = '알림도 함께 중지돼요';
+      document.getElementById('deleteConfirmMessage').innerText = '이 기기에서 학생을 변경하면 아침·저녁 기록 알림도 중지됩니다. 연구기간에는 본인 휴대폰에서 로그아웃하지 마세요.';
+      document.getElementById('confirmActionBtn').innerText = '계속';
+      document.getElementById('confirmActionBtn').className = 'flex-1 py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 transition';
       document.getElementById('deleteConfirmModal').style.display = 'flex';
-      pendingDelete = { type: 'logout', id: null };
+      pendingDelete = { type: 'logout-warning', id: null };
       // 포커스를 버튼에서 제거 - 카메라 확인키가 버튼을 자동 클릭하는 현상 방지
       setTimeout(function() {
         var btn = document.getElementById('confirmActionBtn');
@@ -2359,14 +2598,30 @@
       }, 0);
     }
 
+    function showLogoutFinalConfirm() {
+      document.getElementById('confirmModalIcon').innerText = '👋';
+      document.getElementById('confirmModalTitle').innerText = '학생 변경·로그아웃';
+      document.getElementById('deleteConfirmMessage').innerText = '정말 학생을 변경하고 알림을 중지할까요?';
+      document.getElementById('confirmActionBtn').innerText = '학생 변경·로그아웃';
+      document.getElementById('confirmActionBtn').className = 'flex-1 py-3 bg-red-500 text-white rounded-xl font-bold hover:bg-red-600 transition';
+      document.getElementById('deleteConfirmModal').style.display = 'flex';
+      pendingDelete = { type: 'logout', id: null };
+    }
+
     async function executeLogout() {
-      try { await window.appAuth.logout(); } catch(e) {}
+      document.getElementById('mainApp')?.classList.add('hidden');
+      resetStudentData();
+      let pushEndpoint = null;
+      try {
+        if (window.pushReminders) pushEndpoint = await window.pushReminders.unsubscribeCurrentDevice();
+      } catch(e) {}
+      try { await window.appAuth.logout(pushEndpoint); } catch(e) { location.reload(); return; }
       user = null;
       clearSession(); // ⭐ 세션 삭제
       window._weightLoaded = false; // ⭐ 체중 로드 플래그 초기화
       try { sessionStorage.setItem('caffeineLoggedOut', '1'); } catch(e) {} // ⭐ 로그아웃 플래그
       stopAutoRefresh();
-      caffeineLogs = [];
+      caffeineLogs = []; caffeineHistoryLoaded = false;
       sleepLogs = [];
       window.currentAIAnalysis = null;
       userWeight = 60;
@@ -2404,7 +2659,7 @@
       if(sleepLogsContainer) sleepLogsContainer.innerHTML = '<p class="text-center py-8 text-gray-400 text-sm">기록이 없습니다.</p>';
 
       const userWeightInput = document.getElementById('userWeight');
-      if(userWeightInput) userWeightInput.value = '60';
+      if(userWeightInput) { userWeightInput.value = ''; userWeightInput.disabled = true; userWeightInput.placeholder = '불러오는 중...'; }
 
       const limitDisplay = document.getElementById('limitDisplay');
       if(limitDisplay) limitDisplay.innerText = '150';
@@ -2462,7 +2717,8 @@
       const weightInput = document.getElementById('userWeight');
       const limitDisplay = document.getElementById('limitDisplay');
       if(!weightInput || !limitDisplay) return;
-      const w = parseFloat(weightInput.value) || 60;
+      const w = parseFloat(weightInput.value);
+      if (!Number.isFinite(w) || w <= 0) { limitDisplay.innerText = '—'; return; }
       const limit = w * 2.5;
       userLimit = limit;
       limitDisplay.innerText = limit % 1 === 0 ? limit : limit.toFixed(1);
@@ -2500,8 +2756,8 @@
       updateLimitDisplay();
 
       google.script.run
-        .withSuccessHandler(() => { showSaveCompleteModal('목표 설정이 저장되었습니다.'); refreshData(); })
-        .withFailureHandler(err => { showSaveCompleteModal('목표 설정이 저장되었습니다.\n(로컬에만 저장됨)'); })
+        .withSuccessHandler(result => { showSaveCompleteModal(result.localSaved ? '휴대폰 저장 완료 · 구글시트 전송 대기' : '구글시트 반영 완료'); refreshData(); })
+        .withFailureHandler(err => { showInfoModal('저장 확인 필요', '휴대폰에 저장하지 못했습니다. 입력은 유지됩니다.'); })
         .saveInitialSetup({
           studentId: user.studentId,
           name: user.name,
@@ -2592,7 +2848,7 @@
       closeWeightConfirmModal();
     }
 
-    function showSleepCompleteModal(hours, isUpdated) {
+    function showSleepCompleteModal(hours, isUpdated, localSaved) {
       const h = parseFloat(hours);
       let statusEmoji, statusLabel, headerColor, statusBody;
       const tag = 'background:white;border-radius:20px;padding:4px 11px;font-size:12px;color:#374151;box-shadow:0 1px 3px rgba(0,0,0,0.08);white-space:nowrap;';
@@ -2639,7 +2895,7 @@
           info('#f5f3ff','#ddd6fe','#4c1d95','너무 긴 수면은 피로감이 남고<br>생체 리듬을 흐트러뜨릴 수 있어요.') +
           `<p style="text-align:center;font-size:13px;color:#6b7280;">💡 규칙적인 수면 패턴을 유지해보세요.</p>`;
       }
-      const savedText = isUpdated ? '기존 기록이 업데이트되었습니다' : '수면 기록이 저장되었습니다';
+      const savedText = localSaved ? '휴대폰 저장 완료 · 구글시트 전송 대기' : (isUpdated ? '기존 기록이 업데이트되었습니다' : '구글시트 반영 완료');
       const overlay = document.createElement('div');
       overlay.className = 'fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4 backdrop-blur-sm';
       overlay.innerHTML = `
@@ -2931,6 +3187,7 @@
 
     // ── caffeine_db 시트 로드 함수 ─────────────────────────────
     function loadCaffeineDbFromGAS() {
+      if (caffeineDbLoading) return;
       const countEl = document.getElementById('dbTotalCount');
 
       // ⭐ localStorage 캐시 즉시 복원 (카메라 복귀 시 GAS 호출 없이 바로 사용 가능)
@@ -2938,20 +3195,44 @@
         const cached = localStorage.getItem('caffeine_db_cache');
         const cachedTime = localStorage.getItem('caffeine_db_cache_time');
         const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
-        if (cached && cachedTime && (Date.now() - parseInt(cachedTime)) < CACHE_TTL) {
-          CAFFEINE_DB = JSON.parse(cached);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (!Array.isArray(parsed) || !parsed.length) throw new Error('Empty database cache');
+          CAFFEINE_DB = parsed;
           const cnt = CAFFEINE_DB.length;
           if (countEl) countEl.textContent = cnt.toLocaleString() + '건';
           console.log('카페인 DB 캐시 복원: ' + cnt + '건 (GAS 호출 생략)');
-          return; // ⭐ 캐시가 유효하면 GAS 호출 생략 → google.script.run 큐 비워둠
+          searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
+          if ((typeof navigator !== 'undefined' && navigator.onLine === false) || (cachedTime && Date.now() - Number(cachedTime) < CACHE_TTL)) return;
         }
       } catch(e) {}
 
-      if (countEl) countEl.textContent = '로딩 중...';
+      if (typeof navigator !== 'undefined' && navigator.onLine === false && CAFFEINE_DB.length) return;
+      if (countEl && !CAFFEINE_DB.length) countEl.textContent = '로딩 중...';
+      caffeineDbLoading = true;
+      let receivedLiveDb = false;
+      // 공용 음료 정보만 포함한 배포 DB로 Google 서버 지연 중에도 검색 가능.
+      if (typeof fetch === 'function') {
+        fetch('/public/data/caffeine-db.json')
+          .then(response => { if (!response.ok) throw new Error('DB snapshot unavailable'); return response.json(); })
+          .then(data => {
+            if (receivedLiveDb || CAFFEINE_DB.length || !Array.isArray(data) || !data.length) return;
+            CAFFEINE_DB = data;
+            caffeineDbLoading = false;
+            if (countEl) countEl.textContent = data.length.toLocaleString() + '건';
+            try {
+              localStorage.setItem('caffeine_db_cache', JSON.stringify(data));
+              localStorage.setItem('caffeine_db_cache_time', '0');
+            } catch(e) {}
+            searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
+          }).catch(() => {});
+      }
 
       google.script.run
         .withSuccessHandler(function(result) {
+          caffeineDbLoading = false;
           if (result && result.success && Array.isArray(result.data)) {
+            receivedLiveDb = true;
             CAFFEINE_DB = result.data;
             const cnt = CAFFEINE_DB.length;
             if (countEl) countEl.textContent = cnt.toLocaleString() + '건';
@@ -2960,17 +3241,23 @@
               localStorage.setItem('caffeine_db_cache', JSON.stringify(CAFFEINE_DB));
               localStorage.setItem('caffeine_db_cache_time', String(Date.now()));
             } catch(e) {}
+            searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
           } else {
-            if (countEl) countEl.textContent = '로드 실패';
+            if (countEl && !CAFFEINE_DB.length) countEl.textContent = '로드 실패';
             console.error('카페인 DB 로드 실패:', result);
+            searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
           }
         })
         .withFailureHandler(function(err) {
-          if (countEl) countEl.textContent = '로드 실패';
+          caffeineDbLoading = false;
+          if (countEl && !CAFFEINE_DB.length) countEl.textContent = '로드 실패';
           console.error('getCaffeineDB 오류:', err);
+          searchCaffeineDb(document.getElementById('dbSearchInput')?.value || '');
         })
         .getCaffeineDB();
     }
+
+    window.addEventListener('online', () => loadCaffeineDbFromGAS());
 
     // ── 카페인 DB 검색 함수들 ─────────────────────────────
     function toggleDbSearch() {
@@ -2979,6 +3266,7 @@
       if (!panel) return;
       const isHidden = panel.classList.contains('hidden');
       panel.classList.toggle('hidden');
+      if (isHidden) loadCaffeineDbFromGAS();
       if (icon) {
         icon.classList.toggle('fa-chevron-down', !isHidden);
         icon.classList.toggle('fa-chevron-up', isHidden);
@@ -3055,6 +3343,12 @@
       const resultsEl = document.getElementById('dbSearchResults');
       if (!resultsEl) return;
       const q = query.trim();
+      if (q && !CAFFEINE_DB.length) {
+        resultsEl.innerHTML = '<p class="text-xs text-center text-gray-400 py-4">' +
+          (caffeineDbLoading ? '카페인 DB를 불러오는 중입니다...' : '카페인 DB를 불러오지 못했습니다.') + '</p>' +
+          (caffeineDbLoading ? '' : '<button type="button" onclick="loadCaffeineDbFromGAS()" class="w-full py-2 text-sm font-bold text-emerald-700">DB 다시 불러오기</button>');
+        return;
+      }
       if (q.length < 1) {
         resultsEl.innerHTML = '<p class="text-xs text-center text-gray-400 py-4">검색어를 입력하세요</p>';
         cancelDbVolume();
@@ -3262,7 +3556,8 @@
         drinkLabel = _dbSearchSelected._displayName;
       }
 
-      setDrink(drinkLabel, finalMg);
+      if (_dbSearchSelected.c) drinkLabel = `${_dbSearchSelected.c} · ${drinkLabel}`;
+      setDrink(drinkLabel, finalMg, {company: _dbSearchSelected.c || '', foodName: _dbSearchSelected.f || ''});
       cancelDbVolume();
       clearDbSearch();
       // 검색 패널 닫기
@@ -3289,6 +3584,19 @@
       if (resultsEl) resultsEl.style.display = '';
     }
 
+    function resetCaffeineForm() {
+      ['drinkName', 'customAmount', 'caffeineReasonEtc'].forEach(id => {
+        const field = document.getElementById(id);
+        if (field) field.value = '';
+      });
+      document.querySelectorAll('input[name="caffeineReason"], input[name="caffeineSymptom"]').forEach(field => field.checked = false);
+      document.getElementById('caffeineReasonEtc')?.classList.add('hidden');
+      selectedDrink = { drink: '', mg: 0 };
+      document.getElementById('selectedDrink').textContent = '음료를 선택하거나 직접 입력해주세요';
+      clearDbSearch();
+      document.getElementById('caffeineTime').value = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 16);
+    }
+
     function clearDbSearch() {
       const input = document.getElementById('dbSearchInput');
       const results = document.getElementById('dbSearchResults');
@@ -3300,7 +3608,7 @@
     function renderCaffeineLogs() {
       const container = document.getElementById('caffeineLogsContainer');
       if(!container) return;
-      if(caffeineLogs.length === 0) {
+      if(caffeineLogs.length === 0 && !pendingCaffeineSave) {
         container.innerHTML = '<p class="text-center py-8 text-gray-400 text-sm">기록이 없습니다.</p>';
         return;
       }
@@ -3313,6 +3621,13 @@
         return ib - ia;
       });
       container.innerHTML = '';
+      if (pendingCaffeineSave) {
+        const pending = document.createElement('div');
+        pending.className = 'p-4 bg-indigo-50 rounded-xl text-sm text-indigo-700';
+        pending.textContent = `${pendingCaffeineSave.name} · ${pendingCaffeineSave.amount}mg — 서버에 저장 중…`;
+        pending.setAttribute('role', 'status');
+        container.appendChild(pending);
+      }
       sorted.forEach(log => {
         const div = document.createElement('div');
         div.className = "p-4 bg-gray-50 rounded-xl flex justify-between items-center";
@@ -3326,6 +3641,7 @@
             <p class="font-bold text-sm text-gray-800">${drinkName}</p>
             <p class="text-xs text-gray-400">${log.amount || 0}mg · ${timeStr}</p>
             ${reasonText}
+            ${log.localPending ? '<p class="text-xs text-blue-600">휴대폰 보관 · 시트 전송 대기</p>' : ''}
           </div>
           <div class="flex gap-2">
             <button onclick="openEditModal('caffeine', '${logId}')" class="text-xs text-indigo-600 font-bold px-2 py-1 hover:bg-indigo-50 rounded">편집</button>
@@ -3360,6 +3676,7 @@
             </p>
             <p class="text-xs text-gray-400 mt-1">${log.hours || 0}시간 수면 (${log.start || ''}~${log.end || ''})</p>
             <p class="text-xs text-indigo-500 mt-1 font-semibold">${timing.graphText}</p>
+            ${log.localPending ? '<p class="text-xs text-blue-600">휴대폰 보관 · 시트 전송 대기</p>' : ''}
             ${log.memo ? `<p class="mt-1 text-xs text-gray-500">📝 ${log.memo}</p>` : ''}
           </div>
           <div class="flex gap-2">
@@ -3643,8 +3960,7 @@
             }
           })
           .withFailureHandler(err => {
-            showSaveCompleteModal('기록이 수정되었습니다.\n(로컬에만 저장됨)');
-            closeEditModal(); loadCaffeineLogs(); refreshData();
+            showInfoModal('수정 확인 필요', '수정하지 못했습니다. 전송 대기 기록은 시트 반영을 확인한 뒤 다시 수정해주세요.');
           })
           .updateCaffeineData({ id: editingId, studentId: user.studentId, name: user.name, drink: name, mg: amount, time, reason, symptom });
 
@@ -3667,7 +3983,7 @@
         if(index !== -1) sleepLogs[index] = { ...sleepLogs[index], date, wakeDate, start: sleepStartTime, end: sleepEndTime, hours: parseFloat(hours), condition, memo };
         google.script.run
           .withSuccessHandler(() => { closeEditModal(); loadSleepLogs(); refreshData(); showSleepCompleteModal(hours, true); })
-          .withFailureHandler(err => { closeEditModal(); loadSleepLogs(); refreshData(); showSleepCompleteModal(hours, true); })
+          .withFailureHandler(err => { showInfoModal('수정 확인 필요', '수정하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.'); })
           .updateSleepData({ id: editingId, studentId: user.studentId, name: user.name, date, wakeDate, sleepTime: sleepStartTime, wakeTime: sleepEndTime, hours: parseFloat(hours), condition, memo, ...(window.editSleepChoices || {}) });
       }
     }
@@ -3705,29 +4021,97 @@
       if (!modal || modal.style.display === 'none' || modal.style.display === '') return;
       const { type, id } = pendingDelete;
       closeDeleteConfirm();
-      if (type === 'logout') { executeLogout(); }
+      if (type === 'logout-warning') { showLogoutFinalConfirm(); }
+      else if (type === 'logout') { executeLogout(); }
       else if (type && id) { deleteLog(type, id); }
+    }
+
+    function applyConfirmedCaffeineSave(response) {
+      const record = response && response.record;
+      if (!record || typeof record.id !== 'string' || !record.id || typeof record.name !== 'string' || !Number.isFinite(record.amount) || typeof record.time !== 'string') return false;
+      if (!caffeineLogs.some(log => String(log.id) === record.id)) caffeineLogs.push(record);
+      cacheStudentRecords('caffeineLogs');
+      renderCaffeineLogs();
+      syncConfirmedCaffeineStats();
+      return true;
+    }
+
+    function syncConfirmedCaffeineStats() {
+      if (!caffeineHistoryLoaded) { refreshData(); return; }
+      const today = getTodayKST();
+      const totals = new Map();
+      caffeineLogs.forEach(log => {
+        const date = getLogDateKST(log.time);
+        totals.set(date, (totals.get(date) || 0) + Number(log.amount || 0));
+      });
+      const data = { ...(lastDashboardData || {}), todayTotal: totals.get(today) || 0, todayHasRecord: totals.has(today) };
+      const labels = data.labels || [];
+      // Dashboard labels are the seven calendar days ending on the selected date.
+      const endDate = data.chartEndDate || today;
+      const dates = labels.map(label => {
+        let date = `${endDate.slice(0, 4)}-${String(label).replace('/', '-')}`;
+        if (date > endDate) date = `${Number(date.slice(0, 4)) - 1}${date.slice(4)}`;
+        return date;
+      });
+      data.caffeineData = dates.map(date => totals.get(date) || 0);
+      data.caffeineHasData = dates.map(date => totals.has(date));
+      updateDashboard(data);
+    }
+
+    function applyConfirmedDeletion(type, id) {
+      if (typeof window !== 'undefined' && window.studentSync && !String(id).startsWith('local_')) void window.studentSync.forgetRecord(id);
+      if (type === 'caffeine') {
+        caffeineLogs = caffeineLogs.filter(log => String(log.id) !== String(id));
+        cacheStudentRecords('caffeineLogs');
+        renderCaffeineLogs();
+        updateCaffeineBadge();
+        syncConfirmedCaffeineStats();
+      } else if (type === 'sleep') {
+        sleepLogs = sleepLogs.filter(log => String(log.id) !== String(id));
+        cacheStudentRecords('sleepLogs');
+        renderSleepLogs();
+      }
     }
 
     function deleteLog(type, id) {
       if(type === 'caffeine') {
         google.script.run
-          .withSuccessHandler(() => { loadCaffeineLogs(); showSaveCompleteModal('✅ 카페인 기록이 삭제되었습니다.'); setTimeout(() => { updateCaffeineBadge(); refreshData(); }, 500); })
+          .withSuccessHandler(() => { applyConfirmedDeletion(type, id); showSaveCompleteModal('✅ 카페인 기록이 삭제되었습니다.'); })
           .withFailureHandler(err => { showInfoModal('오류', '삭제 중 오류가 발생했습니다. 다시 시도해주세요.'); })
           .deleteCaffeineData(String(id));
       } else if(type === 'sleep') {
         google.script.run
-          .withSuccessHandler(() => { loadSleepLogs(); refreshData(); showSaveCompleteModal('✅ 수면 기록이 삭제되었습니다.'); })
+          .withSuccessHandler(() => { applyConfirmedDeletion(type, id); showSaveCompleteModal('✅ 수면 기록이 삭제되었습니다.'); refreshData(); })
           .withFailureHandler(err => { showInfoModal('오류', '삭제 중 오류가 발생했습니다. 다시 시도해주세요.'); })
           .deleteSleepData(String(id));
       }
+    }
+
+    function cacheStudentRecords(kind) {
+      if (!user || !window.studentRecordCache) return;
+      if (!kind || kind === 'caffeineLogs') window.studentRecordCache.write(user, 'caffeineLogs', caffeineLogs);
+      if (!kind || kind === 'sleepLogs') window.studentRecordCache.write(user, 'sleepLogs', sleepLogs);
+    }
+
+    function showRecordConnectionError(kind, cached) {
+      const container = document.getElementById(kind === 'caffeine' ? 'caffeineLogsContainer' : 'sleepLogsContainer');
+      if (!container) return;
+      const logs = kind === 'caffeine' ? caffeineLogs : sleepLogs;
+      if (!logs.length) container.innerHTML = '';
+      const previous = container.querySelector('[data-record-status]');
+      if (previous) previous.remove();
+      const notice = document.createElement('p');
+      notice.dataset.recordStatus = 'true';
+      notice.className = 'text-center py-3 text-amber-700 text-sm';
+      notice.textContent = cached ? '마지막으로 불러온 기록입니다. 최신 기록을 확인하고 있습니다.' : '연결이 원활하지 않아 최신 기록을 불러오지 못했습니다. 기존 기록은 유지되며, 상단 새로고침으로 다시 확인할 수 있습니다.';
+      container.prepend(notice);
     }
 
     function loadCaffeineLogs(showWarningAfter) {
       if(!user || !user.studentId) return;
       google.script.run
         .withSuccessHandler(logs => {
-          caffeineLogs = logs || [];
+          caffeineLogs = logs || []; caffeineHistoryLoaded = true; confirmedPendingCaffeine = []; cacheStudentRecords('caffeineLogs');
           renderCaffeineLogs();
           if(showWarningAfter !== undefined) {
             const today = getTodayKST();
@@ -3739,7 +4123,7 @@
           }
         })
         .withFailureHandler(err => {
-          caffeineLogs = []; renderCaffeineLogs();
+          showRecordConnectionError('caffeine');
           if(showWarningAfter !== undefined) showCaffeineWarning(showWarningAfter, showWarningAfter);
         })
         .getCaffeineLogs(user.studentId);
@@ -3749,14 +4133,14 @@
       if(!user || !user.studentId) return;
       google.script.run
         .withSuccessHandler(logs => {
-          sleepLogs = logs || [];
+          sleepLogs = logs || []; cacheStudentRecords('sleepLogs');
           renderSleepLogs();
           if(lastDashboardData) renderCharts(lastDashboardData);
           // 달력 탭이 활성화 상태면 달력도 업데이트
           const calTab = document.getElementById('tab-calendar');
           if (calTab && calTab.classList.contains('active')) renderCalendar();
         })
-        .withFailureHandler(err => { sleepLogs = []; renderSleepLogs(); if(lastDashboardData) renderCharts(lastDashboardData); })
+        .withFailureHandler(err => { showRecordConnectionError('sleep'); })
         .getSleepLogs(user.studentId);
     }
 
@@ -3800,7 +4184,12 @@
       return kst.toISOString().split('T')[0];
     }
 
-    function showCaffeineWarning(addedAmount, totalOverride) {
+    function showCaffeineWarning(addedAmount, totalOverride, saveStatus) {
+      if(saveStatus === 'local' && !(window.studentSyncProfile?.targetCaf > 0)) {
+        showSaveCompleteModal('휴대폰 저장 완료 · 구글시트 전송 대기\n목표 카페인이 미설정되어 목표 초과 여부를 계산하지 않았습니다.');
+        return;
+      }
+
       const today = getTodayKST();
       let todayTotal = 0;
       // totalOverride: 편집 시 이미 정확히 계산된 합계값을 직접 사용 (>= 0 허용)
@@ -3851,6 +4240,9 @@
         title.innerText = stage.name;
         desc.innerText = stage.msg;
         info.innerText = `오늘 총 ${todayTotal}mg 섭취\n(권장량 ${userLimit}mg 대비 ${percentage}%)`;
+        if (saveStatus === 'local') info.innerText = `휴대폰 저장 완료 · 구글시트 전송 대기\n오늘 총 ${todayTotal}mg 섭취` ;
+        if (saveStatus === 'pending') info.innerText = `서버에 저장 중…\n입력한 기록을 포함한 예상 합계 ${todayTotal}mg\n(권장량 ${userLimit}mg 대비 ${percentage}%)`;
+        if (saveStatus === 'confirmed') info.innerText = `서버 저장 완료\n오늘 총 ${todayTotal}mg 섭취\n(권장량 ${userLimit}mg 대비 ${percentage}%)`;
         btn.style.background = stage.color;
         btn.style.color = 'white';
         btn.style.border = 'none';
@@ -4404,7 +4796,7 @@
 
     function startAutoRefresh() {
       stopAutoRefresh();
-      autoRefreshInterval = setInterval(() => { silentRefresh(); }, 30000);
+      autoRefreshInterval = setInterval(() => { if (!document.hidden) silentRefresh(); }, 120000);
     }
 
     function stopAutoRefresh() {
@@ -4716,35 +5108,21 @@
 
     // ────────────────────────────────────────────────
 
+    function refreshNotificationsOnResume() {
+      if (!user || !user.studentId || document.hidden || navigator.onLine === false) return;
+      if (Date.now() - lastRefreshTime < 15000) return;
+      silentRefresh();
+    }
+
+    document.addEventListener('visibilitychange', refreshNotificationsOnResume);
+    window.addEventListener('pageshow', refreshNotificationsOnResume);
+    window.addEventListener('online', refreshNotificationsOnResume);
+
     function silentRefresh() {
-      if (!user || !user.studentId) return;
+      if (!user || !user.studentId || document.hidden || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
       lastRefreshTime = Date.now();
-      google.script.run
-        .withSuccessHandler(logs => {
-          const oldLength = caffeineLogs.length;
-          caffeineLogs = logs || [];
-          if (caffeineLogs.length !== oldLength) { renderCaffeineLogs(); refreshData(); if (caffeineLogs.length > oldLength) showUpdateNotification('카페인 기록이 업데이트되었습니다'); }
-        })
-        .withFailureHandler(err => { console.error('자동 새로고침 실패 (카페인):', err); })
-        .getCaffeineLogs(user.studentId);
-      google.script.run
-        .withSuccessHandler(logs => {
-          const oldLength = sleepLogs.length;
-          sleepLogs = logs || [];
-          if (sleepLogs.length !== oldLength) {
-            renderSleepLogs();
-            if(lastDashboardData) renderCharts(lastDashboardData);
-            refreshData();
-            if (sleepLogs.length > oldLength) showUpdateNotification('수면 기록이 업데이트되었습니다');
-          }
-        })
-        .withFailureHandler(err => { console.error('자동 새로고침 실패 (수면):', err); })
-        .getSleepLogs(user.studentId);
-      // 문의 답변 감지
       checkReplyBubble();
-      // 교사 수여 뱃지 감지
       checkTeacherAwards();
-      // 교사 메시지 감지 → 미읽음 있으면 자동 팝업
       checkMsgBubble();
     }
 
@@ -4767,8 +5145,8 @@
       const btn = document.getElementById('refreshBtn');
       if (btn) { btn.classList.add('animate-spin'); btn.style.pointerEvents = 'none'; }
       Promise.all([
-        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { caffeineLogs = logs || []; renderCaffeineLogs(); resolve(); }).withFailureHandler(() => resolve()).getCaffeineLogs(user.studentId); }),
-        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { sleepLogs = logs || []; renderSleepLogs(); resolve(); }).withFailureHandler(() => resolve()).getSleepLogs(user.studentId); }),
+        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { caffeineLogs = logs || []; caffeineHistoryLoaded = true; confirmedPendingCaffeine = []; cacheStudentRecords('caffeineLogs'); renderCaffeineLogs(); resolve(); }).withFailureHandler(() => { showRecordConnectionError('caffeine'); resolve(); }).getCaffeineLogs(user.studentId); }),
+        new Promise((resolve) => { google.script.run.withSuccessHandler(logs => { sleepLogs = logs || []; cacheStudentRecords('sleepLogs'); renderSleepLogs(); resolve(); }).withFailureHandler(() => { showRecordConnectionError('sleep'); resolve(); }).getSleepLogs(user.studentId); }),
         new Promise((resolve) => { google.script.run.withSuccessHandler(res => { updateDashboard(res); resolve(); }).withFailureHandler(() => resolve()).getStats(user.studentId); })
       ]).then(() => {
         if(lastDashboardData) renderCharts(lastDashboardData);
@@ -4841,13 +5219,20 @@
       return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}.(${days[d.getDay()]})`;
     }
 
-    function formatTeacherMsgContent(content) {
-      const safe = String(content || '')
+    function formatTeacherMsgContent(content, message = {}) {
+      const attachmentUrl = String(message.attachmentUrl || '').trim();
+      let text = String(content || '');
+      const bodyUrls = text.match(/https?:\/\/[^\s<]+/gi) || [];
+      if (/^https?:\/\/\S+$/i.test(attachmentUrl) && !bodyUrls.includes(attachmentUrl)) text += '\n\n' + attachmentUrl;
+      const escape = value => String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-      return safe.replace(/(https?:\/\/[^\s<]+)/g, url => {
-        const label = url.includes('drive.google.com') ? 'PDF 열기' : '링크 열기';
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+      const safe = escape(text);
+      return safe.replace(/(https?:\/\/[^\s<]+)/gi, url => {
+        const label = url.includes('drive.google.com') || (url === escape(attachmentUrl) && message.attachmentType === 'pdf') ? 'PDF 열기' : '링크 열기';
         return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;background:#10b981;color:white;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;text-decoration:none;">📎 ${label}</a>`;
       });
     }
@@ -4941,7 +5326,7 @@
                 ${isNew ? '<span style="background:#10b981;color:white;font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;">NEW</span>' : ''}
               </div>
               <div class="text-xs text-gray-400 mb-2">${formatMsgDate(m.timestamp)}</div>
-              <div class="text-sm text-gray-700 whitespace-pre-wrap">${formatTeacherMsgContent(m.content)}</div>
+              <div class="text-sm text-gray-700 whitespace-pre-wrap">${formatTeacherMsgContent(m.content, m)}</div>
               ${replySection}
             </div>`;
           }).join('');
@@ -4979,7 +5364,7 @@
         <div style="border:1px solid #d1fae5;border-radius:12px;padding:14px;margin-bottom:10px;background:#f0fdf4;">
           <div style="font-weight:700;font-size:15px;color:#1f2937;margin-bottom:4px;">${m.title}</div>
           <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;">${formatMsgDate(m.timestamp)}</div>
-          <div style="font-size:13px;color:#374151;white-space:pre-wrap;line-height:1.6;">${formatTeacherMsgContent(m.content)}</div>
+          <div style="font-size:13px;color:#374151;white-space:pre-wrap;line-height:1.6;">${formatTeacherMsgContent(m.content, m)}</div>
         </div>`).join('');
 
       box.innerHTML = `
@@ -5084,25 +5469,26 @@
     }
 
     function checkAppVersion() {
-      try {
-        const currentVersion = document.lastModified;
-        const stored = localStorage.getItem('app_version');
-        if (stored && stored !== currentVersion) {
-          const toast = document.createElement('div');
-          toast.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:99999;background:#1f2937;color:white;padding:13px 22px;border-radius:14px;font-size:14px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,0.3);display:flex;align-items:center;gap:10px;white-space:nowrap;';
-          toast.innerHTML = '🎉 <span>앱이 업데이트 되었습니다!</span>';
-          document.body.appendChild(toast);
-          setTimeout(() => {
-            toast.style.transition = 'opacity 0.5s';
-            toast.style.opacity = '0';
-            setTimeout(() => toast.remove(), 500);
-          }, 3500);
-        }
-        localStorage.setItem('app_version', currentVersion);
-      } catch(e) {}
+      // Updates are applied silently; no version toast is shown.
     }
 
     document.addEventListener('DOMContentLoaded', () => {
+      const privateIds = [
+        'caffeineLogsContainer', 'sleepLogsContainer', 'aiReportContainer',
+        'teacherMsgContainer', 'myInquiriesContainer', 'calendarGrid', 'calendarDetailContent',
+        'challengeBadgeGrid', 'tbModalEmojiRow', 'tbModalList',
+        'statusBadge', 'caffeineBadge', 'replyBubble', 'teacherBadgeBubble', 'msgUnreadBadge', 'msgBubble',
+        'dateRangeText', 'dashboardLimit', 'limitDisplay', 'targetSleepDisplay',
+        'badge-daily-caf', 'badge-daily-sleep', 'badge-challenge-msg',
+        'badge-streak-info', 'teacherDirectBadgeSection', 'editModalBody',
+      ];
+      privateUiDefaults = privateIds.map(id => {
+        const element = document.getElementById(id);
+        return element ? { id, html: element.innerHTML, className: element.className, style: element.style.cssText } : null;
+      }).filter(Boolean);
+      privateFormDefaults = Array.from(document.querySelectorAll('#mainApp input, #mainApp textarea, #mainApp select, #mainApp .sleep-choice-btn, #mainApp .condition-btn, #settingsTeenBtn, #settingsAdultBtn'))
+        .map(element => ({ element, value: element.value, checked: element.checked, disabled: element.disabled,
+          className: element.className, style: element.style.cssText }));
       checkAppVersion();
 
       // 부작용 섹션: 다른 항목 체크 시 "없음" 자동 해제
@@ -5124,36 +5510,43 @@
 
       window.appAuth.onSessionExpired(function() {
         user = null;
+        resetStudentData();
         clearSession();
+        document.getElementById('bootPage')?.classList.add('hidden');
         document.getElementById('mainApp')?.classList.add('hidden');
-        document.getElementById('loginPage')?.classList.remove('hidden');
+        const loginPage = document.getElementById('loginPage');
+        if (loginPage) { loginPage.style.display = ''; loginPage.classList.remove('hidden'); }
         const msg = document.getElementById('loginMsg');
         if (msg) msg.innerText = '로그인이 만료되었습니다. 다시 로그인해 주세요.';
       });
 
       // 브라우저 저장값이 아니라 서명된 서버 세션으로만 로그인 상태를 복구한다.
-      window.appAuth.getSession()
-        .then(function(savedSession) {
+      const restoreOptions = {
+        getSession: window.appAuth.getSession,
+        onAuthenticated: function(savedSession) {
           try {
             const cached = localStorage.getItem('caffeine_db_cache');
-            if (cached) CAFFEINE_DB = JSON.parse(cached);
+            const cachedTime = Number(localStorage.getItem('caffeine_db_cache_time'));
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (Array.isArray(parsed) && parsed.length) {
+                CAFFEINE_DB = parsed;
+                document.getElementById('dbTotalCount').textContent = parsed.length.toLocaleString() + '건';
+              }
+            }
           } catch(e) {}
           enterApp(savedSession, true);
-          google.script.run
-            .withSuccessHandler(function(res) {
-              if (res && res.success && res.settings) {
-                SLEEP_CFG = res.settings;
-                changeSettingsAgeGroup(res.settings.ageGroup || 'teen');
-              }
-            })
-            .withFailureHandler(function() {})
-            .getSleepSettings();
-        })
-        .catch(function() {
+        },
+        onUnauthenticated: function() {
           clearSession();
+          document.getElementById('bootPage')?.classList.add('hidden');
           document.getElementById('mainApp')?.classList.add('hidden');
-          document.getElementById('loginPage')?.classList.remove('hidden');
-        });
+          const loginPage = document.getElementById('loginPage');
+          if (loginPage) { loginPage.style.display = ''; loginPage.classList.remove('hidden'); }
+        }
+      };
+      if (window.studentStartup) window.studentStartup.restoreStudentSession(restoreOptions);
+      else restoreOptions.getSession().then(restoreOptions.onAuthenticated).catch(restoreOptions.onUnauthenticated);
 
       // ── 뒤로가기 완전 차단 ──
       history.pushState({ page: 'app' }, '', location.href);
@@ -5638,7 +6031,7 @@
       google.script.run
         .withSuccessHandler(function(result) {
           if (result && result.success && result.config) {
-            badgeConfig = result.config;
+            badgeConfig = BadgeJourney.mergeConfig(result.config);
             updateBadges(); // 설정 로드 후 즉시 뱃지 다시 렌더
           }
         })
@@ -5650,14 +6043,14 @@
               if (r2 && r2.success && r2.config) {
                 // v2 → v3 형식으로 변환
                 const v2 = r2.config;
-                badgeConfig = {
+                badgeConfig = BadgeJourney.mergeConfig({
                   challengeName: v2.challengeName || '',
                   challengeStart: '', challengeEnd: '',
                   badges: (v2.badges || []).map(function(b) {
                     return { id:b.id, name:b.name, image:b.emoji||'🏅', bg:b.bg||'#f5f3ff', color:b.color||'#7c3aed',
                              type:'caffeine', method: b.type==='streak'?'consecutive':'cumulative', days:b.days||3 };
                   })
-                };
+                });
                 updateBadges();
               }
             })
@@ -5668,7 +6061,7 @@
     }
 
     // 뱃지 업데이트 로직
-    function updateBadges() {
+    function updateBadgesLegacy() {
       const today = getTodayKST();
 
       // 1) 오늘의 실천
@@ -5947,6 +6340,92 @@
         } else {
           directSection.classList.add('hidden');
         }
+      }
+    }
+
+    function updateBadges() {
+      const today = getTodayKST();
+      const cafDates = caffeineLogs.map(function(log) { return getLogDateKST(log.time); }).filter(Boolean);
+      const sleepDates = sleepLogs.map(function(log) { return log.date; }).filter(Boolean);
+      const cfg = BadgeJourney.mergeConfig(badgeConfig);
+      const classNo = BadgeJourney.classFromStudentId(user && user.studentId);
+      const schedule = cfg.schedules[classNo] || cfg.schedules[cfg.defaultClass || '3'];
+      const summary = BadgeJourney.summarize({ caffeineDates: cafDates, sleepDates: sleepDates, schedule: schedule, today: today });
+      const weekly = BadgeJourney.weekProgress({ caffeineDates: cafDates, sleepDates: sleepDates, today: today });
+      const stage = BadgeJourney.studentStage(schedule, today);
+      const progress = BadgeJourney.milestoneProgress(summary.completeDates, cfg.badges);
+
+      function setDailyCard(type, active) {
+        const ids = type === 'caffeine'
+          ? ['badge-daily-caf', 'badge-daily-caf-icon', 'badge-daily-caf-label', '카페인<br>오늘 기록', 'bg-orange-100', 'text-orange-700']
+          : ['badge-daily-sleep', 'badge-daily-sleep-icon', 'badge-daily-sleep-label', '수면<br>오늘 기록', 'bg-blue-100', 'text-blue-700'];
+        const card = document.getElementById(ids[0]);
+        const icon = document.getElementById(ids[1]);
+        const label = document.getElementById(ids[2]);
+        if (!card || !icon || !label) return;
+        card.className = active
+          ? `flex items-center gap-3 p-3 rounded-2xl transition-all duration-500 ${ids[4]}`
+          : 'flex items-center gap-3 p-3 rounded-2xl bg-gray-100 transition-all duration-500';
+        icon.className = active ? 'text-3xl flex-shrink-0' : 'text-3xl flex-shrink-0 grayscale opacity-40';
+        label.className = active ? `text-xs font-bold leading-tight ${ids[5]}` : 'text-xs font-bold text-gray-400 leading-tight';
+        label.innerHTML = ids[3];
+      }
+
+      setDailyCard('caffeine', summary.today.caffeine);
+      setDailyCard('sleep', summary.today.sleep);
+
+      const stageEl = document.getElementById('journey-stage-label');
+      if (stageEl) stageEl.textContent = stage.label + ' · 오늘도 내 생활을 천천히 살펴보세요.';
+      const totalEl = document.getElementById('journey-total-days');
+      if (totalEl) totalEl.textContent = '지금까지 ' + summary.totalComplete + '일의 생활을 기록했어요.';
+      const weekEl = document.getElementById('journey-week-days');
+      if (weekEl) weekEl.textContent = '이번 주에는 ' + weekly.complete + '일을 모두 기록했어요.';
+
+      const weekdayNames = ['월', '화', '수', '목', '금', '토', '일'];
+      const dotsEl = document.getElementById('journey-week-dots');
+      if (dotsEl) {
+        dotsEl.innerHTML = weekly.states.map(function(state, index) {
+          const dotClass = state === 'complete'
+            ? 'bg-emerald-500 text-white'
+            : state === 'partial' ? 'bg-amber-200 text-amber-800' : 'bg-white text-gray-400 border border-gray-200';
+          const mark = state === 'complete' ? '●' : state === 'partial' ? '◐' : '○';
+          return `<div class="text-center"><div class="text-[10px] text-gray-400 mb-1">${weekdayNames[index]}</div><div class="h-7 rounded-lg flex items-center justify-center text-xs ${dotClass}">${mark}</div></div>`;
+        }).join('');
+      }
+
+      const grid = document.getElementById('challengeBadgeGrid');
+      if (grid) {
+        grid.innerHTML = progress.map(function(item) {
+          const earnedByTeacher = teacherAwards.some(function(award) {
+            return award.awardId === item.id || award.badgeId === item.id || (award.name && award.name.trim() === item.name.trim());
+          });
+          const earned = item.earned || earnedByTeacher;
+          return `<div class="flex items-center gap-2.5 p-3 rounded-2xl ${earned ? '' : 'bg-gray-100'}" style="${earned ? `background:${item.bg};box-shadow:0 2px 10px ${item.color}20;` : ''}">
+            <span class="text-2xl ${earned ? '' : 'grayscale opacity-40'}">${item.image}</span>
+            <div class="min-w-0"><p class="text-xs font-bold leading-tight" style="color:${earned ? item.color : '#9ca3af'}">${item.name}</p>
+            <p class="text-[10px] mt-0.5" style="color:${earned ? item.color : '#9ca3af'}">${earned ? '기록하며 얻은 뱃지' : '기록을 이어가면 만날 수 있어요'}</p></div>
+          </div>`;
+        }).join('');
+      }
+
+      const infoEl = document.getElementById('badge-streak-info');
+      if (infoEl) {
+        if (summary.today.complete) infoEl.textContent = '오늘의 카페인과 수면 기록을 모두 남겼어요.';
+        else if (summary.today.caffeine || summary.today.sleep) infoEl.textContent = '오늘 한 가지 기록을 남겼어요. 나머지도 편할 때 기록해 주세요.';
+        else infoEl.textContent = '기록하지 못한 날이 있어도 괜찮아요. 오늘부터 다시 이어갈 수 있어요.';
+      }
+      const msgEl = document.getElementById('badge-challenge-msg');
+      if (msgEl) msgEl.classList.add('hidden');
+
+      const directSection = document.getElementById('teacherDirectBadgeSection');
+      const directList = document.getElementById('teacherDirectBadgeList');
+      if (directSection && directList) {
+        const milestoneIds = new Set(cfg.badges.map(function(item) { return item.id; }));
+        const directAwards = teacherAwards.filter(function(award) { return !milestoneIds.has(award.awardId || award.badgeId); });
+        directList.innerHTML = directAwards.map(function(award) {
+          return `<div style="display:inline-flex;align-items:center;gap:5px;background:${award.bg||'#f5f3ff'};color:${award.color||'#7c3aed'};padding:5px 10px;border-radius:20px;font-size:11px;font-weight:700;">${award.image||'🏅'} <span>${award.name||'수업활동 뱃지'}</span></div>`;
+        }).join('');
+        directSection.classList.toggle('hidden', directAwards.length === 0);
       }
     }
 
@@ -6711,5 +7190,6 @@ function hideTutFab() {
   if (loginBtn) loginBtn.style.display = 'none';
 }
 </script>
+  <script src="/public/js/student-sync-ui.js"></script>
 </body>
 </html>

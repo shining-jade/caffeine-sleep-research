@@ -4,3 +4,5 @@ apps-script/dist/
 .env
 .env.*
 !.env.example
+
+.superpowers/

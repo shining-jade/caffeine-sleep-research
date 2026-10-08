@@ -10,11 +10,15 @@ const EXPECTED_ACTIONS = [
   'saveCaffeineData', 'getCaffeineLogs', 'deleteCaffeineData', 'updateCaffeineData',
   'saveSleepData', 'getSleepLogs', 'deleteSleepData', 'updateSleepData',
   'getWeightData', 'saveInitialSetup', 'getStats', 'getFilteredStats',
+  'getStudentBootstrap',
   'getTeacherAwardsForStudent', 'markTeacherAwardsSeen', 'submitInquiry',
   'getMyInquiries', 'getCaffeineDB', 'testConnection', 'generateAIHealthReport',
   'analyzeDrinkImageWithAI', 'getTeacherMessages', 'markTeacherMessageRead',
   'replyToTeacherMessage', 'getBadgeConfig', 'getChallengeBadgeConfig',
   'getSleepSettings',
+  'savePushSubscription', 'getPushPreferences', 'savePushPreferences',
+  'deactivatePushSubscription',
+  'getReminderStudentConfig',
 ];
 
 test('student policy contains every student UI action and no login action', () => {
@@ -35,6 +39,13 @@ test('student identity replaces the first argument for own-data reads', () => {
   );
 
   assert.deepEqual(result.params, ['1101', '2026-09-01', '2026-09-07']);
+  assert.deepEqual(result.subject, { studentId: '1101', name: '테스트학생' });
+});
+
+test('student bootstrap always uses the signed session identity', () => {
+  const result = normalizeStudentRequest('getStudentBootstrap', ['9999'], SESSION);
+
+  assert.deepEqual(result.params, ['1101']);
   assert.deepEqual(result.subject, { studentId: '1101', name: '테스트학생' });
 });
 
@@ -78,4 +89,20 @@ test('student ownership metadata is attached to record and row operations', () =
 
 test('student policy requires an array of parameters', () => {
   assert.throws(() => normalizeStudentRequest('getStats', { studentId: '9999' }, SESSION), /parameters/i);
+});
+
+test('student push action cannot retain a browser supplied identity', () => {
+  const input = {
+    role: 'teacher-test', studentId: '9999', name: '다른학생',
+    endpoint: 'https://push.example/device', keys: { p256dh: 'p', auth: 'a' },
+  };
+  const saved = normalizeStudentRequest('savePushSubscription', [input], SESSION);
+  assert.deepEqual(saved.params[0], {
+    role: 'student', studentId: '1101',
+    endpoint: 'https://push.example/device', keys: { p256dh: 'p', auth: 'a' },
+  });
+  for (const action of ['getPushPreferences', 'savePushPreferences', 'deactivatePushSubscription']) {
+    const result = normalizeStudentRequest(action, ['device-id', { studentId: '9999' }], SESSION);
+    assert.deepEqual(result.subject, { studentId: '1101', name: '테스트학생' });
+  }
 });

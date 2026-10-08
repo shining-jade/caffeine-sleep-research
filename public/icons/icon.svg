@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">카페인·수면 기록</title>
+  <desc id="desc">보라색 바탕에 하얀 커피잔과 초승달</desc>
+  <defs>
+    <linearGradient id="bg" x1="72" y1="54" x2="448" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#4338ca"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="375" cy="139" r="73" fill="#fef3c7"/>
+  <circle cx="406" cy="112" r="73" fill="#6366f1"/>
+  <path d="M128 208h226v101c0 70-49 121-113 121s-113-51-113-121V208Z" fill="#fff"/>
+  <path d="M354 238h28c43 0 70 26 70 63s-27 63-70 63h-39" fill="none" stroke="#fff" stroke-width="34" stroke-linecap="round"/>
+  <path d="M185 166c-24-31 24-43 0-76M248 166c-24-31 24-43 0-76M311 166c-24-31 24-43 0-76" fill="none" stroke="#e0e7ff" stroke-width="18" stroke-linecap="round"/>
+  <path d="M105 437h298" stroke="#c7d2fe" stroke-width="22" stroke-linecap="round"/>
+</svg>

@@ -10,6 +10,7 @@ export const STUDENT_ACTION_RULES = Object.freeze({
   getWeightData: 'identityFirst',
   saveInitialSetup: 'identityPayload',
   getStats: 'identityFirst',
+  getStudentBootstrap: 'identityFirst',
   getFilteredStats: 'identityFirst',
   getTeacherAwardsForStudent: 'identityFirst',
   markTeacherAwardsSeen: 'identityPair',
@@ -25,6 +26,11 @@ export const STUDENT_ACTION_RULES = Object.freeze({
   getBadgeConfig: 'passthrough',
   getChallengeBadgeConfig: 'passthrough',
   getSleepSettings: 'passthrough',
+  savePushSubscription: 'pushSubscription',
+  getPushPreferences: 'subscriptionOwned',
+  savePushPreferences: 'subscriptionOwned',
+  deactivatePushSubscription: 'subscriptionOwned',
+  getReminderStudentConfig: 'passthrough',
 });
 
 export const STUDENT_ACTIONS = new Set(Object.keys(STUDENT_ACTION_RULES));

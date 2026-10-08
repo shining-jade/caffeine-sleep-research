@@ -1,5 +1,6 @@
 const ACTION_NAMES = [
   'getTeacherData',
+  'updateTeacherHiddenStudents',
   'handleAIReportForTeacher',
   'grantTeacherAwards',
   'revokeTeacherAward',
@@ -28,6 +29,13 @@ const ACTION_NAMES = [
   'saveAIReport',
   'getAIReport',
   'saveSleepSettings',
+  'getReminderAdminConfig',
+  'saveReminderAdminConfig',
+  'saveTeacherTestSubscription',
+  'deactivateTeacherTestSubscription',
+  'getTestStudentReminderStatus',
+  'getTestStudentReminderTargets',
+  'recordTestStudentReminderResults',
 ];
 
 export const TEACHER_ACTIONS = new Set(ACTION_NAMES);

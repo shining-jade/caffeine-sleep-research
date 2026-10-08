@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import { createHash } from 'node:crypto';
+import test from 'node:test';
+const code=fs.readFileSync('apps-script/Sync.gs','utf8');
+function make(){let rows=[];let saved=new Set();let writes=0;const c=vm.createContext({Utilities:{DigestAlgorithm:{SHA_256:'sha'},Charset:{UTF_8:'utf8'},computeDigest:(_,v)=>Array.from(createHash('sha256').update(v).digest()).map(n=>n>127?n-256:n)},Date,JSON,normalizeId:String,requireOwnedRecord_(){},getSpreadsheet_(){}});vm.runInContext(code,c);c.syncLedgerFind_=key=>rows.find(r=>r.key===key);c.syncLedgerPending_=(key,digest,id)=>{const r={key,digest,id,state:'pending'};rows.push(r);return r;};c.syncLedgerCommit_=(r,result)=>{r.state='committed';r.result=result;};c.syncRecordExists_=(_,id)=>saved.has(id);return {c,rows,saved,write(p){writes++;saved.add(p.id);return {success:true};},count:()=>writes};}
+const subject={studentId:'2101',name:'합성 학생'};const p={studentId:'2101',name:'합성 학생',drink:'합성',mg:0,time:'2026-10-08 12:00:00',_sync:{mutationId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'}};
+test('retry after lost receipt writes one record and returns the same receipt',()=>{const x=make();const payload=structuredClone(p);let fail=true;x.c.syncLedgerCommit_=(entry,result)=>{if(fail)throw new Error('lost acknowledgement');entry.state='committed';entry.result=result;};assert.throws(()=>x.c.runSyncedMutation_('saveCaffeineData',payload,subject,()=>x.write(payload)));fail=false;const first=x.c.runSyncedMutation_('saveCaffeineData',structuredClone(p),subject,()=>x.write(payload));assert.equal(first.success,true);assert.equal(x.count(),1);});
+test('duplicate mutation returns receipt without another execution',()=>{const x=make();let calls=0;const execute=()=>{calls++;return {success:true};};const a=x.c.runSyncedMutation_('saveCaffeineData',structuredClone(p),subject,execute);const b=x.c.runSyncedMutation_('saveCaffeineData',structuredClone(p),subject,execute);assert.equal(calls,1);assert.equal(a.mutationId,b.mutationId);});
+test('same mutation with different content is rejected',()=>{const x=make();x.c.runSyncedMutation_('saveCaffeineData',structuredClone(p),subject,()=>({success:true}));assert.throws(()=>x.c.runSyncedMutation_('saveCaffeineData',{...p,mg:20},subject,()=>({success:true})));});
+test('owner is part of mutation identity',()=>{const x=make();const a=x.c.runSyncedMutation_('saveCaffeineData',structuredClone(p),subject,()=>({success:true}));const b=x.c.runSyncedMutation_('saveCaffeineData',{...structuredClone(p),studentId:'2102'}, {studentId:'2102',name:'다른 합성'},()=>({success:true}));assert.notEqual(a.recordId,b.recordId);});
+test('profile conflict is kept explicit and does not overwrite settings',()=>{const x=make();x.c.syncProfileState_=()=>({version:'newer'});const result=x.c.runSyncedMutation_('saveInitialSetup',{weight:50,_sync:{mutationId:p._sync.mutationId,baseVersion:'older'}},subject,()=>{assert.fail('must not overwrite');});assert.equal(result.error,'SYNC_CONFLICT');});
+
+test('a replaced sleep row cannot cause a lost response retry to overwrite the newer row',()=>{
+ const x=make();x.c.syncConfirmation_=(entry,receipt)=>({entry,receipt});let current;
+ function save(payload){return confirmation=>{current=payload.hours;confirmation.entry.state='committed';confirmation.entry.result=confirmation.receipt;return {success:true};};}
+ const a={...structuredClone(p),hours:5};const b={...structuredClone(p),hours:8,_sync:{mutationId:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'}};
+ x.c.runSyncedMutation_('saveSleepData',a,subject,save(a));x.c.runSyncedMutation_('saveSleepData',b,subject,save(b));
+ x.c.runSyncedMutation_('saveSleepData',structuredClone(a),subject,()=>{assert.fail('retry must replay its committed receipt');});assert.equal(current,8);
+});

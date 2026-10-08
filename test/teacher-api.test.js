@@ -6,7 +6,7 @@ import { createActionHandler } from '../api/teacher/action.js';
 import { createLoginHandler } from '../api/teacher/login.js';
 import { createLogoutHandler } from '../api/teacher/logout.js';
 import { createSessionHandler } from '../api/teacher/session.js';
-import { TEACHER_ACTIONS } from '../api/_lib/teacher-policy.js';
+import { normalizeTeacherRequest, TEACHER_ACTIONS } from '../api/_lib/teacher-policy.js';
 import { createSession } from '../api/_lib/session.js';
 
 process.env.SESSION_SECRET = 'teacher-api-test-session-secret';
@@ -17,7 +17,7 @@ process.env.TEACHER_PASSWORD_HASH = '11'.repeat(64);
 
 const NOW = 1_800_000_000;
 const EXPECTED_ACTIONS = [
-  'getTeacherData', 'handleAIReportForTeacher', 'grantTeacherAwards',
+  'updateTeacherHiddenStudents', 'getTeacherData', 'handleAIReportForTeacher', 'grantTeacherAwards',
   'revokeTeacherAward', 'getInquiries', 'replyToInquiry', 'deleteInquiry',
   'getUnreadInquiries', 'markInquiryNotified', 'exportDataToNewSheet',
   'sendTeacherMessage', 'saveTeacherPdfAndSendMessage', 'getSentTeacherMessages',
@@ -26,6 +26,9 @@ const EXPECTED_ACTIONS = [
   'saveChallengeBadgeConfig', 'getPendingBadges', 'savePendingBadgesData',
   'getDismissedBadges', 'saveDismissedBadgesData', 'getAwardSettings',
   'saveAwardSettingsData', 'saveAIReport', 'getAIReport', 'saveSleepSettings',
+  'getReminderAdminConfig', 'saveReminderAdminConfig', 'saveTeacherTestSubscription',
+  'deactivateTeacherTestSubscription', 'getTestStudentReminderStatus',
+  'getTestStudentReminderTargets', 'recordTestStudentReminderResults',
 ];
 
 function request(method, body, cookie = '') {
@@ -97,6 +100,7 @@ test('teacher API issues cookie after correct password without forwarding it', a
   assert.equal(seenCandidate, 'correct-password');
   assert.equal(res.statusCode, 200);
   assert.match(res.getHeader('set-cookie'), /HttpOnly; Secure; SameSite=Lax/);
+  assert.match(res.getHeader('set-cookie'), /Max-Age=2592000/);
   assert.deepEqual(res.json(), { success: true, authenticated: true, role: 'teacher' });
 });
 
@@ -170,4 +174,14 @@ test('teacher API session inspection and logout are role-safe', async () => {
   const logoutRes = response();
   await createLogoutHandler()(request('POST'), logoutRes);
   assert.match(logoutRes.getHeader('set-cookie'), /Max-Age=0/);
+});
+
+test('teacher reminder actions are allowlisted without admitting scheduler actions', () => {
+  assert.deepEqual(normalizeTeacherRequest('getReminderAdminConfig', []).params, []);
+  assert.deepEqual(normalizeTeacherRequest('saveReminderAdminConfig', [{ enabled: false }]).params, [{ enabled: false }]);
+  assert.deepEqual(normalizeTeacherRequest('getTestStudentReminderStatus', []).params, []);
+  assert.deepEqual(normalizeTeacherRequest('getTestStudentReminderTargets', ['sleep']).params, ['sleep']);
+  assert.deepEqual(normalizeTeacherRequest('recordTestStudentReminderResults', ['sleep', '2026-09-28', []]).params, ['sleep', '2026-09-28', []]);
+  assert.throws(() => normalizeTeacherRequest('getReminderDispatchSnapshot', []), /not allowed/i);
+  assert.throws(() => normalizeTeacherRequest('recordReminderDeliveryResults', []), /not allowed/i);
 });

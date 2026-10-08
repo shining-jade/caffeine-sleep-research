@@ -221,10 +221,6 @@ function getKSTDate() {
 // Students 시트 구조: A:학년, B:반, C:번호, D:이름, E:학번ID
 function checkLogin(studentId, name) {
   try {
-    safeLog_('=== 로그인 시도 ===');
-    safeLog_('입력된 학번: "' + studentId + '"');
-    safeLog_('입력된 이름: "' + name + '"');
-
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("students");
 
@@ -233,21 +229,16 @@ function checkLogin(studentId, name) {
       return { success: false, message: "학생 명단 시트를 찾을 수 없습니다." };
     }
 
-    const data = sheet.getDataRange().getValues();
-    safeLog_('students 시트 데이터 행 수: ' + (data.length - 1) + '명');
-
-    // 처음 5개 행 로그 출력 (디버깅용)
-    for (let i = 1; i < Math.min(6, data.length); i++) {
-      safeLog_(`${i}행 - E열(학번): "${data[i][4]}", D열(이름): "${data[i][3]}"`);
-    }
-
-    for (let i = 1; i < data.length; i++) {
+    const lastRow = sheet.getLastRow();
+    const data = lastRow > 1 ? sheet.getRange(2, 4, lastRow - 1, 2).getValues() : [];
+    const inputId = normalizeId(studentId);
+    const inputName = String(name).trim();
+    for (let i = 0; i < data.length; i++) {
       // ⭐ normalizeId로 숫자(1101.0) → "1101" 처리
-      const rowId   = normalizeId(data[i][4]);  // E열: 학번
-      const rowName = String(data[i][3]).trim(); // D열: 이름
-      const inputId = normalizeId(studentId);
+      const rowId   = normalizeId(data[i][1]);  // E열: 학번
+      const rowName = String(data[i][0]).trim(); // D열: 이름
 
-      if (rowId === inputId && rowName === name.trim()) {
+      if (rowId === inputId && rowName === inputName) {
         safeLog_('✅ 로그인 성공: ' + i + '행에서 일치');
         // 비수치 학번(교직원·교생)은 "학번_이름" 복합키로 고유화
         const uniqueId = /^\d+$/.test(inputId) ? inputId : inputId + '_' + name.trim();
@@ -288,7 +279,7 @@ function saveCaffeineData(payload) {
       intakeTime = Utilities.formatDate(dt, "Asia/Seoul", "yyyy-MM-dd HH:mm:ss");
     }
 
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       kstTimestamp,      // A: 타임스탬프 (기록 시간)
       p.grade,           // B: 학년
       p.class,           // C: 반
@@ -300,7 +291,10 @@ function saveCaffeineData(payload) {
       intakeTime,        // I: 섭취시간
       payload.id || '',      // J: 고유ID
       payload.reason || '',  // K: 섭취이유
-      payload.symptom || ''  // L: 부작용 경험
+      payload.symptom || '', // L: 부작용 경험
+      '',                    // M: 연구대상자코드 (기존 수식 유지)
+      String(payload.company || '').trim().slice(0, 120), // N: 업체명
+      String(payload.foodName || '').trim().slice(0, 240) // O: 원본 식품명
     ]);
 
     return { success: true };
@@ -325,7 +319,7 @@ function getWakeDateFromSleepPayload(payload) {
   return Utilities.formatDate(d, 'Asia/Seoul', 'yyyy-MM-dd');
 }
 
-function saveSleepData(payload) {
+function saveSleepData(payload, syncConfirmation) {
   try {
     // payload 검증
     if (!payload) {
@@ -339,7 +333,7 @@ function saveSleepData(payload) {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("sleep") || (() => {
       const s = ss.insertSheet("sleep");
-      s.appendRow([
+      appendRecordRow_(s, [
         "타임스탬프", "학년", "반", "번호", "전체학번", "성명",
         "날짜", "취침시간", "기상날짜", "기상시간", "수면시간",
         "컨디션", "메모", "고유ID",
@@ -424,14 +418,14 @@ function saveSleepData(payload) {
     if (existingRowIndex > 0) {
       // 기존 데이터가 있으면 해당 행 삭제
       safeLog_(`⚠️ Row ${existingRowIndex} 삭제 시작...`);
-      sheet.deleteRow(existingRowIndex);
+      // Replace this row atomically below; failed saves retain the old record.
       safeLog_(`✅ 기존 수면 기록 삭제 완료: 학번=${payload.studentId}, 날짜=${payload.date}`);
       wasUpdated = true;
     }
 
     // 새로운 데이터 추가 (항상)
     safeLog_(`새 데이터 추가 중...`);
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       kstTimestamp,           // A: 타임스탬프
       p.grade,                // B: 학년
       p.class,                // C: 반
@@ -451,7 +445,7 @@ function saveSleepData(payload) {
       payload.latency || '',     // P: 수면 잠들기 소요시간
       payload.awakenings || '',  // Q: 수면 중 각성
       payload.daytime || ''      // R: 낮 졸림
-    ]);
+    ], existingRowIndex > 0 ? existingRowIndex : null, syncConfirmation);
 
     safeLog_(`✅ 수면 기록 저장 완료: 학번=${payload.studentId}, 날짜=${payload.date}, 덮어쓰기=${wasUpdated}`);
     safeLog_('=== saveSleepData 종료 ===');
@@ -498,7 +492,7 @@ function saveWeightData(payload) {
       sheet.getRange(rowIndex, 7).setValue(payload.weight);
     } else {
       // 새 데이터 추가
-      sheet.appendRow([
+      appendRecordRow_(sheet, [
         kstTimestamp,      // A: 타임스탬프
         p.grade,           // B: 학년
         p.class,           // C: 반
@@ -562,6 +556,17 @@ function getWeightData(studentId) {
   }
 }
 
+// 학생 앱 재실행 시 필요한 초기 데이터를 한 번의 게이트웨이 요청으로 조회
+function getStudentBootstrap(studentId) {
+  return {
+    weight: getWeightData(studentId),
+    stats: getStats(studentId),
+    caffeineLogs: getCaffeineLogs(studentId),
+    sleepLogs: getSleepLogs(studentId),
+    sleepSettings: getSleepSettings()
+  };
+}
+
 // 초기 설정 저장 (체중 + 목표 카페인 + 목표 취침/기상시간)
 function saveInitialSetup(payload) {
   try {
@@ -589,7 +594,7 @@ function saveInitialSetup(payload) {
       sheet.getRange(rowIndex, 11).setValue(payload.ageGroup || 'teen'); // K: 연령대
     } else {
       // 새 행 추가
-      sheet.appendRow([
+      appendRecordRow_(sheet, [
         kstTimestamp,   // A: 타임스탬프
         p.grade,        // B: 학년
         p.class,        // C: 반
@@ -779,7 +784,7 @@ function getCaffeineLogs(studentId, startDate, endDate) {
       return [];
     }
 
-    const data = sheet.getRange(2, 1, lastRow - 1, 12).getValues();
+    const data = sheet.getRange(2, 1, lastRow - 1, Math.min(15, sheet.getLastColumn())).getValues();
     const logs = [];
 
     for (let i = 0; i < data.length; i++) {
@@ -810,6 +815,8 @@ function getCaffeineLogs(studentId, startDate, endDate) {
           amount: parseFloat(row[7]) || 0,     // H열: 함량
           time: timeStr,
           reason: row[10] || '',              // K열: 섭취이유
+          company: row[13] || '',
+          foodName: row[14] || '',
           symptom: row[11] || ''              // L열: 부작용 경험
         });
       }
@@ -2151,7 +2158,7 @@ function saveSleepSettings(settings) {
 
 // ---------------------------------------------------------------------------
 // Teacher message attachments / PDF delivery
-// Later declarations intentionally replace the earlier message functions.
+// Shared message helpers preserve attachment metadata for both dashboards.
 // ---------------------------------------------------------------------------
 function ensureTeacherMessageSheet_() {
   const ss = getSpreadsheet_();
@@ -2163,7 +2170,7 @@ function ensureTeacherMessageSheet_() {
   ];
   if (!sheet) {
     sheet = ss.insertSheet('teacher_messages');
-    sheet.appendRow(headers);
+    appendRecordRow_(sheet, headers);
     return sheet;
   }
   const width = sheet.getLastColumn();
@@ -2206,86 +2213,7 @@ function sendTeacherMessage(data) {
   try {
     const sheet = ensureTeacherMessageSheet_();
     const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.appendRow([
-      ts,
-      String(data.studentId),
-      String(data.studentName),
-      String(data.title),
-      String(data.content),
-      '미읽음',
-      '',
-      '',
-      '',
-      '',
-      String(data.attachmentName || ''),
-      String(data.attachmentUrl || ''),
-      String(data.attachmentType || '')
-    ]);
-    return { success: true };
-  } catch (err) {
-    safeLog_('sendTeacherMessage error: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Teacher message attachments / PDF delivery
-// Final declarations override the earlier message functions above.
-// ---------------------------------------------------------------------------
-function ensureTeacherMessageSheet_() {
-  const ss = getSpreadsheet_();
-  let sheet = ss.getSheetByName('teacher_messages');
-  const headers = [
-    'timestamp', 'studentId', 'studentName', 'title', 'content',
-    'readStatus', 'readTime', 'studentReply', 'studentReplyTime', 'studentReplyRead',
-    'attachmentName', 'attachmentUrl', 'attachmentType'
-  ];
-  if (!sheet) {
-    sheet = ss.insertSheet('teacher_messages');
-    sheet.appendRow(headers);
-    return sheet;
-  }
-  const width = sheet.getLastColumn();
-  if (width < headers.length) {
-    sheet.getRange(1, width + 1, 1, headers.length - width).setValues([headers.slice(width)]);
-  }
-  return sheet;
-}
-
-function formatTeacherMsgDate_(value) {
-  if (!value) return '';
-  return value instanceof Date
-    ? Utilities.formatDate(value, 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss')
-    : String(value);
-}
-
-function readTeacherMessageRow_(row, rowIndex, includeStudent) {
-  const item = {
-    rowIndex: rowIndex,
-    timestamp: formatTeacherMsgDate_(row[0]),
-    title: String(row[3] || ''),
-    content: String(row[4] || ''),
-    readStatus: String(row[5] || '미읽음'),
-    readTime: formatTeacherMsgDate_(row[6]),
-    studentReply: String(row[7] || ''),
-    studentReplyTime: formatTeacherMsgDate_(row[8]),
-    studentReplyRead: String(row[9] || ''),
-    attachmentName: String(row[10] || ''),
-    attachmentUrl: String(row[11] || ''),
-    attachmentType: String(row[12] || '')
-  };
-  if (includeStudent) {
-    item.studentId = String(row[1] || '');
-    item.studentName = String(row[2] || '');
-  }
-  return item;
-}
-
-function sendTeacherMessage(data) {
-  try {
-    const sheet = ensureTeacherMessageSheet_();
-    const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       ts,
       String(data.studentId),
       String(data.studentName),
@@ -2357,7 +2285,7 @@ function saveTeacherPdfAndSendMessage(data) {
 
     const sheet = ensureTeacherMessageSheet_();
     const msgTs = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       msgTs,
       String(data.studentId),
       String(data.studentName),
@@ -2374,105 +2302,6 @@ function saveTeacherPdfAndSendMessage(data) {
     ]);
     return { success: true, fileName: file.getName(), fileUrl: file.getUrl(), fileId: file.getId() };
 
-    const msgResult_unused = sendTeacherMessage({
-      studentId: data.studentId,
-      studentName: data.studentName,
-      title: data.title || '건강 기록 PDF',
-      content: data.content || '건강 기록 PDF를 확인해 주세요.',
-      attachmentName: file.getName(),
-      attachmentUrl: file.getUrl(),
-      attachmentType: 'pdf'
-    });
-    if (!msgResult || !msgResult.success) {
-      throw new Error((msgResult && msgResult.error) || '메시지 전송에 실패했습니다.');
-    }
-    return { success: true, fileName: file.getName(), fileUrl: file.getUrl(), fileId: file.getId() };
-  } catch (err) {
-    safeLog_('saveTeacherPdfAndSendMessage error: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-function getSentTeacherMessages() {
-  try {
-    const sheet = ensureTeacherMessageSheet_();
-    const rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) return { success: true, data: [] };
-    const result = [];
-    for (let i = 1; i < rows.length; i++) {
-      result.push(readTeacherMessageRow_(rows[i], i + 1, true));
-    }
-    result.reverse();
-    return { success: true, data: result };
-  } catch (err) {
-    safeLog_('getSentTeacherMessages error: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-function getTeacherMessages(studentId) {
-  try {
-    const sheet = ensureTeacherMessageSheet_();
-    const rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) return { success: true, data: [] };
-    const result = [];
-    for (let i = 1; i < rows.length; i++) {
-      if (normalizeId(rows[i][1]) === normalizeId(studentId)) {
-        result.push(readTeacherMessageRow_(rows[i], i + 1, false));
-      }
-    }
-    result.reverse();
-    return { success: true, data: result };
-  } catch (err) {
-    safeLog_('getTeacherMessages error: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
-
-function saveTeacherPdfAndSendMessage(data) {
-  try {
-    if (!data || !data.studentId || !data.studentName || !data.html) {
-      throw new Error('PDF 전송 정보가 부족합니다.');
-    }
-    const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyyMMdd_HHmmss');
-    const fileName = String(data.fileName || ('health-report-' + data.studentId + '-' + ts + '.pdf')).replace(/[\\/:*?"<>|]/g, '_');
-    const htmlBlob = Utilities.newBlob(String(data.html), 'text/html', fileName.replace(/\.pdf$/i, '.html'));
-    const pdfBlob = htmlBlob.getAs(MimeType.PDF).setName(fileName);
-    const file = DriveApp.createFile(pdfBlob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-    const sheet = ensureTeacherMessageSheet_();
-    const msgTs = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.appendRow([
-      msgTs,
-      String(data.studentId),
-      String(data.studentName),
-      String(data.title || '건강 기록 PDF'),
-      String(data.content || '건강 기록 PDF를 확인해 주세요.') + '\n\nPDF 링크: ' + file.getUrl(),
-      '미읽음',
-      '',
-      '',
-      '',
-      '',
-      file.getName(),
-      file.getUrl(),
-      'pdf'
-    ]);
-    return { success: true, fileName: file.getName(), fileUrl: file.getUrl(), fileId: file.getId() };
-
-    const msgResult = sendTeacherMessage({
-      studentId: data.studentId,
-      studentName: data.studentName,
-      title: data.title || '건강 기록 PDF',
-      content: data.content || '건강 기록 PDF를 확인해 주세요.',
-      attachmentName: file.getName(),
-      attachmentUrl: file.getUrl(),
-      attachmentType: 'pdf'
-    });
-    if (!msgResult || !msgResult.success) {
-      throw new Error((msgResult && msgResult.error) || '메시지 전송에 실패했습니다.');
-    }
-    return { success: true, fileName: file.getName(), fileUrl: file.getUrl(), fileId: file.getId() };
   } catch (err) {
     safeLog_('saveTeacherPdfAndSendMessage error: ' + err.message);
     return { success: false, error: err.message };
@@ -2669,7 +2498,7 @@ function saveAIReport(studentId, startDate, endDate, content, name) {
     let sheet   = ss.getSheetByName('ai_reports');
     if (!sheet) {
       sheet = ss.insertSheet('ai_reports');
-      sheet.appendRow(['이름', '학번', '시작일', '종료일', '내용', '저장일시']);
+      appendRecordRow_(sheet, ['이름', '학번', '시작일', '종료일', '내용', '저장일시']);
       sheet.setFrozenRows(1);
     }
     const now  = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
@@ -2686,7 +2515,7 @@ function saveAIReport(studentId, startDate, endDate, content, name) {
       }
     }
     // 없으면 새 행 추가
-    sheet.appendRow([sname, sid, startDate, endDate, cleanContent, now]);
+    appendRecordRow_(sheet, [sname, sid, startDate, endDate, cleanContent, now]);
     return { success: true, action: 'inserted' };
   } catch(e) {
     return { success: false, error: e.message };
@@ -2900,7 +2729,7 @@ function saveSleepDataSimple(studentId, name, date, sleepTime, wakeTime, hours, 
   const kstTimestamp = getKSTTimestamp();
   const p = parseStudentId(studentId);
 
-  sheet.appendRow([
+  appendRecordRow_(sheet, [
     kstTimestamp,
     p.grade,
     p.class,
@@ -3857,7 +3686,7 @@ function getTeacherData() {
     const caffeine = [];
 
     if (cafLastRow > 1) {
-      const cafRaw = cafSheet.getRange(2, 1, cafLastRow - 1, 12).getValues();
+      const cafRaw = cafSheet.getRange(2, 1, cafLastRow - 1, Math.min(15, cafSheet.getLastColumn())).getValues();
       for (let i = 0; i < cafRaw.length; i++) {
         const r = cafRaw[i];
         const cafRawId = String(r[4]).trim();  // E열: 전체학번
@@ -3881,6 +3710,8 @@ function getTeacherData() {
           함량:   parseFloat(r[7]) || 0, // H열
           섭취시간: timeStr,
           이유:   String(r[10] || ''),   // K열
+          업체명: String(r[13] || ''),
+          원본식품명: String(r[14] || ''),
           부작용: String(r[11] || '')    // L열
         });
       }
@@ -4016,6 +3847,7 @@ function getTeacherData() {
 
     return {
       success      : true,
+      hiddenStudentIds: getTeacherHiddenStudents().hiddenStudentIds,
       students     : students,
       caffeine     : caffeine,
       sleep        : sleep,
@@ -4660,7 +4492,7 @@ function submitInquiry(data) {
     const timestamp = getKSTTimestamp();
     const p = parseStudentId(data.studentId);
 
-    sheet.appendRow([
+    appendRecordRow_(sheet, [
       timestamp,               // A: 타임스탬프
       p.grade,                 // B: 학년
       p.class,                 // C: 반
@@ -5712,90 +5544,18 @@ function exportDataToNewSheet(params) {
  * 교사가 특정 학생에게 메시지 발송
  * data: { studentId, studentName, title, content }
  */
-function sendTeacherMessage(data) {
-  try {
-    const ss = getSpreadsheet_();
-    let sheet = ss.getSheetByName('teacher_messages');
-    if (!sheet) {
-      sheet = ss.insertSheet('teacher_messages');
-      sheet.appendRow(['타임스탬프','학번','이름','제목','내용','읽음여부','읽은시간','학생답장','학생답장시간','학생답장읽음']);
-    }
-    const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.appendRow([ts, String(data.studentId), String(data.studentName), String(data.title), String(data.content), '미읽음', '', '', '', '']);
-    return { success: true };
-  } catch (err) {
-    safeLog_('❌ sendTeacherMessage 오류: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
+
 
 /**
  * 교사용: 발송한 전체 메시지 목록 조회
  */
-function getSentTeacherMessages() {
-  try {
-    const ss = getSpreadsheet_();
-    const sheet = ss.getSheetByName('teacher_messages');
-    if (!sheet) return { success: true, data: [] };
-    const rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) return { success: true, data: [] };
-    const result = [];
-    for (let i = 1; i < rows.length; i++) {
-      result.push({
-        rowIndex:         i + 1,
-        timestamp:        rows[i][0] ? (rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][0])) : '',
-        studentId:        String(rows[i][1] || ''),
-        studentName:      String(rows[i][2] || ''),
-        title:            String(rows[i][3] || ''),
-        content:          String(rows[i][4] || ''),
-        readStatus:       String(rows[i][5] || '미읽음'),
-        readTime:         rows[i][6] ? (rows[i][6] instanceof Date ? Utilities.formatDate(rows[i][6], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][6])) : '',
-        studentReply:     String(rows[i][7] || ''),
-        studentReplyTime: rows[i][8] ? (rows[i][8] instanceof Date ? Utilities.formatDate(rows[i][8], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][8])) : '',
-        studentReplyRead: String(rows[i][9] || '')
-      });
-    }
-    result.reverse();
-    return { success: true, data: result };
-  } catch (err) {
-    safeLog_('❌ getSentTeacherMessages 오류: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
+
 
 /**
  * 학생용: 자신에게 온 메시지 조회
  * 시트 열: A타임스탬프 B학번 C이름 D제목 E내용 F읽음여부 G읽은시간 H학생답장 I학생답장시간 J학생답장읽음
  */
-function getTeacherMessages(studentId) {
-  try {
-    const ss = getSpreadsheet_();
-    const sheet = ss.getSheetByName('teacher_messages');
-    if (!sheet) return { success: true, data: [] };
-    const rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) return { success: true, data: [] };
-    const result = [];
-    for (let i = 1; i < rows.length; i++) {
-      if (normalizeId(rows[i][1]) === normalizeId(studentId)) {
-        result.push({
-          rowIndex:         i + 1,
-          timestamp:        rows[i][0] ? (rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][0])) : '',
-          title:            String(rows[i][3] || ''),
-          content:          String(rows[i][4] || ''),
-          readStatus:       String(rows[i][5] || '미읽음'),
-          readTime:         rows[i][6] ? (rows[i][6] instanceof Date ? Utilities.formatDate(rows[i][6], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][6])) : '',
-          studentReply:     String(rows[i][7] || ''),
-          studentReplyTime: rows[i][8] ? (rows[i][8] instanceof Date ? Utilities.formatDate(rows[i][8], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][8])) : ''
-        });
-      }
-    }
-    result.reverse();
-    return { success: true, data: result };
-  } catch (err) {
-    safeLog_('❌ getTeacherMessages 오류: ' + err.message);
-    return { success: false, error: err.message };
-  }
-}
+
 
 /**
  * 학생용: 메시지 읽음 처리

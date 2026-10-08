@@ -7,7 +7,7 @@ import { createLoginHandler } from '../api/student/login.js';
 import { createLogoutHandler } from '../api/student/logout.js';
 import { createSessionHandler } from '../api/student/session.js';
 import { GasGatewayError } from '../api/_lib/gas.js';
-import { createSession } from '../api/_lib/session.js';
+import { createSession, verifySession } from '../api/_lib/session.js';
 
 process.env.SESSION_SECRET = 'student-api-test-session-secret';
 process.env.GAS_API_URL = 'https://example.invalid/gas';
@@ -46,8 +46,18 @@ function studentCookie(overrides = {}) {
     ...overrides,
   };
   const token = createSession(payload, Math.min(NOW, payload.exp - 1));
-  return `caffeine_session=${encodeURIComponent(token)}`;
+  return `caffeine_student_session=${encodeURIComponent(token)}`;
 }
+
+test('student API refuses a screen identity that differs from the current cookie before reading data', async () => {
+  const res = response();
+  await createActionHandler({ callGas: async () => assert.fail('must not fetch another student data'), now: () => NOW })(
+    request('POST', JSON.stringify({ action: 'getStats', params: ['1102'],
+      expectedSubject: { studentId: '1102', name: '다른학생' } }), studentCookie()), res,
+  );
+  assert.equal(res.statusCode, 409);
+  assert.equal(res.json().error, 'SESSION_CHANGED');
+});
 
 test('student API rejects unsupported login method', async () => {
   const res = response();
@@ -112,7 +122,12 @@ test('student API issues secure cookie after valid login', async () => {
   assert.deepEqual(forwarded, {
     role: 'public', action: 'checkLogin', params: ['1101', '테스트학생'], subject: null,
   });
-  assert.match(res.getHeader('set-cookie'), /HttpOnly; Secure; SameSite=Lax/);
+  const setCookie = res.getHeader('set-cookie');
+  assert.match(setCookie, /HttpOnly; Secure; SameSite=Lax/);
+  assert.match(setCookie, /Max-Age=7776000/);
+  const token = decodeURIComponent(setCookie.match(/^caffeine_student_session=([^;]+)/)[1]);
+  assert.equal(verifySession(token, 'student', NOW + 7_775_999).studentId, '1101');
+  assert.throws(() => verifySession(token, 'student', NOW + 7_776_000), /expired session/i);
   assert.deepEqual(res.json(), {
     success: true, authenticated: true, role: 'student', studentId: '1101', name: '테스트학생',
   });
@@ -164,7 +179,7 @@ test('student API forwards successful action with session identity only', async 
   assert.deepEqual(forwarded.subject, { studentId: '1101', name: '테스트학생' });
   assert.deepEqual(forwarded.params, [{ studentId: '1101', name: '테스트학생', mg: 40 }]);
   assert.equal(JSON.stringify(forwarded).includes('9999'), false);
-  assert.deepEqual(res.json(), { success: true, data: { saved: true } });
+  assert.deepEqual(res.json(), { success: true, data: { saved: true }, subject: { studentId: '1101', name: '테스트학생' } });
 });
 
 test('student API maps upstream failure safely', async () => {
@@ -188,12 +203,66 @@ test('student API session inspection never returns token', async () => {
   assert.deepEqual(res.json(), {
     authenticated: true, role: 'student', studentId: '1101', name: '테스트학생',
   });
-  assert.equal(res.body.includes('caffeine_session'), false);
+  assert.equal(res.body.includes('caffeine_student_session'), false);
+});
+
+test('student API session inspection renews the same student session for 90 days', async () => {
+  const res = response();
+  await createSessionHandler({ now: () => NOW })(request('GET', undefined, studentCookie()), res);
+
+  const setCookie = res.getHeader('set-cookie');
+  assert.match(setCookie, /Max-Age=7776000/);
+  const token = decodeURIComponent(setCookie.match(/^caffeine_student_session=([^;]+)/)[1]);
+  assert.deepEqual(verifySession(token, 'student', NOW + 7_775_999), {
+    role: 'student', studentId: '1101', name: '테스트학생', exp: NOW + 7_776_000,
+  });
+  assert.throws(() => verifySession(token, 'student', NOW + 7_776_000), /expired session/i);
 });
 
 test('student API logout clears the session cookie', async () => {
   const res = response();
-  await createLogoutHandler()(request('POST'), res);
+  await createLogoutHandler({ now: () => NOW })(request('POST'), res);
   assert.equal(res.statusCode, 200);
+  assert.match(res.getHeader('set-cookie'), /Max-Age=0/);
+});
+
+test('student API logout deactivates the current device with session identity', async () => {
+  let forwarded;
+  const handler = createLogoutHandler({
+    now: () => NOW,
+    callGas: async (input) => { forwarded = input; },
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ endpoint: 'https://push.example/device-a' }), studentCookie()), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(forwarded.action, 'deactivatePushSubscription');
+  assert.deepEqual(forwarded.subject, { studentId: '1101', name: '테스트학생' });
+  assert.match(forwarded.params[0], /^[a-f0-9]{64}$/);
+  assert.match(res.getHeader('set-cookie'), /Max-Age=0/);
+});
+
+test('student API logout clears its cookie when deactivation fails', async () => {
+  const handler = createLogoutHandler({
+    now: () => NOW,
+    callGas: async () => { throw new Error('private gateway failure'); },
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ endpoint: 'https://push.example/device-a' }), studentCookie()), res);
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.json(), { success: true });
+  assert.match(res.getHeader('set-cookie'), /Max-Age=0/);
+  assert.doesNotMatch(res.body, /private gateway failure|push\.example/);
+});
+
+test('student API logout without a valid session never calls the gateway', async () => {
+  let calls = 0;
+  const handler = createLogoutHandler({
+    now: () => NOW,
+    callGas: async () => { calls += 1; },
+  });
+  const res = response();
+  await handler(request('POST', JSON.stringify({ endpoint: 'https://push.example/device-a' })), res);
+  assert.equal(res.statusCode, 200);
+  assert.equal(calls, 0);
   assert.match(res.getHeader('set-cookie'), /Max-Age=0/);
 });

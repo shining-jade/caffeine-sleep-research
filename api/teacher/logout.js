@@ -7,7 +7,7 @@ export function createLogoutHandler() {
       sendJson(res, 405, { success: false, error: 'METHOD_NOT_ALLOWED' });
       return;
     }
-    clearSessionCookie(res);
+    clearSessionCookie(res, "teacher", req);
     sendJson(res, 200, { success: true });
   };
 }

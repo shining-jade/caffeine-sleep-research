@@ -46,6 +46,45 @@ test('callGas follows a successful Apps Script response', async () => {
   assert.deepEqual(await callGas({ ...request, fetchImpl }), { count: 3 });
 });
 
+test('DB retries a GET service response but never treats it as database data', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return new Response(JSON.stringify(calls === 1
+      ? { success: true, service: 'caffeine-sleep-api' }
+      : { success: true, data: { success: true, data: [{ f: '커피' }] } }));
+  };
+  const result = await callGas({ ...request, action: 'getCaffeineDB', fetchImpl });
+  assert.equal(result.data.length, 1);
+  assert.equal(calls, 2);
+});
+
+test('DB retries are bounded and writes are never replayed', async () => {
+  let calls = 0;
+  const fetchImpl = async () => { calls++; return new Response('unavailable', { status: 503 }); };
+  await assert.rejects(callGas({ ...request, action: 'getCaffeineDB', fetchImpl }));
+  assert.equal(calls, 3);
+  calls = 0;
+  await assert.rejects(callGas({ ...request, action: 'saveCaffeineData', fetchImpl }));
+  assert.equal(calls, 1);
+});
+
+test('script execution redirects retain POST, output redirects use GET without secret', async () => {
+  const calls = [];
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    if (calls.length === 1) return new Response(null, { status: 302, headers: { Location: 'https://script.google.com/a/domain/macros/s/private-deployment/exec' } });
+    if (calls.length === 2) return new Response(null, { status: 302, headers: { Location: 'https://script.googleusercontent.com/macros/echo?key=output' } });
+    return new Response(JSON.stringify({ success: true, data: { success: true, data: [{ f: '커피' }] } }));
+  };
+  const result = await callGas({ ...request, action: 'getCaffeineDB', fetchImpl });
+  assert.equal(result.data.length, 1);
+  assert.equal(calls[1].options.method, 'POST');
+  assert.equal(calls[1].options.body, calls[0].options.body);
+  assert.equal(calls[2].options.method, 'GET');
+  assert.equal(calls[2].options.body, undefined);
+});
+
 test('callGas rejects upstream success false', async () => {
   const fetchImpl = async () => new Response(
     JSON.stringify({ success: false, error: 'private sheet detail' }),
@@ -58,6 +97,16 @@ test('callGas rejects upstream success false', async () => {
       && error.status === 502
       && !error.message.includes('private sheet detail'),
   );
+});
+
+test('redirects cannot send the gateway secret to another host', async () => {
+  let calls = 0;
+  const fetchImpl = async () => {
+    calls++;
+    return new Response(null, { status: 302, headers: { Location: 'https://example.com/collect' } });
+  };
+  await assert.rejects(callGas({ ...request, fetchImpl }), error => error.code === 'GAS_UNAVAILABLE');
+  assert.equal(calls, 1);
 });
 
 test('callGas rejects an HTML redirect page', async () => {
@@ -101,4 +150,16 @@ test('callGas never exposes URL secret or upstream body in its public error', as
         && !rendered.includes(privateBody);
     },
   );
+});
+
+test('personal record reads reject a health response instead of returning missing data', async () => {
+  for (const action of ['getCaffeineLogs', 'getSleepLogs', 'getStats']) {
+    await assert.rejects(callGas({ ...request, action, fetchImpl: async () => new Response(JSON.stringify({success:true,service:'caffeine-sleep-api'})) }), error => error.code === 'GAS_UNAVAILABLE');
+  }
+});
+
+test('teacher primary read retries transient upstream failure once without retrying mutations',async()=>{
+ let calls=0;const fetchImpl=async()=>{calls++;return calls===1?new Response('temporary',{status:502}):new Response(JSON.stringify({success:true,data:{success:true,students:[]}}));};
+ const result=await callGas({role:'teacher',action:'getTeacherData',params:[],fetchImpl});assert.equal(result.success,true);assert.equal(calls,2);
+ calls=0;await assert.rejects(callGas({role:'teacher',action:'updateTeacherHiddenStudents',params:[['2410'],true],fetchImpl:async()=>{calls++;return new Response('temporary',{status:502})}}));assert.equal(calls,1);
 });

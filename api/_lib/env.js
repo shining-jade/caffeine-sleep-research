@@ -15,3 +15,16 @@ export function getRuntimeConfig() {
     teacherPasswordHash: requireEnv('TEACHER_PASSWORD_HASH'),
   };
 }
+
+export function getPushRuntimeConfig() {
+  const subject = requireEnv('WEB_PUSH_SUBJECT');
+  if (!/^(mailto:|https:\/\/)/.test(subject)) {
+    throw new Error('WEB_PUSH_SUBJECT must start with mailto: or https://');
+  }
+  return {
+    publicKey: requireEnv('WEB_PUSH_VAPID_PUBLIC_KEY'),
+    privateKey: requireEnv('WEB_PUSH_VAPID_PRIVATE_KEY'),
+    subject,
+    cronSecret: requireEnv('CRON_SECRET'),
+  };
+}

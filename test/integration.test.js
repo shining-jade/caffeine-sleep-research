@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict';
 import { Readable } from 'node:stream';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 
-import { GasGatewayError } from '../api/_lib/gas.js';
+import { GAS_TIMEOUT_MS, GasGatewayError } from '../api/_lib/gas.js';
 import { createActionHandler as studentAction } from '../api/student/action.js';
 import { createLoginHandler as studentLogin } from '../api/student/login.js';
 import { createLogoutHandler as studentLogout } from '../api/student/logout.js';
 import { createActionHandler as teacherAction } from '../api/teacher/action.js';
 import { createLoginHandler as teacherLogin } from '../api/teacher/login.js';
+import { scanPublicBundle } from '../scripts/check-public-bundle.mjs';
 
 process.env.SESSION_SECRET = 'integration-session-secret';
 process.env.GAS_API_URL = 'https://example.invalid/apps-script';
@@ -138,8 +139,62 @@ test('integration: student own save/read, cross-student denial, teacher read, lo
 test('integration: Vercel config applies clean URLs, function duration and security headers', async () => {
   const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
   assert.equal(config.cleanUrls, true);
-  assert.equal(config.functions['api/**/*.js'].maxDuration, 30);
+  assert.equal(config.functions['api/**/*.js'].maxDuration, 60);
+  assert.equal(GAS_TIMEOUT_MS, 50_000);
+  assert.ok(GAS_TIMEOUT_MS <= (config.functions['api/**/*.js'].maxDuration * 1000) - 5_000);
   const headers = Object.fromEntries(config.headers[0].headers.map(({ key, value }) => [key, value]));
   assert.equal(headers['X-Content-Type-Options'], 'nosniff');
   assert.equal(headers['Referrer-Policy'], 'no-referrer');
+});
+
+test('integration: Vercel config schedules 24 unique once-daily UTC reminder slots', async () => {
+  const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
+  assert.equal(config.crons.length, 24);
+  assert.deepEqual(config.crons.map(({ path }) => path), Array.from(
+    { length: 24 }, (_, hour) => `/api/reminders/run?slot=${String(hour).padStart(2, '0')}`,
+  ));
+  assert.deepEqual(config.crons.map(({ schedule }) => schedule), Array.from(
+    { length: 24 }, (_, hour) => `0 ${hour} * * *`,
+  ));
+  assert.equal(new Set(config.crons.map(({ path }) => path)).size, 24);
+  assert.ok(config.crons.every(({ schedule }) => /^0 (?:[0-9]|1[0-9]|2[0-3]) \* \* \*$/.test(schedule)));
+  assert.deepEqual(config.rewrites, [
+    { source: '/', destination: '/index.html' },
+    { source: '/teacher', destination: '/teacher/index.html' },
+  ]);
+});
+
+test('integration: public scanner rejects reminder secrets and private key material', async () => {
+  const fixture = new URL('./fixtures/public-bundle-unsafe', import.meta.url);
+  const failures = await scanPublicBundle([fixture], { secretValues: ['private-value', 'cron-value'] });
+  assert.deepEqual(new Set(failures.map(({ name }) => name)), new Set([
+    'Apps Script deployment URL',
+    'server-only reminder environment variable',
+    'private key material',
+    'configured secret value',
+  ]));
+});
+
+test('integration: reminder browser APIs are same-origin and initial delivery remains disabled', async () => {
+  const [studentSource, teacherSource, appScriptSource] = await Promise.all([
+    readFile(new URL('../public/js/push-reminders.js', import.meta.url), 'utf8'),
+    readFile(new URL('../public/js/teacher-reminders.js', import.meta.url), 'utf8'),
+    readFile(new URL('../apps-script/Reminders.gs', import.meta.url), 'utf8'),
+  ]);
+  assert.doesNotMatch(`${studentSource}\n${teacherSource}`, /fetch\(['"]https?:\/\//);
+  assert.match(teacherSource, /\/api\/teacher\/reminders\/config/);
+  assert.match(studentSource, /api\.getConfig/);
+  assert.match(appScriptSource, /enabled:\s*false/);
+  assert.match(appScriptSource, /sleepTime:\s*'08:00'/);
+  assert.match(appScriptSource, /caffeineTime:\s*'20:00'/);
+});
+
+test('integration: Hobby deployment stays within twelve serverless entrypoints', async () => {
+  const entries = await readdir(new URL('../api', import.meta.url), { recursive: true });
+  const functions = entries
+    .map((path) => path.replaceAll('\\', '/'))
+    .filter((path) => path.endsWith('.js') && !path.startsWith('_lib'));
+  assert.ok(functions.length <= 12, `found ${functions.length} serverless entrypoints`);
+  assert.ok(functions.includes('student/push/[...path].js'));
+  assert.ok(functions.includes('teacher/reminders/[...path].js'));
 });

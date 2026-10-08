@@ -4,7 +4,7 @@ var STUDENT_ACTIONS_ = {
   saveSleepData: 'identityPayload', getSleepLogs: 'identityFirst',
   deleteSleepData: 'sleepRecord', updateSleepData: 'sleepPayload',
   getWeightData: 'identityFirst', saveInitialSetup: 'identityPayload',
-  getStats: 'identityFirst', getFilteredStats: 'identityFirst',
+  getStats: 'identityFirst', getStudentBootstrap: 'identityFirst', getFilteredStats: 'identityFirst',
   getTeacherAwardsForStudent: 'identityFirst', markTeacherAwardsSeen: 'identityPair',
   submitInquiry: 'identityPayload', getMyInquiries: 'identityFirst',
   getCaffeineDB: 'passthrough', testConnection: 'passthrough',
@@ -12,9 +12,13 @@ var STUDENT_ACTIONS_ = {
   getTeacherMessages: 'identityFirst', markTeacherMessageRead: 'messageRow',
   replyToTeacherMessage: 'messageRow', getBadgeConfig: 'passthrough',
   getChallengeBadgeConfig: 'passthrough', getSleepSettings: 'passthrough'
+  , savePushSubscription: 'pushSubscription', getPushPreferences: 'subscriptionOwned'
+  , savePushPreferences: 'subscriptionOwned', deactivatePushSubscription: 'subscriptionOwned'
+  , getReminderStudentConfig: 'passthrough'
 };
 
 var TEACHER_ACTIONS_ = {
+  updateTeacherHiddenStudents: true,
   getTeacherData: true, handleAIReportForTeacher: true, grantTeacherAwards: true,
   revokeTeacherAward: true, getInquiries: true, replyToInquiry: true,
   deleteInquiry: true, getUnreadInquiries: true, markInquiryNotified: true,
@@ -27,7 +31,16 @@ var TEACHER_ACTIONS_ = {
   savePendingBadgesData: true, getDismissedBadges: true,
   saveDismissedBadgesData: true, getAwardSettings: true,
   saveAwardSettingsData: true, saveAIReport: true, getAIReport: true,
-  saveSleepSettings: true
+  saveSleepSettings: true, getReminderAdminConfig: true, saveReminderAdminConfig: true,
+  saveTeacherTestSubscription: true, deactivateTeacherTestSubscription: true,
+  getTestStudentReminderStatus: true, getTestStudentReminderTargets: true,
+  recordTestStudentReminderResults: true
+};
+
+var SCHEDULER_ACTIONS_ = {
+  getReminderDispatchSnapshot: true,
+  claimReminderDeliveries: true,
+  recordReminderDeliveryResults: true
 };
 
 var STUDENT_MUTATIONS_ = {
@@ -38,13 +51,15 @@ var STUDENT_MUTATIONS_ = {
 };
 
 var TEACHER_MUTATIONS_ = {
+  updateTeacherHiddenStudents: true,
   grantTeacherAwards: true, revokeTeacherAward: true, replyToInquiry: true,
   deleteInquiry: true, markInquiryNotified: true, exportDataToNewSheet: true,
   sendTeacherMessage: true, saveTeacherPdfAndSendMessage: true,
   deleteTeacherMessage: true, deleteBulkTeacherMessages: true,
   markStudentReplyRead: true, saveBadgeConfig: true, saveChallengeBadgeConfig: true,
   savePendingBadgesData: true, saveDismissedBadgesData: true,
-  saveAwardSettingsData: true, saveAIReport: true, saveSleepSettings: true
+  saveAwardSettingsData: true, saveAIReport: true, saveSleepSettings: true,
+  recordTestStudentReminderResults: true
 };
 
 function normalizeCaffeineTime_(value) {
@@ -104,6 +119,7 @@ function handleApiRequest_(request) {
     return dispatchStudentAction_(request.action, request.params, requireSubject_(request.subject));
   }
   if (request.role === 'teacher') return dispatchTeacherAction_(request.action, request.params);
+  if (request.role === 'scheduler') return dispatchSchedulerAction_(request.action, request.params);
   throw new Error('REQUEST_REJECTED');
 }
 
@@ -117,19 +133,43 @@ function dispatchStudentAction_(action, params, subject) {
     if (!safeParams[0] || typeof safeParams[0] !== 'object' || Array.isArray(safeParams[0])) throw new Error('REQUEST_REJECTED');
     safeParams[0] = Object.assign({}, safeParams[0], { studentId: subject.studentId, name: subject.name });
   }
+  if (rule === 'pushSubscription') {
+    if (!safeParams[0] || typeof safeParams[0] !== 'object' || Array.isArray(safeParams[0])) throw new Error('REQUEST_REJECTED');
+    safeParams[0] = Object.assign({}, safeParams[0], { role: 'student', studentId: subject.studentId });
+    delete safeParams[0].name;
+  }
+  if (rule === 'subscriptionOwned') {
+    safeParams = action === 'savePushPreferences'
+      ? [safeParams[0], subject, safeParams[1]]
+      : [safeParams[0], subject];
+  }
   if (action === 'saveCaffeineData' || action === 'updateCaffeineData') {
     safeParams[0].time = normalizeCaffeineTime_(safeParams[0].time);
+    if (action === 'saveCaffeineData') {
+      safeParams[0].company = String(safeParams[0].company || '').trim().slice(0, 120);
+      safeParams[0].foodName = String(safeParams[0].foodName || '').trim().slice(0, 240);
+    }
   }
   if (action === 'saveCaffeineData' || action === 'saveSleepData') safeParams[0].id = Utilities.getUuid();
-  var execute = function() {
+  var execute = function(syncConfirmation) {
     if (rule === 'caffeineRecord') requireOwnedRecord_('caffeine', safeParams[0], subject);
     if (rule === 'sleepRecord') requireOwnedRecord_('sleep', safeParams[0], subject);
     if (rule === 'caffeinePayload') requireOwnedRecord_('caffeine', safeParams[0].id, subject);
     if (rule === 'sleepPayload') requireOwnedRecord_('sleep', safeParams[0].id, subject);
     if (rule === 'messageRow') requireOwnedRow_('teacher_messages', safeParams[0], subject);
-    return invokeAction_(action, safeParams);
+    var result = action === 'saveSleepData' && syncConfirmation ? saveSleepData(safeParams[0], syncConfirmation) : invokeAction_(action, safeParams);
+    if (action === 'saveCaffeineData' && result && result.success === true) {
+      var saved = safeParams[0];
+      result.record = { id: saved.id, name: saved.drink, company: saved.company || '', foodName: saved.foodName || '', amount: Number(saved.mg), time: saved.time, reason: saved.reason || '', symptom: saved.symptom || '' };
+    }
+    return result;
   };
-  return STUDENT_MUTATIONS_[action] ? withScriptLock_(execute) : execute();
+  var synced = ['saveCaffeineData','saveSleepData','saveInitialSetup'].indexOf(action) >= 0 && safeParams[0] && safeParams[0]._sync;
+  var operation = synced ? function() { return runSyncedMutation_(action, safeParams[0], subject, execute); } : execute;
+  var result = STUDENT_MUTATIONS_[action] ? withScriptLock_(operation) : operation();
+  if (action === 'getWeightData' && result) result.syncVersion = syncProfileState_(subject).version;
+  if (action === 'getStudentBootstrap' && result && result.weight) result.weight.syncVersion = syncProfileState_(subject).version;
+  return result;
 }
 
 function dispatchTeacherAction_(action, params) {
@@ -139,8 +179,15 @@ function dispatchTeacherAction_(action, params) {
   return TEACHER_MUTATIONS_[action] ? withScriptLock_(execute) : execute();
 }
 
+function dispatchSchedulerAction_(action, params) {
+  if (!SCHEDULER_ACTIONS_[action]) throw new Error('REQUEST_REJECTED');
+  return invokeAction_(action, params.slice());
+}
+
 function invokeAction_(action, params) {
   switch (action) {
+    case 'getTeacherHiddenStudents': return getTeacherHiddenStudents();
+    case 'updateTeacherHiddenStudents': return updateTeacherHiddenStudents.apply(null, params);
     case 'checkLogin': return checkLogin.apply(null, params);
     case 'saveCaffeineData': return saveCaffeineData.apply(null, params);
     case 'getCaffeineLogs': return getCaffeineLogs.apply(null, params);
@@ -153,6 +200,7 @@ function invokeAction_(action, params) {
     case 'getWeightData': return getWeightData.apply(null, params);
     case 'saveInitialSetup': return saveInitialSetup.apply(null, params);
     case 'getStats': return getStats.apply(null, params);
+    case 'getStudentBootstrap': return getStudentBootstrap.apply(null, params);
     case 'getFilteredStats': return getFilteredStats.apply(null, params);
     case 'getTeacherAwardsForStudent': return getTeacherAwardsForStudent.apply(null, params);
     case 'markTeacherAwardsSeen': return markTeacherAwardsSeen.apply(null, params);
@@ -168,6 +216,11 @@ function invokeAction_(action, params) {
     case 'getBadgeConfig': return getBadgeConfig.apply(null, params);
     case 'getChallengeBadgeConfig': return getChallengeBadgeConfig.apply(null, params);
     case 'getSleepSettings': return getSleepSettings.apply(null, params);
+    case 'savePushSubscription': return upsertPushSubscription_.apply(null, params);
+    case 'getPushPreferences': return getPushPreferences_.apply(null, params);
+    case 'savePushPreferences': return setPushPreferences_.apply(null, params);
+    case 'deactivatePushSubscription': return deactivatePushSubscription_.apply(null, params);
+    case 'getReminderStudentConfig': return getReminderStudentConfig_.apply(null, params);
     case 'getTeacherData': return getTeacherData.apply(null, params);
     case 'handleAIReportForTeacher': return handleAIReportForTeacher.apply(null, params);
     case 'grantTeacherAwards': return grantTeacherAwards.apply(null, params);
@@ -196,6 +249,41 @@ function invokeAction_(action, params) {
     case 'saveAIReport': return saveAIReport.apply(null, params);
     case 'getAIReport': return getAIReport.apply(null, params);
     case 'saveSleepSettings': return saveSleepSettings.apply(null, params);
+    case 'getReminderAdminConfig': return getReminderAdminConfig_.apply(null, params);
+    case 'saveReminderAdminConfig': return saveReminderAdminConfig_.apply(null, params);
+    case 'saveTeacherTestSubscription': return saveTeacherTestSubscription_.apply(null, params);
+    case 'deactivateTeacherTestSubscription': return deactivateTeacherTestSubscription_.apply(null, params);
+    case 'getTestStudentReminderStatus': return getTestStudentReminderStatus_.apply(null, params);
+    case 'getTestStudentReminderTargets': return getTestStudentReminderTargets_.apply(null, params);
+    case 'recordTestStudentReminderResults': return recordTestStudentReminderResults_.apply(null, params);
+    case 'getReminderDispatchSnapshot': return getReminderDispatchSnapshot_.apply(null, params);
+    case 'claimReminderDeliveries': return claimReminderDeliveries_.apply(null, params);
+    case 'recordReminderDeliveryResults': return recordReminderDeliveryResults_.apply(null, params);
   }
   throw new Error('REQUEST_REJECTED');
+}
+
+// Teacher-only analysis exclusions; research sheets and student access remain intact.
+function getTeacherHiddenStudents(){
+  var raw=PropertiesService.getScriptProperties().getProperty('TEACHER_HIDDEN_STUDENTS');
+  var ids=raw?JSON.parse(raw):[];
+  if(!Array.isArray(ids))throw new Error('REQUEST_REJECTED');
+  return {success:true,hiddenStudentIds:ids};
+}
+function updateTeacherHiddenStudents(ids,hidden){
+  if(!Array.isArray(ids)||ids.length>500||typeof hidden!=='boolean')throw new Error('REQUEST_REJECTED');
+  var clean=ids.map(function(id){
+    if(typeof id!=='string'||!id||id.length>100||/[<>\x00-\x1f]/.test(id))throw new Error('REQUEST_REJECTED');
+    return id;
+  });
+  var current=getTeacherHiddenStudents().hiddenStudentIds;
+  clean.forEach(function(id){
+    var index=current.indexOf(id);
+    if(hidden&&index<0)current.push(id);
+    if(!hidden&&index>=0)current.splice(index,1);
+  });
+  var encoded=JSON.stringify(current);
+  if(encoded.length>8000)throw new Error('REQUEST_REJECTED');
+  PropertiesService.getScriptProperties().setProperty('TEACHER_HIDDEN_STUDENTS',encoded);
+  return {success:true,hiddenStudentIds:current};
 }

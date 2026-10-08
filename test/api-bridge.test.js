@@ -123,6 +123,30 @@ test('API bridge auth helpers use login session and logout routes', async () => 
   assert.equal(calls[2].options.method, 'POST');
 });
 
+test('student push bridge uses same-origin endpoints and logout can include the current endpoint', async () => {
+  const calls = [];
+  const { window } = loadBridge({
+    fetchImpl: async (url, options = {}) => {
+      calls.push({ url, options });
+      return response({ success: true, subscriptionId: 'a'.repeat(64) });
+    },
+  });
+  const subscription = { endpoint: 'https://push.example/device', keys: { p256dh: 'p', auth: 'a' } };
+  await window.appPush.getConfig();
+  await window.appPush.subscribe(subscription, { sleepEnabled: true, caffeineEnabled: false });
+  await window.appPush.getPreferences('a'.repeat(64));
+  await window.appPush.savePreferences({ subscriptionId: 'a'.repeat(64), sleepEnabled: false, caffeineEnabled: true });
+  await window.appPush.unsubscribe({ endpoint: subscription.endpoint });
+  await window.appAuth.logout(subscription.endpoint);
+
+  assert.deepEqual(calls.map(({ url }) => url), [
+    '/api/student/push/config', '/api/student/push/subscribe', '/api/student/push/preferences',
+    '/api/student/push/preferences', '/api/student/push/unsubscribe', '/api/student/logout',
+  ]);
+  assert.equal(calls[2].options.headers['X-Push-Subscription-Id'], 'a'.repeat(64));
+  assert.deepEqual(JSON.parse(calls[5].options.body), { endpoint: subscription.endpoint });
+});
+
 test('API bridge student login sends only student credentials', async () => {
   let captured;
   const { window } = loadBridge({
@@ -162,4 +186,125 @@ test('API bridge rejects malformed JSON responses safely', async () => {
 test('API bridge public source contains no upstream URL or secret names', () => {
   assert.doesNotMatch(SOURCE, /script\.google\.com\/macros\/s\//i);
   assert.doesNotMatch(SOURCE, /GAS_API_URL|GAS_SHARED_SECRET|SESSION_SECRET|TEACHER_PASSWORD_HASH/);
+});
+
+test('duplicate in-flight student reads share one request and both receive results', async () => {
+  const pending = [];
+  const { window } = loadBridge({ fetchImpl: () => new Promise(resolve => pending.push(resolve)) });
+  const values = [];
+  window.google.script.run.withSuccessHandler(v => values.push(v)).getStats('1101');
+  window.google.script.run.withSuccessHandler(v => values.push(v)).getStats('1101');
+  assert.equal(pending.length, 1);
+  pending[0](response({ success: true, data: 7 }));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(values, [7, 7]);
+});
+
+test('old student success and failure responses are discarded after a new login', async () => {
+  const pending = [];
+  const { window } = loadBridge({ fetchImpl: url => url.endsWith('/login')
+    ? Promise.resolve(response({ success: true })) : new Promise(resolve => pending.push(resolve)) });
+  let callbacks = 0;
+  let expired = 0;
+  window.appAuth.onSessionExpired(() => expired++);
+  const runner = window.google.script.run.withSuccessHandler(() => callbacks++).withFailureHandler(() => callbacks++);
+  runner.getStats('1101');
+  runner.getSleepLogs('1101');
+  await window.appAuth.loginStudent('1102', '다른학생');
+  pending[0](response({ success: true, data: { private: 'previous student' } }));
+  pending[1](response({ success: false }, 401));
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(callbacks, 0);
+  assert.equal(expired, 0);
+});
+
+test('student data from a cookie changed by another tab never reaches the current screen', async () => {
+  const { window } = loadBridge({ fetchImpl: async url => url.endsWith('/login')
+    ? response({ success: true, studentId: '1101', name: '학생A' })
+    : response({ success: true, subject: { studentId: '1102', name: '학생B' }, data: ['private B record'] }) });
+  await window.appAuth.loginStudent('1101', '학생A');
+  let shown = false;
+  let expired = 0;
+  window.appAuth.onSessionExpired(() => expired++);
+  window.google.script.run.withSuccessHandler(() => { shown = true; }).withFailureHandler(() => {}).getCaffeineLogs('1101');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(shown, false);
+  assert.equal(expired, 1);
+});
+
+test('delayed session restoration cannot overwrite a completed new login', async () => {
+  let restore;
+  const { window } = loadBridge({ fetchImpl: url => url.endsWith('/session')
+    ? new Promise(resolve => { restore = resolve; })
+    : Promise.resolve(response({ success: true, studentId: '1102', name: '학생B' })) });
+  const session = window.appAuth.getSession().catch(error => error);
+  await window.appAuth.loginStudent('1102', '학생B');
+  restore(response({ success: true, studentId: '1101', name: '학생A' }));
+  assert.equal((await session).code, 'STALE_SESSION');
+});
+
+test('writes are never deduplicated and completed reads are fetched again', async () => {
+  let calls = 0;
+  const { window } = loadBridge({ fetchImpl: async () => { calls++; return response({ success: true, data: [] }); } });
+  const read = () => new Promise(resolve => window.google.script.run.withSuccessHandler(resolve).getStats('1101'));
+  await read();
+  await read();
+  window.google.script.run.saveSleepData({ id: '1' });
+  window.google.script.run.saveSleepData({ id: '1' });
+  assert.equal(calls, 4);
+});
+
+test('transient student reads retry once while writes are never replayed', async () => {
+  let calls=0;
+  const {window}=loadBridge({fetchImpl:async()=>{calls++;return calls===1?response({success:false,error:'GAS_UNAVAILABLE'},502):response({success:true,data:[{id:'saved'}]});}});
+  const result=await new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCaffeineLogs('0'));
+  assert.equal(result[0].id,'saved'); assert.equal(calls,2);
+  calls=0;
+  const failed=loadBridge({fetchImpl:async()=>{calls++;return response({success:false,error:'GAS_UNAVAILABLE'},502);}}).window;
+  await new Promise(resolve=>failed.google.script.run.withFailureHandler(resolve).saveCaffeineData({}));
+  assert.equal(calls,1);
+});
+
+test('changing session during a read retry never sends the old student request again', async () => {
+  let calls=0, firstFailure;
+  const first = new Promise(resolve=>{firstFailure=resolve;});
+  const {window}=loadBridge({fetchImpl:async()=>{calls++;firstFailure();return response({success:false,error:'GAS_UNAVAILABLE'},502);}});
+  let settled=false;
+  window.google.script.run.withSuccessHandler(()=>{settled=true;}).withFailureHandler(()=>{settled=true;}).getCaffeineLogs('0');
+  await first;
+  await new Promise(resolve=>setImmediate(resolve));
+  window.appAuth.invalidateSession();
+  await new Promise(resolve=>setTimeout(resolve,650));
+  assert.equal(calls,1); assert.equal(settled,false);
+});
+
+test('a confirmed write forces fresh history and an older snapshot cannot overwrite it', async () => {
+  let finishOld, reads=0;
+  const {window}=loadBridge({fetchImpl:async(_url,options)=>{
+    const action=JSON.parse(options.body).action;
+    if(action==='saveCaffeineData')return response({success:true,data:{success:true}});
+    reads++;
+    if(reads===1)return new Promise(resolve=>{finishOld=()=>resolve(response({success:true,data:[{id:'old'}]}));});
+    return response({success:true,data:[{id:'new'}]});
+  }});
+  const old=new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCaffeineLogs('0'));
+  await new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).saveCaffeineData({}));
+  const fresh=await new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getCaffeineLogs('0'));
+  finishOld(); const refreshedOld=await old;
+  assert.equal(fresh[0].id,'new');assert.equal(refreshedOld[0].id,'new');
+});
+
+test('teacher requests are bounded and queued dashboard reads receive priority',async()=>{
+ const calls=[];const releases=[];const {window}=loadBridge({role:'teacher',fetchImpl:async(_url,options)=>{calls.push(JSON.parse(options.body).action);return new Promise(resolve=>releases.push(()=>resolve(response({success:true,data:{success:true}}))));}});
+ const invoke=action=>new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[action]());
+ const jobs=['getAwardSettings','getPendingBadges','getDismissedBadges','getTeacherData'].map(invoke);
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(calls.length,2);
+ releases.shift()();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls[2],'getTeacherData');
+ while(releases.length){releases.shift()();await new Promise(resolve=>setImmediate(resolve));}
+ await Promise.all(jobs);assert.equal(calls.length,4);
+});
+test('simultaneous teacher dashboard reads share a single request',async()=>{
+ let count=0;let release;const {window}=loadBridge({role:'teacher',fetchImpl:()=>{count++;return new Promise(resolve=>release=()=>resolve(response({success:true,data:{success:true}})));}});
+ const invoke=()=>new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getTeacherData());
+ const a=invoke(),b=invoke();await new Promise(resolve=>setImmediate(resolve));assert.equal(count,1);release();await Promise.all([a,b]);
 });

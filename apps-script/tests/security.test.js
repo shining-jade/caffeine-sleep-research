@@ -13,6 +13,14 @@ async function gateway(extra = {}) {
       getCaffeineDB() { return { success: true, data: [] }; },
       getTeacherData() { return { success: true, students: [] }; },
       saveCaffeineData(payload) { return payload; },
+      getReminderDispatchSnapshot_(type) { return { type }; },
+      claimReminderDeliveries_(keys) { return keys; },
+      recordReminderDeliveryResults_(results) { return { recorded: results.length }; },
+      getReminderAdminConfig_() { return { enabled: false }; },
+      getReminderStudentConfig_() { return { sleepTime: '08:00', caffeineTime: '20:00', globallyEnabled: false }; },
+      getTestStudentReminderStatus_() { return { name: '테스트', sleepDevices: 1, caffeineDevices: 1 }; },
+      getTestStudentReminderTargets_(type) { return { name: '테스트', type, subscriptions: [] }; },
+      recordTestStudentReminderResults_(type, referenceDate, results) { return { type, referenceDate, recorded: results.length }; },
       ...extra,
     },
   });
@@ -79,6 +87,39 @@ test('student and teacher roles use distinct allowlists', async () => {
   assert.equal(outputJson(call(context, 'doPost(teacherDenied)')).error, 'REQUEST_REJECTED');
 });
 
+test('student bootstrap is student-only and replaces a supplied identity', async () => {
+  const { context } = await gateway({
+    getStudentBootstrap(id) { return { studentId: id, stats: { todayTotal: 0 } }; },
+  });
+  context.studentBootstrap = event({
+    secret, role: 'student', action: 'getStudentBootstrap', params: ['9999'],
+    subject: { studentId: '1101', name: '학생' },
+  });
+  context.teacherBootstrap = event({
+    secret, role: 'teacher', action: 'getStudentBootstrap', params: ['1101'],
+  });
+
+  assert.equal(outputJson(call(context, 'doPost(studentBootstrap)')).data.studentId, '1101');
+  assert.equal(outputJson(call(context, 'doPost(teacherBootstrap)')).error, 'REQUEST_REJECTED');
+});
+
+test('student bootstrap aggregates the existing student datasets', async () => {
+  const { context } = await loadAppsScript({ files: ['Code.gs'] });
+  context.getWeightData = (id) => ({ success: true, studentId: id, weight: 55 });
+  context.getStats = (id) => ({ studentId: id, todayTotal: 10 });
+  context.getCaffeineLogs = (id) => [{ id: `c-${id}` }];
+  context.getSleepLogs = (id) => [{ id: `s-${id}` }];
+  context.getSleepSettings = () => ({ success: true, settings: { ageGroup: 'teen' } });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(call(context, "getStudentBootstrap('1101')"))), {
+    weight: { success: true, studentId: '1101', weight: 55 },
+    stats: { studentId: '1101', todayTotal: 10 },
+    caffeineLogs: [{ id: 'c-1101' }],
+    sleepLogs: [{ id: 's-1101' }],
+    sleepSettings: { success: true, settings: { ageGroup: 'teen' } },
+  });
+});
+
 test('unknown roles actions and malformed params are rejected without echoing input', async () => {
   const { context } = await gateway();
   for (const body of [
@@ -90,5 +131,70 @@ test('unknown roles actions and malformed params are rejected without echoing in
     const result = outputJson(call(context, 'doPost(requestEvent)'));
     assert.equal(result.error, 'REQUEST_REJECTED');
     assert.doesNotMatch(JSON.stringify(result), /sensitive-input|notAFunction/);
+  }
+});
+
+test('scheduler role permits only reminder dispatch actions', async () => {
+  const { context } = await gateway();
+  for (const [action, params] of [
+    ['getReminderDispatchSnapshot', ['sleep', '2026-09-10T08:00:00+09:00']],
+    ['claimReminderDeliveries', [['key'], 'execution', '2026-09-10T08:00:00Z']],
+    ['recordReminderDeliveryResults', [[]]],
+  ]) {
+    context.schedulerEvent = event({ secret, role: 'scheduler', action, params });
+    assert.equal(outputJson(call(context, 'doPost(schedulerEvent)')).success, true);
+  }
+  for (const action of ['getTeacherData', 'savePushSubscription', 'constructor']) {
+    context.deniedSchedulerEvent = event({ secret, role: 'scheduler', action, params: [] });
+    assert.equal(outputJson(call(context, 'doPost(deniedSchedulerEvent)')).error, 'REQUEST_REJECTED');
+  }
+});
+
+test('student teacher and public roles cannot call another reminder role actions', async () => {
+  const { context } = await gateway();
+  const requests = [
+    { role: 'public', action: 'getReminderAdminConfig', params: [] },
+    { role: 'student', action: 'getReminderAdminConfig', params: [], subject: { studentId: '1101', name: '학생' } },
+    { role: 'teacher', action: 'getReminderDispatchSnapshot', params: [] },
+  ];
+  for (const request of requests) {
+    context.crossRoleEvent = event({ secret, ...request });
+    assert.equal(outputJson(call(context, 'doPost(crossRoleEvent)')).error, 'REQUEST_REJECTED');
+  }
+});
+
+test('student role can read only the limited reminder config action', async () => {
+  const { context } = await gateway();
+  context.studentReminderConfig = event({
+    secret,
+    role: 'student',
+    action: 'getReminderStudentConfig',
+    params: [],
+    subject: { studentId: '1101', name: '학생' },
+  });
+  const result = outputJson(call(context, 'doPost(studentReminderConfig)'));
+  assert.deepEqual(JSON.parse(JSON.stringify(result.data)), {
+    sleepTime: '08:00', caffeineTime: '20:00', globallyEnabled: false,
+  });
+});
+
+test('test student reminder actions are teacher-only', async () => {
+  const { context } = await gateway();
+  const allowed = [
+    ['getTestStudentReminderStatus', []],
+    ['getTestStudentReminderTargets', ['sleep']],
+    ['recordTestStudentReminderResults', ['sleep', '2026-09-28', []]],
+  ];
+  for (const [action, params] of allowed) {
+    context.teacherTestStudentEvent = event({ secret, role: 'teacher', action, params });
+    assert.equal(outputJson(call(context, 'doPost(teacherTestStudentEvent)')).success, true);
+    for (const request of [
+      { role: 'student', subject: { studentId: '1101', name: '테스트' } },
+      { role: 'scheduler' },
+      { role: 'public' },
+    ]) {
+      context.deniedTestStudentEvent = event({ secret, action, params, ...request });
+      assert.equal(outputJson(call(context, 'doPost(deniedTestStudentEvent)')).error, 'REQUEST_REJECTED');
+    }
   }
 });

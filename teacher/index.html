@@ -14,11 +14,20 @@
         .header-top{display:flex;justify-content:space-between;align-items:center;gap:16px;}
         .header-left{flex:1;min-width:0;}
         .header-right{display:flex;align-items:center;gap:12px;flex-shrink:0;}
+        .header-actions{min-width:0;}
+        .refresh-settings{display:flex;align-items:center;gap:8px;background:#f9fafb;padding:8px 14px;border-radius:10px;border:1px solid #e5e7eb;}
         .zoom-box{display:flex;align-items:center;gap:8px;background:#f9fafb;padding:8px 14px;border-radius:10px;border:1px solid #e5e7eb;}
         h1{color:#1f2937;font-size:28px;font-weight:700;display:flex;align-items:center;gap:12px;}
         .subtitle{color:#6b7280;font-size:14px;margin-top:8px;}
         .last-update{font-size:13px;color:#9ca3af;margin-top:4px;}
         .btn{padding:10px 20px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:all 0.3s;}
+        .teacher-save-toast{position:fixed;top:20px;right:20px;z-index:1800;display:flex;align-items:center;gap:12px;max-width:min(420px,calc(100vw - 32px));padding:14px 16px;border-radius:12px;color:white;font-size:14px;font-weight:700;line-height:1.45;box-shadow:0 14px 36px rgba(15,23,42,.24);opacity:0;transform:translateY(-14px);pointer-events:none;transition:opacity .2s ease,transform .2s ease;}
+        .teacher-save-toast.is-visible{opacity:1;transform:translateY(0);pointer-events:auto;}
+        .teacher-save-toast-loading{background:#2563eb;}
+        .teacher-save-toast-success{background:#15803d;}
+        .teacher-save-toast-error{background:#b91c1c;}
+        .teacher-save-toast-message{flex:1;}
+        .teacher-save-toast-close{border:0;background:rgba(255,255,255,.18);color:white;border-radius:999px;width:28px;height:28px;font-size:20px;line-height:1;cursor:pointer;flex:0 0 auto;}
         .btn-primary{background:#6366f1;color:white;} .btn-primary:hover{background:#4f46e5;} .btn-primary:disabled{background:#9ca3af;cursor:not-allowed;}
         .btn-green{background:#10b981;color:white;} .btn-green:hover{background:#059669;} .btn-green:disabled{background:#9ca3af;cursor:not-allowed;}
         .btn-blue{background:#3b82f6;color:white;} .btn-blue:hover{background:#2563eb;}
@@ -142,6 +151,30 @@
         .caf-level-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
         .settings-save-row{grid-column:1/-1;display:flex;align-items:center;gap:16px;}
         .settings-toast{display:none;padding:10px 18px;background:#10b981;color:white;border-radius:8px;font-size:13px;font-weight:600;}
+        .reminder-grid[hidden]{display:none;}
+        .reminder-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start;}
+        .reminder-wide{grid-column:1/-1;}
+        .reminder-toggle{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0;border-bottom:1px solid #f3f4f6;}
+        .reminder-toggle:last-child{border-bottom:none;}
+        .reminder-toggle input[type=checkbox]{width:20px;height:20px;accent-color:#6366f1;cursor:pointer;flex-shrink:0;}
+        .reminder-time-row{display:grid;grid-template-columns:1fr 120px;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid #f3f4f6;}
+        .reminder-select,.reminder-date{width:100%;padding:9px 10px;border:2px solid #e5e7eb;border-radius:8px;background:white;font:inherit;color:#374151;}
+        .reminder-select:focus,.reminder-date:focus{outline:none;border-color:#6366f1;}
+        .reminder-copy{margin-top:8px;padding:12px 14px;background:#f9fafb;border-radius:10px;color:#4b5563;font-size:13px;line-height:1.6;}
+        .reminder-period-table{width:100%;border-collapse:collapse;font-size:13px;}
+        .reminder-period-table th,.reminder-period-table td{padding:9px 8px;border-bottom:1px solid #e5e7eb;text-align:left;}
+        .reminder-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}
+        .reminder-metric{padding:16px;background:#f9fafb;border-radius:12px;}
+        .reminder-metric-label{font-size:12px;color:#6b7280;margin-bottom:6px;}
+        .reminder-metric-value{font-size:18px;font-weight:700;color:#1f2937;}
+        .reminder-class-counts{font-size:12px;color:#6b7280;margin-top:12px;display:flex;gap:14px;flex-wrap:wrap;}
+        .reminder-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+        .reminder-status{font-size:13px;color:#4f46e5;font-weight:600;}
+        .reminder-error{font-size:13px;color:#dc2626;font-weight:600;min-height:20px;margin-top:8px;}
+        .chart-card,.settings-card,.student-card{min-width:0;}
+        .tab-content,.filter-bar,.chart-grid,.settings-grid,.student-grid{min-width:0;}
+        .responsive-table-wrap{max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-inline:contain;}
+        .responsive-table-wrap:focus-visible{outline:3px solid #818cf8;outline-offset:2px;}
 
         .modal{display:none;position:fixed;z-index:1000;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);}
         .modal.active{display:flex;align-items:center;justify-content:center;}
@@ -293,7 +326,17 @@
         /* ── PC 반응형 ── */
         @media(max-width:1600px){.student-grid{grid-template-columns:repeat(3,1fr);}}
         @media(max-width:1400px){.settings-grid{grid-template-columns:repeat(2,1fr);}}
-        @media(max-width:1200px){.stats-grid{grid-template-columns:repeat(2,1fr);}.student-grid{grid-template-columns:repeat(2,1fr);}}
+        @media(max-width:1200px){
+            .header-top{flex-direction:column;align-items:stretch;}
+            .header-left{width:100%;}
+            .header-left h1,.header-left .subtitle{word-break:keep-all;}
+            .header-actions{flex-wrap:wrap;width:100%;justify-content:flex-end;}
+            .tab-nav{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-wrap:nowrap;overscroll-behavior-inline:contain;}
+            .tab-nav::-webkit-scrollbar{display:none;}
+            .tab-button{white-space:nowrap;flex:0 0 auto;}
+            .stats-grid{grid-template-columns:repeat(2,1fr);}
+            .student-grid{grid-template-columns:repeat(2,1fr);}
+        }
         @media(max-width:900px){.settings-grid{grid-template-columns:1fr;}}
 
         /* ── 태블릿 반응형 (768px ~ 1024px) ── */
@@ -308,29 +351,26 @@
 
         /* ── 모바일 반응형 (max 768px) ── */
         @media(max-width:768px){
-            body{font-size:15px;}
+            html,body{width:100%;max-width:100%;overflow-x:hidden;}
+            body{font-size:15px;zoom:100%;}
             .container{padding:0 14px;}
 
             /* 헤더 */
             header{padding:14px 0;}
-            .header-top{flex-wrap:wrap;}
+            .header-top{display:block;}
             h1{font-size:18px;gap:8px;}
             .subtitle{font-size:12px;margin-top:4px;}
             .last-update{font-size:11px;}
-            /* 제목(왼쪽)은 최대한 넓게, 우측 버튼들은 한 줄에 */
-            .header-left{flex:1;min-width:200px;}
-            .header-right{flex-shrink:0;flex-direction:column;align-items:flex-end;gap:8px;}
-            /* 줌박스: 모바일에서 compact하게 */
-            .zoom-box{padding:6px 10px;gap:6px;}
-            .zoom-box span:first-child{font-size:12px;}
-            #zoomSlider{width:70px;}
-            #zoomLabel{font-size:12px;min-width:30px;}
-            #refreshBtn{font-size:13px;padding:8px 14px;}
+            .header-left{width:100%;min-width:0;}
+            .header-actions{width:100%;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:stretch;margin-top:12px;}
+            .zoom-box{display:none;}
+            .refresh-settings{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:10px 12px;}
+            #refreshBtn,#teacherSecureLogout{width:100%;min-height:44px;justify-content:center;margin:0;}
 
             /* 탭 네비게이션 */
-            .tab-nav{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-wrap:nowrap;}
+            .tab-nav{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-wrap:nowrap;scroll-snap-type:x mandatory;overscroll-behavior-inline:contain;}
             .tab-nav::-webkit-scrollbar{display:none;}
-            .tab-button{padding:12px 16px;font-size:13px;white-space:nowrap;flex-shrink:0;}
+            .tab-button{padding:12px 16px;font-size:13px;white-space:nowrap;flex:0 0 auto;min-height:44px;scroll-snap-align:start;}
 
             /* 카드 & 그리드 */
             .stats-grid{grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px;}
@@ -355,7 +395,7 @@
             .student-grid{grid-template-columns:1fr;gap:14px;}
             .student-card{padding:18px;}
             .student-name{font-size:18px;margin-bottom:12px;}
-            .info-row{font-size:13px;}
+            .info-row{font-size:13px;flex-wrap:wrap;}
 
             /* 학생 필터 날짜 행: 항상 가로 한 줄 유지 */
             .student-date-filter{flex-wrap:nowrap !important;}
@@ -382,6 +422,19 @@
             /* 설정 그리드 */
             .settings-grid{grid-template-columns:1fr;}
             .settings-card{padding:20px 16px;}
+            .settings-input-row{flex-wrap:wrap;align-items:stretch;}
+            .settings-input{width:100%;flex:1 1 140px;min-height:44px;}
+            .reminder-select,.reminder-date,.journey-date-input{min-height:44px;width:100%;}
+            .award-setting-row{flex-wrap:wrap;align-items:flex-start;}
+            .analysis-dropdown-menu{min-width:0;max-width:calc(100vw - 28px);width:max-content;}
+            .chart-card,.chart-container,.dual-chart-container{max-width:100%;overflow:hidden;}
+            .responsive-table-wrap{border-radius:10px;}
+            .reminder-period-table,.journey-schedule-table{min-width:0!important;width:100%;}
+            .reminder-period-table thead,.journey-schedule-table thead{display:none;}
+            .reminder-period-table tbody,.journey-schedule-table tbody{display:grid;gap:10px;}
+            .reminder-period-table tr,.journey-schedule-table tr{display:grid;grid-template-columns:1fr;border:1px solid #d1fae5;border-radius:10px;padding:10px;background:#fff;}
+            .reminder-period-table th,.reminder-period-table td,.journey-schedule-table td{display:grid;grid-template-columns:minmax(86px,auto) minmax(0,1fr);align-items:center;gap:8px;padding:7px 4px;border:0;}
+            .reminder-period-table td::before,.journey-schedule-table td::before{content:attr(data-label);font-weight:700;color:#4b5563;}
 
             /* 모달 */
             .modal-content{width:100%;max-width:100%;max-height:100vh;border-radius:16px 16px 0 0;position:fixed;bottom:0;left:0;animation:modalSlideUp 0.3s ease-out;}
@@ -414,6 +467,8 @@
         /* ── 소형 모바일 (max 480px) ── */
         @media(max-width:480px){
             h1{font-size:17px;}
+            .header-actions{grid-template-columns:1fr;}
+            .refresh-settings{grid-template-columns:1fr;}
             .tab-button{padding:10px 12px;font-size:12px;}
             .stats-grid{grid-template-columns:1fr;gap:10px;}
             .stat-value{font-size:32px;}
@@ -421,6 +476,7 @@
             .filter-buttons{gap:6px;}
             .filter-btn{font-size:11px;padding:6px 10px;}
             .btn-sm{padding:8px 12px;font-size:12px;}
+            .reminder-metrics{grid-template-columns:1fr;}
         }
 
         .student-filter-row{display:grid;grid-template-columns:1fr 180px 180px auto;gap:12px;align-items:center;margin-bottom:12px;}
@@ -434,6 +490,11 @@
             .modal-content{overflow-y:auto;-webkit-overflow-scrolling:touch;}
             /* 설정탭 저장버튼 풀너비 */
             #tab-settings .btn-primary{width:100%;}
+            .reminder-grid{grid-template-columns:1fr;}
+            .reminder-wide{grid-column:auto;}
+            .reminder-metrics{grid-template-columns:1fr;}
+            .reminder-time-row{grid-template-columns:1fr;}
+            .teacher-save-toast{top:12px;left:14px;right:14px;max-width:none;}
         }
 
         .rec-badge{display:inline-block;padding:1px 7px;border-radius:8px;font-size:11px;font-weight:600;margin-left:4px;}
@@ -505,8 +566,11 @@
         .pdf-award-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:12px;font-size:9px;font-weight:600;border:1px solid rgba(0,0,0,0.1);}
     </style>
   <script src="/public/js/api-bridge.js"></script>
+  <script src="/public/js/badge-journey.js"></script>
   <script src="/public/js/safe-render.js"></script>
   <script src="/public/js/teacher-auth.js"></script>
+  <script type="module" src="/public/js/teacher-save-feedback.js"></script>
+  <script type="module" src="/public/js/teacher-reminders.js"></script>
 </head>
 <body>
 
@@ -623,14 +687,14 @@
                 <p class="subtitle">학생들의 카페인 섭취 및 수면 패턴을 실시간으로 모니터링합니다</p>
                 <p class="last-update" id="lastUpdate">마지막 업데이트: -</p>
             </div>
-            <div class="header-right">
+            <div class="header-right header-actions">
                 <div class="zoom-box">
                     <span style="font-size:13px;font-weight:600;color:#374151;">🖥️ 화면 비율</span>
                     <input type="range" id="zoomSlider" min="70" max="130" value="100" step="5" style="width:100px;accent-color:#6366f1;" oninput="applyZoom(this.value)">
                     <span style="font-size:13px;font-weight:700;color:#6366f1;min-width:36px;" id="zoomLabel">100%</span>
                     <button onclick="applyZoom(100);document.getElementById('zoomSlider').value=100;" style="background:#e5e7eb;border:none;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;color:#6b7280;font-weight:600;">초기화</button>
                 </div>
-                <div style="display:flex;align-items:center;gap:8px;background:#f9fafb;padding:8px 14px;border-radius:10px;border:1px solid #e5e7eb;">
+                <div class="refresh-settings">
                     <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:#374151;white-space:nowrap;">
                         <input type="checkbox" id="autoRefreshToggle" onchange="toggleAutoRefresh(this.checked)"
                             style="width:15px;height:15px;accent-color:#6366f1;cursor:pointer;">
@@ -654,6 +718,7 @@
             <button class="tab-button" onclick="switchTab('sleep',this)">😴 수면 분석</button>
             <button class="tab-button" onclick="switchTab('students',this)">👥 학생 목록</button>
             <button class="tab-button" onclick="switchTab('awards',this)">🏅 뱃지 현황</button>
+            <button class="tab-button" onclick="switchTab('reminders',this)">🔔 알림 설정</button>
             <button class="tab-button" onclick="switchTab('settings',this)">⚙️ 설정</button>
             <button class="tab-button" onclick="switchTab('inquiries',this)">📩 학생 문의</button>
         </div>
@@ -729,10 +794,11 @@
             </div>
         </div>
         <div class="chart-grid">
-            <div class="chart-card"><h3 class="chart-title">일별 평균 카페인 (<span id="cafChartLabel1">7일</span>)</h3><div class="chart-container"><canvas id="dailyCaffeineChart"></canvas></div></div>
+            <div class="chart-card"><h3 class="chart-title">일별 평균 카페인 (<span id="cafChartLabel1">7일</span>)</h3><div class="chart-container"><canvas id="dailyCaffeineChart"></canvas></div><p id="cafDailyParticipation" style="font-size:12px;color:#6b7280;">기록한 학생만 평균에 포함됩니다. 0mg 기록은 포함됩니다.</p></div>
             <div class="chart-card"><h3 class="chart-title">카페인 단계별 학생 수 (<span id="cafChartLabel2">7일</span> 평균)</h3><div class="chart-container"><canvas id="gradeCaffeineChart"></canvas></div></div>
             <div class="chart-card"><h3 class="chart-title">음료 분류별 비율</h3><div class="chart-container"><canvas id="drinkTypeChart"></canvas></div></div>
             <div class="chart-card"><h3 class="chart-title">카페인 섭취 시간대</h3><div class="chart-container"><canvas id="caffeineTimeChart"></canvas></div></div>
+            <div class="chart-card" style="grid-column:1/-1;"><h3 class="chart-title">업체별 섭취 현황</h3><p style="font-size:12px;color:#6b7280;margin-bottom:12px;">선택한 학년·반·조회기간·테스트 포함 설정을 따릅니다. DB 업체 기준이며 구매 지점 통계가 아닙니다. 섭취 안 함은 제외하고 디카페인 음료는 포함합니다.</p><div id="cafCompanySummary"></div><div id="cafCompanyTable" style="max-height:360px;overflow:auto;"></div></div>
             <div class="chart-card" style="grid-column:1/-1;"><h3 class="chart-title">☕ 카페인 섭취 이유 분포 <span style="font-size:13px;font-weight:400;color:#9ca3af;">(<span id="cafChartLabel3">7일</span> 기준 · 중복 선택 포함)</span></h3><div id="cafReasonNoData" style="display:none;text-align:center;padding:40px;color:#9ca3af;font-size:14px;">섭취 이유 데이터가 없습니다.</div><div class="chart-container" id="cafReasonWrap" style="height:260px;"><canvas id="cafReasonChart"></canvas></div></div>
             <div class="chart-card" style="grid-column:1/-1;">
                 <h3 class="chart-title">⚠️ 카페인 부작용 경험 분포 <span style="font-size:13px;font-weight:400;color:#9ca3af;">(<span id="cafChartLabel4">7일</span> 기준 · 중복 선택 포함)</span></h3>
@@ -807,6 +873,8 @@
     <!-- 학생 목록 -->
     <div id="tab-students" class="tab-content">
         <div class="student-filter-section">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"><button id="hideSelectedStudentsBtn" class="btn btn-sm" onclick="hideSelectedStudents()" disabled>선택 학생 숨기기 (0명)</button><button id="manageHiddenStudentsBtn" class="btn btn-sm" onclick="showHiddenStudents()">숨긴 학생 관리 (0명)</button><span style="font-size:12px;color:#6b7280;align-self:center;">숨긴 학생은 목록·필터·통계·내보내기에서 제외됩니다.</span></div>
+            <button id="studentTestToggle" class="btn btn-sm" onclick="toggleTestStudents()" style="margin-bottom:12px;">테스트 제외</button>
             <h3 class="filter-title">🔍 학생 필터 <span id="studentFilterCount" style="margin-left:8px;font-size:13px;font-weight:600;color:#6366f1;background:#eef2ff;padding:3px 10px;border-radius:12px;"></span></h3>
             <!-- 검색·학년·반 -->
             <div class="student-filter-row" style="display:grid;grid-template-columns:1fr 180px 180px;gap:12px;align-items:center;margin-bottom:10px;">
@@ -941,6 +1009,25 @@
     <!-- 📩 학생 문의 탭 -->
     <!-- ══ 🏅 뱃지 현황 탭 ══ -->
     <div id="tab-awards" class="tab-content">
+
+        <div style="background:white;border-radius:16px;padding:20px 24px;margin-bottom:24px;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+                <div>
+                    <h3 style="font-size:17px;font-weight:700;color:#1f2937;">🌱 학생별 건강기록 현황</h3>
+                    <p style="font-size:12px;color:#6b7280;margin-top:4px;">운영용 학생목록의 학번·이름으로 확인하며, 연구 분석용 내보내기에서는 가명처리합니다.</p>
+                </div>
+                <input id="journeyStatusSearch" type="text" placeholder="학번 또는 이름 검색" oninput="renderJourneyStatus()"
+                    style="padding:8px 12px;border:1.5px solid #d1d5db;border-radius:8px;font-size:12px;width:190px;">
+            </div>
+            <div class="responsive-table-wrap" tabindex="0" aria-label="학생별 건강기록 현황 표">
+                <table style="width:100%;border-collapse:collapse;min-width:760px;font-size:12px;">
+                    <thead><tr style="background:#f9fafb;color:#4b5563;text-align:left;">
+                        <th style="padding:9px;">학번</th><th>이름</th><th>누적 완료일</th><th>이번 주</th><th>초기 7일</th><th>행동실험 7일</th><th>현재 단계</th>
+                    </tr></thead>
+                    <tbody id="journeyStatusBody"><tr><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;">데이터를 불러오는 중...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
 
         <!-- ⭐ 챌린지 설정 미완료 안내 -->
         <div id="challengeSetupNotice" style="display:none;background:white;border-radius:16px;padding:24px 28px;margin-bottom:24px;box-shadow:0 2px 12px rgba(0,0,0,0.08);border-left:4px solid #6366f1;text-align:center;">
@@ -1098,7 +1185,100 @@
     </div>
 </div>
 
+    <div id="tab-reminders" class="tab-content">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+            <div>
+                <div class="settings-page-title" style="margin-bottom:6px;">🔔 카페인·수면 기록 알림</div>
+                <div id="teacherReminderStatus" class="reminder-status">설정을 불러오는 중입니다…</div>
+                <div id="teacherReminderError" class="reminder-error" role="alert"></div>
+            </div>
+            <button id="teacherReminderSaveButton" disabled class="btn btn-primary" onclick="teacherReminders.saveConfig()">💾 알림 설정 저장</button>
+        </div>
+
+        <div class="reminder-grid" hidden>
+            <section class="settings-card">
+                <div class="settings-card-title">운영 설정</div>
+                <label class="reminder-toggle">
+                    <span><strong>전체 학생 알림</strong><br><small style="color:#9ca3af;">저장 후 켜지며, 끄면 모든 학생 알림이 중지됩니다.</small></span>
+                    <input id="teacherReminderEnabled" type="checkbox">
+                </label>
+                <label class="reminder-toggle">
+                    <span><strong>주말에도 알림 보내기</strong><br><small style="color:#9ca3af;">토요일과 일요일을 운영일에 포함합니다.</small></span>
+                    <input id="teacherReminderIncludeWeekends" type="checkbox">
+                </label>
+            </section>
+
+            <section class="settings-card">
+                <div class="settings-card-title">시간 및 문구</div>
+                <div class="reminder-time-row">
+                    <label style="display:flex;align-items:center;gap:9px;"><input id="teacherReminderSleepEnabled" type="checkbox" style="width:18px;height:18px;accent-color:#6366f1;"><strong>아침 수면 기록</strong></label>
+                    <select id="teacherReminderSleepTime" class="reminder-select" aria-label="수면 기록 알림 시간"></select>
+                </div>
+                <div class="reminder-copy">어젯밤 수면 기록을 간단히 남겨보세요.</div>
+                <div class="reminder-time-row" style="margin-top:10px;">
+                    <label style="display:flex;align-items:center;gap:9px;"><input id="teacherReminderCaffeineEnabled" type="checkbox" style="width:18px;height:18px;accent-color:#6366f1;"><strong>저녁 카페인 기록</strong></label>
+                    <select id="teacherReminderCaffeineTime" class="reminder-select" aria-label="카페인 기록 알림 시간"></select>
+                </div>
+                <div class="reminder-copy">오늘의 카페인 기록을 확인해 주세요. 마시지 않았다면 ‘섭취 안 함’을 선택하면 돼요.</div>
+                <p style="font-size:12px;color:#6b7280;margin-top:12px;">※ 기기와 네트워크 상태에 따라 선택한 시간대 안에서 발송될 수 있습니다.</p>
+            </section>
+
+            <section class="settings-card reminder-wide">
+                <div class="settings-card-title">반별 알림 운영 기간</div>
+                <div class="responsive-table-wrap" tabindex="0" aria-label="반별 알림 운영 기간 표">
+                    <table class="reminder-period-table">
+                        <thead><tr><th>반</th><th>시작일</th><th>종료일</th><th>알림 기기</th></tr></thead>
+                        <tbody>
+                            <tr><th>1반</th><td data-label="시작일"><input id="teacherReminderClass1Start" class="reminder-date" type="date"></td><td data-label="종료일"><input id="teacherReminderClass1End" class="reminder-date" type="date"></td><td data-label="알림 기기" id="teacherReminderClass1Count">0대</td></tr>
+                            <tr><th>2반</th><td data-label="시작일"><input id="teacherReminderClass2Start" class="reminder-date" type="date"></td><td data-label="종료일"><input id="teacherReminderClass2End" class="reminder-date" type="date"></td><td data-label="알림 기기" id="teacherReminderClass2Count">0대</td></tr>
+                            <tr><th>3반</th><td data-label="시작일"><input id="teacherReminderClass3Start" class="reminder-date" type="date"></td><td data-label="종료일"><input id="teacherReminderClass3End" class="reminder-date" type="date"></td><td data-label="알림 기기" id="teacherReminderClass3Count">0대</td></tr>
+                            <tr><th>4반</th><td data-label="시작일"><input id="teacherReminderClass4Start" class="reminder-date" type="date"></td><td data-label="종료일"><input id="teacherReminderClass4End" class="reminder-date" type="date"></td><td data-label="알림 기기" id="teacherReminderClass4Count">0대</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section class="settings-card reminder-wide">
+                <div class="settings-card-title">구독 및 실행 현황</div>
+                <div class="reminder-metrics">
+                    <div class="reminder-metric"><div class="reminder-metric-label">알림을 켠 학생</div><div id="teacherReminderStudentCount" class="reminder-metric-value">0명</div></div>
+                    <div class="reminder-metric"><div class="reminder-metric-label">등록 기기</div><div id="teacherReminderDeviceCount" class="reminder-metric-value">0대</div></div>
+                    <div class="reminder-metric"><div class="reminder-metric-label">최근 실행</div><div id="teacherReminderLastAt" class="reminder-metric-value" style="font-size:15px;">-</div><div id="teacherReminderLastMetrics" style="font-size:11px;color:#6b7280;margin-top:6px;">대상 0 · 성공 0 · 만료 0 · 실패 0</div></div>
+                </div>
+                <div class="reminder-class-counts">
+                    <span>다음 수면 알림: <strong id="teacherReminderNextSleep">-</strong></span>
+                    <span>다음 카페인 알림: <strong id="teacherReminderNextCaffeine">-</strong></span>
+                </div>
+            </section>
+
+            <section class="settings-card reminder-wide">
+                <div class="settings-card-title">현재 교사 브라우저 알림 확인</div>
+                <p style="font-size:13px;color:#6b7280;line-height:1.7;margin-bottom:14px;">학생에게 보내지 않고 지금 사용 중인 이 브라우저에서 문구와 동작을 확인합니다.</p>
+                <div class="reminder-actions">
+                    <button class="btn btn-blue" onclick="teacherReminders.registerTestDevice()">🔔 이 기기 등록</button>
+                    <button class="btn" style="background:#eef2ff;color:#4338ca;" onclick="teacherReminders.sendTest('sleep')">수면 알림 미리보기</button>
+                    <button class="btn" style="background:#fff7ed;color:#c2410c;" onclick="teacherReminders.sendTest('caffeine')">카페인 알림 미리보기</button>
+                </div>
+            </section>
+
+            <section class="settings-card reminder-wide" id="teacherTestStudentCard">
+                <div class="settings-card-title">테스트 학생 알림 확인</div>
+                <p style="font-size:13px;color:#6b7280;line-height:1.7;margin-bottom:10px;">이름이 정확히 <strong>테스트</strong>인 학생의 활성 기기에만 실제 알림을 보냅니다. 전체 학생 알림이 꺼져 있어도 시험할 수 있습니다.</p>
+                <div id="teacherTestStudentSummary" style="font-size:14px;font-weight:700;color:#374151;margin-bottom:8px;">테스트 · 수면 가능 기기 0대 · 카페인 가능 기기 0대</div>
+                <div id="teacherTestStudentGuide" style="font-size:12px;color:#6b7280;line-height:1.6;margin-bottom:12px;">연결 상태를 확인하는 중입니다…</div>
+                <div class="reminder-actions">
+                    <button id="teacherTestStudentRefreshButton" class="btn" style="background:#f3f4f6;color:#374151;" onclick="teacherReminders.refreshTestStudent()">🔄 연결 상태 새로고침</button>
+                    <button id="teacherTestStudentSleepButton" class="btn btn-blue" onclick="teacherReminders.sendTestStudent('sleep')" disabled>😴 수면 알림 보내기</button>
+                    <button id="teacherTestStudentCaffeineButton" class="btn" style="background:#fff7ed;color:#c2410c;" onclick="teacherReminders.sendTestStudent('caffeine')" disabled>☕ 카페인 알림 보내기</button>
+                </div>
+                <div id="teacherTestStudentResult" class="reminder-status" aria-live="polite" style="margin-top:14px;"></div>
+                <div id="teacherTestStudentError" class="reminder-error" role="alert" aria-live="assertive"></div>
+            </section>
+        </div>
+    </div>
+
     <div id="tab-settings" class="tab-content">
+        <div class="settings-card"><h3>테스트 학생 표시</h3><p>이 브라우저의 목록·분석·내보내기에 테스트 학생을 포함할지 선택합니다. 새로고침 후에도 유지됩니다.</p><button id="settingsTestToggle" class="btn btn-sm" onclick="toggleTestStudents()">테스트 제외</button></div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
             <div class="settings-page-title" style="margin-bottom:0;">⚙️ 모니터링 기준 설정</div>
             <div style="display:flex;align-items:center;gap:16px;">
@@ -1233,34 +1413,34 @@
                     <span style="font-size:12px;font-weight:400;color:#9ca3af;margin-left:8px;">챌린지 뱃지는 교사 승인 후 학생에게 수여됩니다</span>
                 </div>
                 <div class="settings-info-box" style="margin-bottom:16px;">
-                    ☕ <strong>카페인/수면 오늘 기록 뱃지</strong>는 자동 부여 유지 &nbsp;|&nbsp;
-                    나머지 <strong>습관·챌린지 뱃지</strong>는 시스템이 달성 감지 → <strong>교사가 뱃지 현황 탭에서 승인</strong> 후 수여됩니다.
+                    카페인과 수면을 같은 날 모두 남긴 경우를 <strong>하루 기록 완료</strong>로 계산합니다.<br>
+                    누적 기록 뱃지는 자동으로 표시하며, 건강수치가 아닌 <strong>기록·성찰 과정</strong>만 격려합니다.
                 </div>
 
                 <!-- 챌린지 설정 -->
                 <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:10px;padding:14px 16px;margin-bottom:16px;">
-                    <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:10px;">🏆 챌린지 설정</div>
+                    <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:10px;">🌱 건강기록 여정 설정</div>
                     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
                         <label style="font-size:12px;font-weight:600;color:#374151;white-space:nowrap;">챌린지 이름:</label>
-                        <input type="text" id="setting_challengeName" placeholder="예: 10일 건강 챌린지" value="10일 건강 챌린지"
+                        <input type="text" id="setting_challengeName" placeholder="예: 나의 건강기록 여정" value="나의 건강기록 여정"
                             style="flex:1;max-width:220px;padding:6px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:13px;font-weight:600;">
                     </div>
-                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                        <label style="font-size:12px;font-weight:600;color:#374151;white-space:nowrap;">챌린지 기간:</label>
-                        <input type="date" id="setting_challengeStart" style="padding:6px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:13px;">
-                        <span style="color:#6b7280;">~</span>
-                        <input type="date" id="setting_challengeEnd" style="padding:6px 10px;border:1.5px solid #d1d5db;border-radius:6px;font-size:13px;">
-                        <span style="font-size:11px;color:#6b7280;">( 📊 누적형 뱃지에 적용 )</span>
+                    <div class="responsive-table-wrap" tabindex="0" aria-label="반별 건강기록 여정 일정 표">
+                        <table class="journey-schedule-table" style="width:100%;border-collapse:collapse;min-width:900px;font-size:11px;">
+                            <thead><tr style="color:#166534;text-align:left;">
+                                <th style="padding:5px;">반</th><th>전체 시작</th><th>전체 종료</th><th>초기 시작</th><th>초기 종료</th><th>실천 시작</th><th>실천 종료</th>
+                            </tr></thead>
+                            <tbody id="journeyScheduleRows"></tbody>
+                        </table>
                     </div>
                 </div>
 
                 <!-- 뱃지 목록 -->
                 <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:12px;padding:0 4px;">
-                    🔁 <span style="color:#166534;">연속</span>: N일 하루도 빠짐없이 연속 기록 &nbsp;|&nbsp; 📊 <span style="color:#1e40af;">누적</span>: 챌린지 기간 내 N일 이상 기록
-                    &nbsp;|&nbsp; 이모지·이름·일수를 직접 수정할 수 있습니다.
+                    학생에게는 연구 구간을 노출하지 않고, 누적 기록일과 과정 중심 뱃지만 보여줍니다.
                 </div>
                 <div id="challengeBadgeList" style="display:flex;flex-direction:column;gap:10px;margin-bottom:12px;"></div>
-                <button onclick="addChallengeBadge()" style="padding:6px 16px;background:#e0f2fe;color:#0369a1;border:1.5px solid #7dd3fc;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:14px;">+ 커스텀 뱃지 추가</button>
+                <div style="height:4px;"></div>
 
                 <!-- 저장 / 초기화 -->
                 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -1363,15 +1543,19 @@
             <h3 class="section-title">📈 카페인 &amp; 수면 현황 <span id="chartRangeLabel" style="font-size:13px;color:#9ca3af;font-weight:400;"></span></h3>
             <div class="chart-card" style="margin-bottom:24px;"><div class="dual-chart-container"><canvas id="modalDualChart"></canvas></div></div>
             <h3 class="section-title">☕ 카페인 섭취 내역 <span id="cafTableRangeLabel" style="font-size:13px;color:#9ca3af;font-weight:400;"></span></h3>
+            <div class="responsive-table-wrap" tabindex="0" aria-label="카페인 섭취 내역 표">
             <table class="data-table">
                 <thead><tr><th>섭취시간</th><th>음료명</th><th>카페인 함량</th><th>당일 누계</th><th>상태</th></tr></thead>
                 <tbody id="modalCaffeineTable"></tbody>
             </table>
+            </div>
             <h3 class="section-title" style="margin-top:28px;">😴 수면 기록 <span id="sleepTableRangeLabel" style="font-size:13px;color:#9ca3af;font-weight:400;"></span></h3>
+            <div class="responsive-table-wrap" tabindex="0" aria-label="수면 기록 표">
             <table class="data-table">
                 <thead><tr><th>취침날짜</th><th>취침</th><th>기상날짜</th><th>기상</th><th>수면시간</th><th>컨디션</th><th>상태</th></tr></thead>
                 <tbody id="modalSleepTable"></tbody>
             </table>
+            </div>
 
             <!-- ── 생활 패턴 추가 차트 ── -->
             <section class="pattern-panel">
@@ -1560,9 +1744,10 @@ let S={cafMaxFixed:0,cafWarn:56,cafOver:100,
        aiMinCaf:3,aiMinSleep:3,awardMinDays:5,
        badgeHabitDays:3,badgeStreakDays:7,badgeMonthlyDays:10,
        badgeHabitName:'습관의 시작',badgeStreakName:'꾸준한 습관',badgeMonthlyName:'챌린지 달성',
-       challengeName:'10일 건강 챌린지', challengeStart:'', challengeEnd:''};
+       challengeName:'나의 건강기록 여정', challengeStart:'', challengeEnd:''};
 
 function loadSettings(){
+    syncTestStudentsControls();
     try{const sv=localStorage.getItem('monSettings');if(sv)S={...S,...JSON.parse(sv)};}catch(e){}
     document.getElementById('setting_cafMax').value=S.cafMaxFixed||0;
     document.getElementById('setting_cafWarn').value=S.cafWarn||56;
@@ -1578,12 +1763,12 @@ function loadSettings(){
     updateCafPreview(); updateSleepPreview();
     document.getElementById('sleepWarningDetail').textContent=`7일 평균 ${S.sleepSevere}시간 미만`;
     // 뱃지 설정 로드 및 렌더
-    loadAwardSettings();
+
     loadManualAwards();
-    loadChallengeBadges();
+
     loadBadgeGroupLabels();   // 그룹 이름·이모지 복원
-    loadPendingBadges();
-    loadDismissedBadges();
+
+
     renderAwardSettingList();
     renderChallengeBadgeList();
     // 챌린지 설정 UI 복원
@@ -1594,34 +1779,38 @@ function loadSettings(){
     const sce=document.getElementById('setting_challengeEnd');
     if(sce&&S.challengeEnd)sce.value=S.challengeEnd;
     // 서버에서 뱃지 설정 로드 (v2)
-    loadBadgeConfigFromGAS();
+
     // 기존 자동뱃지 초기화 마이그레이션 (1회)
-    if(!localStorage.getItem('badgeMigrationV3'))migrateOldBadges();
+    // Legacy remote migration runs after primary data arrives.
 }
 function saveSettings(){
-    S.cafMaxFixed=parseFloat(document.getElementById('setting_cafMax').value)||0;
-    S.cafWarn=parseFloat(document.getElementById('setting_cafWarn').value)||80;
-    S.cafOver=parseFloat(document.getElementById('setting_cafOver').value)||100;
-    S.sleepSevere=parseFloat(document.getElementById('setting_sleepSevere').value)||7;
-    S.sleepWarn=parseFloat(document.getElementById('setting_sleepWarn').value)||8;
-    S.sleepGood=parseFloat(document.getElementById('setting_sleepGood').value)||10;
-    S.sleepMax=parseFloat(document.getElementById('setting_sleepMax').value)||11;
-    S.aiMinCaf=parseInt(document.getElementById('setting_aiMinCaf').value)||3;
-    S.aiMinSleep=parseInt(document.getElementById('setting_aiMinSleep').value)||3;
-    S.awardMinDays=parseInt(document.getElementById('setting_awardMinDays')?.value||5);
-    S.badgeHabitDays=parseInt(document.getElementById('setting_badgeHabitDays')?.value||3);
-    S.badgeStreakDays=parseInt(document.getElementById('setting_badgeStreakDays')?.value||7);
-    S.badgeMonthlyDays=parseInt(document.getElementById('setting_badgeMonthlyDays')?.value||10);
-    S.challengeName  = document.getElementById('setting_challengeName')?.value  || S.challengeName  || '10일 건강 챌린지';
-    S.challengeStart = document.getElementById('setting_challengeStart')?.value || S.challengeStart || '';
-    S.challengeEnd   = document.getElementById('setting_challengeEnd')?.value   || S.challengeEnd   || '';
-    try{localStorage.setItem('monSettings',JSON.stringify(S));}catch(e){}
-    saveSleepSettingsToGAS();
-    saveAwardSettings();
-    updateCafPreview(); updateSleepPreview();
-    document.getElementById('sleepWarningDetail').textContent=`7일 평균 ${S.sleepSevere}시간 미만`;
-    showTeacherModal('💾', '설정 저장 완료', '설정이 성공적으로 저장되었습니다.', 'success');
-    if(studentsData.length){updateDashboard();updateStudentGrid();}
+    const action=()=>{
+        S.cafMaxFixed=parseFloat(document.getElementById('setting_cafMax').value)||0;
+        S.cafWarn=parseFloat(document.getElementById('setting_cafWarn').value)||80;
+        S.cafOver=parseFloat(document.getElementById('setting_cafOver').value)||100;
+        S.sleepSevere=parseFloat(document.getElementById('setting_sleepSevere').value)||7;
+        S.sleepWarn=parseFloat(document.getElementById('setting_sleepWarn').value)||8;
+        S.sleepGood=parseFloat(document.getElementById('setting_sleepGood').value)||10;
+        S.sleepMax=parseFloat(document.getElementById('setting_sleepMax').value)||11;
+        S.aiMinCaf=parseInt(document.getElementById('setting_aiMinCaf').value)||3;
+        S.aiMinSleep=parseInt(document.getElementById('setting_aiMinSleep').value)||3;
+        S.awardMinDays=parseInt(document.getElementById('setting_awardMinDays')?.value||5);
+        S.badgeHabitDays=parseInt(document.getElementById('setting_badgeHabitDays')?.value||3);
+        S.badgeStreakDays=parseInt(document.getElementById('setting_badgeStreakDays')?.value||7);
+        S.badgeMonthlyDays=parseInt(document.getElementById('setting_badgeMonthlyDays')?.value||10);
+        S.challengeName=document.getElementById('setting_challengeName')?.value||S.challengeName||'10일 건강 챌린지';
+        S.challengeStart=document.getElementById('setting_challengeStart')?.value||S.challengeStart||'';
+        S.challengeEnd=document.getElementById('setting_challengeEnd')?.value||S.challengeEnd||'';
+        localStorage.setItem('monSettings',JSON.stringify(S));
+        saveSleepSettingsToGAS();
+        saveAwardSettings();
+        updateCafPreview();updateSleepPreview();
+        document.getElementById('sleepWarningDetail').textContent=`7일 평균 ${S.sleepSevere}시간 미만`;
+        if(studentsData.length){updateDashboard();updateStudentGrid();}
+    };
+    if(window.teacherSaveFeedback)return window.teacherSaveFeedback.runSave('settings',action);
+    try{action();showTeacherModal('💾','설정 저장 완료','설정이 성공적으로 저장되었습니다.','success');}
+    catch(error){showTeacherModal('⚠️','설정 저장 실패','다시 시도해 주세요.','error');throw error;}
 }
 function updateCafPreview(){
     document.getElementById('lvl_ok').textContent='0% ~ 56% 미만 → 1단계: 안전';
@@ -1697,19 +1886,61 @@ function getCustomRange(s,e){const a=[],start=new Date(s+'T00:00:00'),end=new Da
 function getPeriodN(mode){return mode==='14'?14:mode==='30'?30:7;}
 function getPeriodLabel(dates){if(!dates||!dates.length)return '-';return dates[0].substring(5)+' ~ '+dates[dates.length-1].substring(5)+' ('+dates.length+'일)';}
 
-// 테스트 학생 필터 (종합/카페인/수면 대시보드에서만 제외, 학생목록에는 표시)
+// 분석 대상 필터: 테스트는 기본 제외, 숨긴 학생은 교사용 목록과 통계에서 제외
 const TEST_STUDENT_NAMES=new Set(['테스트','테스트1']);
 function isTestStudent(s){return TEST_STUDENT_NAMES.has((s.이름||'').trim());}
+let hiddenStudentIds=new Set();
+let studentHideSelection=new Set();
+let visibilitySaving=false;
+let visibilityRevision=0;
+function getAnalysisStudents(){return studentsData.filter(s=>!hiddenStudentIds.has(String(s.학번))&&(showTestStudents||!isTestStudent(s)));}
+function toggleStudentHideSelection(id,checked){if(checked)studentHideSelection.add(id);else studentHideSelection.delete(id);updateVisibilityControls();}
+function updateVisibilityControls(){
+ const button=document.getElementById('hideSelectedStudentsBtn');
+ if(button){button.disabled=visibilitySaving||!studentHideSelection.size;button.textContent=visibilitySaving?'저장 중...':'선택 학생 숨기기 ('+studentHideSelection.size+'명)';}
+ const manage=document.getElementById('manageHiddenStudentsBtn');if(manage)manage.textContent='숨긴 학생 관리 ('+hiddenStudentIds.size+'명)';
+}
+function refreshAnalysisVisibility(){
+ studentHideSelection.clear();updateVisibilityControls();
+ updateDashboard();updateCaffeineTab();updateSleepTab();updateStudentGrid();renderJourneyStatus();initBatchSelectors();renderBatchStudentList();
+}
+function saveStudentVisibility(ids,hidden){
+ if(visibilitySaving||!ids.length)return;
+ visibilitySaving=true;updateVisibilityControls();
+ const finish=()=>{visibilitySaving=false;updateVisibilityControls();};
+ google.script.run.withSuccessHandler(result=>{
+  finish();
+  if(!result?.success||!Array.isArray(result.hiddenStudentIds)){showTeacherModal('⚠️','저장 실패','숨김 설정을 저장하지 못했습니다. 다시 시도해주세요.','warning');return;}
+  visibilityRevision++;clearTeacherViewCache();hiddenStudentIds=new Set(result.hiddenStudentIds.map(String));refreshAnalysisVisibility();
+  document.getElementById('hiddenStudentsPanel')?.remove();
+ }).withFailureHandler(()=>{finish();showTeacherModal('⚠️','저장 실패','서버 연결을 확인하고 다시 시도해주세요. 기존 설정은 유지됩니다.','warning');}).updateTeacherHiddenStudents(ids,hidden);
+}
+function hideSelectedStudents(){saveStudentVisibility([...studentHideSelection],true);}
+function showHiddenStudents(){
+ document.getElementById('hiddenStudentsPanel')?.remove();
+ const panel=document.createElement('div');panel.id='hiddenStudentsPanel';panel.style.cssText='position:fixed;inset:0;background:#0006;z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
+ const students=studentsData.filter(s=>hiddenStudentIds.has(String(s.학번)));
+ panel.innerHTML='<div style="background:white;border-radius:16px;padding:24px;width:460px;max-width:100%;max-height:80vh;overflow:auto;"><h3>숨긴 학생 관리</h3><p style="color:#6b7280;font-size:13px;">선택한 학생을 다시 표시하면 통계에도 포함됩니다. 기존 기록은 유지됩니다.</p>'+
+ (students.length?students.map(s=>'<label style="display:block;padding:10px;"><input type="checkbox" class="restore-student-checkbox" value="'+escapeHtml(s.학번)+'"> '+escapeHtml(s.학번)+' '+escapeHtml(s.이름)+'</label>').join(''):'<p>숨긴 학생이 없습니다.</p>')+
+ '<div style="display:flex;gap:8px;margin-top:16px;"><button class="btn btn-primary" onclick="restoreSelectedStudents()">선택 학생 다시 표시</button><button class="btn" id="closeHiddenPanel">닫기</button></div></div>';
+ document.body.appendChild(panel);document.getElementById('closeHiddenPanel').onclick=()=>panel.remove();
+}
+function restoreSelectedStudents(){const ids=Array.from(document.querySelectorAll('.restore-student-checkbox:checked'),el=>el.value);saveStudentVisibility(ids,false);}
 let showTestStudents=false; // 테스트 학생 포함 여부 (기본: 제외)
-function toggleTestStudents(){
-    showTestStudents=!showTestStudents;
-    ['overviewTestToggle','cafTestToggle','sleepTestToggle'].forEach(id=>{
+try{showTestStudents=localStorage.getItem('teacherShowTestStudents')==='true';}catch(e){}
+function syncTestStudentsControls(){
+    ['overviewTestToggle','cafTestToggle','sleepTestToggle','studentTestToggle','settingsTestToggle'].forEach(id=>{
         const btn=document.getElementById(id);
         if(!btn)return;
         if(showTestStudents){btn.textContent='테스트 포함 ✓';btn.style.background='#fef3c7';btn.style.color='#b45309';btn.style.borderColor='#fcd34d';}
         else{btn.textContent='테스트 제외';btn.style.background='#f3f4f6';btn.style.color='#6b7280';btn.style.borderColor='#e5e7eb';}
     });
-    updateDashboard();updateCaffeineTab();updateSleepTab();
+}
+function toggleTestStudents(){
+    showTestStudents=!showTestStudents;
+    try{localStorage.setItem('teacherShowTestStudents',String(showTestStudents));}catch(e){}
+    syncTestStudentsControls();
+    refreshAnalysisVisibility();
 }
 
 // 탭별 날짜 배열 반환
@@ -1731,15 +1962,19 @@ function setModalPeriod(mode){modalPeriodMode=mode;['7','14','30','custom'].forE
 
 function getLimit(id){if(S.cafMaxFixed>0)return S.cafMaxFixed;const i=infoData.find(i=>i.학번===id);return Math.min((i?i.몸무게:60)*2.5,400);}
 function getPersonalInfo(id){return infoData.find(i=>i.학번===id)||null;}
-function getTargetCafText(id){
+function getTargetCafLimit(id){
     const info=getPersonalInfo(id);
-    const target=info&&Number.isFinite(info.목표카페인)&&info.목표카페인>0?info.목표카페인:getLimit(id);
-    return target?`${Math.round(target)}mg`:'-';
+    return info&&Number.isFinite(info.목표카페인)&&info.목표카페인>0?info.목표카페인:null;
+}
+function getTargetCafText(id){
+    const target=getTargetCafLimit(id);
+    return target!==null?`${Math.round(target)}mg`:'미설정';
 }
 function getTargetSleepText(id){
     const info=getPersonalInfo(id);
     const bed=info&&info.목표취침?info.목표취침:'-';
     const wake=info&&info.목표기상?info.목표기상:'-';
+    if(!getSleepDurationText(bed,wake))return '미설정';
     const duration=getSleepDurationText(bed,wake);
     return `${bed} / ${wake}${duration?` (총 ${duration})`:''}`;
 }
@@ -1747,6 +1982,7 @@ function getTargetSleepCompactText(id){
     const info=getPersonalInfo(id);
     const bed=info&&info.목표취침?info.목표취침:'-';
     const wake=info&&info.목표기상?info.목표기상:'-';
+    if(!getSleepDurationText(bed,wake))return '미설정';
     const duration=getSleepDurationText(bed,wake).replace('시간','h').replace('분','m').replace(/\s+/g,'');
     return `${bed} / ${wake}${duration?` / ${duration}`:''}`;
 }
@@ -2023,6 +2259,11 @@ function sleepBehaviorLabel(type,val){
     return `${labels[type]||type}: ${val}`;
 }
 
+function getDailyCaffeineSummary(records,total,date){
+ const rows=records.filter(r=>String(r.섭취시간||'').startsWith(date));
+ const recorded=new Set(rows.map(r=>String(r.학번))).size;
+ return {recorded,total,average:recorded?Math.round(rows.reduce((sum,r)=>sum+r.함량,0)/recorded):null};
+}
 function avgCafForDates(id,dates){
     // ⭐ 기록이 존재하는 날만 포함 (0mg 기록도 포함, 미기록 날짜는 제외)
     const vals=dates.map(d=>{
@@ -2066,15 +2307,31 @@ function toggleAutoRefresh(enabled){
     }, ms);
 }
 
-function loadDataFromSheet(){
+const TEACHER_VIEW_CACHE='teacherResearchViewV1';
+function readTeacherViewCache(){try{const v=JSON.parse(sessionStorage.getItem(TEACHER_VIEW_CACHE)||'null');const age=v?Date.now()-v.savedAt:NaN;return v&&Number.isFinite(age)&&age>=0&&age<600000&&['students','caffeine','sleep','info'].every(k=>Array.isArray(v.data?.[k]))?v:null;}catch(_){return null;}}
+function clearTeacherViewCache(){try{sessionStorage.removeItem(TEACHER_VIEW_CACHE);}catch(_){}}
+window.clearTeacherViewCache=clearTeacherViewCache;
+function loadRemoteTeacherSettings(){
+ if(window.__teacherRemoteSettingsStarted)return;window.__teacherRemoteSettingsStarted=true;
+ loadAwardSettings();loadChallengeBadges();loadPendingBadges();loadDismissedBadges();loadBadgeConfigFromGAS();
+ if(!localStorage.getItem('badgeMigrationV3'))migrateOldBadges();
+}
+let teacherDataLoading=false;
+function loadDataFromSheet(onReady,onError){
+    if(teacherDataLoading){if(onError)onError(new Error('조회 중입니다. 잠시 기다려주세요.'));return;}
+    teacherDataLoading=true;
+    const cached=onReady?readTeacherViewCache():null;
+    const visibilityAtLoad=visibilityRevision;
     const btn=document.getElementById('refreshBtn');btn.disabled=true;btn.textContent='⏳ 로딩 중...';
-    document.getElementById('studentGrid').innerHTML='<div class="loading"><div class="spinner"></div><p style="color:#6b7280;">구글시트에서 데이터를 불러오는 중...</p></div>';
-    google.script.run
-        .withSuccessHandler(function(result){
+    if(!studentsData.length&&!cached)document.getElementById('studentGrid').innerHTML='<div class="loading"><div class="spinner"></div><p style="color:#6b7280;">구글시트에서 데이터를 불러오는 중...</p></div>';
+    const applyResult=function(result,isCached=false){
             try{
                 if(!result.success)throw new Error(result.error||'데이터 로드 실패');
+                if(onReady)window.teacherLoadingProgress?.(70,'학생·카페인·수면 데이터를 불러왔습니다');
+                if(visibilityAtLoad===visibilityRevision)hiddenStudentIds=new Set((result.hiddenStudentIds||[]).map(String));
+                studentHideSelection.clear();updateVisibilityControls();
                 studentsData=(result.students||[]).map(s=>({학번:String(s.학번),이름:String(s.이름),학년:String(s.학년),반:String(s.반),번호:String(s.번호)}));
-                caffeineData=(result.caffeine||[]).map(c=>({학번:String(c.학번),음료명:String(c.음료명||''),함량:parseFloat(c.함량)||0,섭취시간:String(c.섭취시간||''),이유:String(c.이유||''),부작용:String(c.부작용||'')}));
+                caffeineData=(result.caffeine||[]).map(c=>({학번:String(c.학번),음료명:String(c.음료명||''),업체명:String(c.업체명||''),원본식품명:String(c.원본식품명||''),함량:parseFloat(c.함량)||0,섭취시간:String(c.섭취시간||''),이유:String(c.이유||''),부작용:String(c.부작용||'')}));
                 sleepData=(result.sleep||[]).map(s=>({학번:String(s.학번),날짜:String(s.날짜||''),기상날짜:String(s.wakeDate||s.기상날짜||''),취침:String(s.취침||''),기상:String(s.기상||''),시간:parseFloat(s.시간)||0,컨디션:String(s['수면 후 컨디션']||''),메모:String(s.메모||''),스마트폰:normalizeSleepUnitLabel(s.스마트폰),활동:normalizeSleepUnitLabel(s.활동),잠들기:normalizeSleepUnitLabel(s.잠들기),각성:String(s.각성||''),낮졸림:normalizeDaytimeLabel(s.낮졸림)}));
                 infoData=(result.info||[]).map(i=>({
                     학번:String(i.학번),
@@ -2114,28 +2371,38 @@ function loadDataFromSheet(){
                     console.log('[뱃지동기화] GAS 시트 → manualAwards 완료:', Object.keys(manualAwards).length, '명');
                 }
 
-                document.getElementById('lastUpdate').textContent='마지막 업데이트: '+new Date().toLocaleString('ko-KR');
+                if(onReady)window.teacherLoadingProgress?.(90,'통계와 화면을 준비하고 있습니다');
+                document.getElementById('lastUpdate').textContent=isCached?'최근 조회 자료: '+new Date(cached.savedAt).toLocaleString('ko-KR')+' · 최신 데이터 확인 중...':'마지막 업데이트: '+new Date().toLocaleString('ko-KR');
                 initFilters();
                 updateDashboard();
                 try { updateCaffeineTab(); } catch(e) { console.error('[카페인탭 오류]', e); }
                 try { updateSleepTab();    } catch(e) { console.error('[수면탭 오류]', e); }
                 updateStudentGrid();
+                renderJourneyStatus();
                 // ⭐ _pendingSync 항목 자동 재시도 (이전 GAS 실패 복구)
-                retryPendingSyncs();
+                if(!isCached)retryPendingSyncs();
                 // 챌린지 달성 감지 실행
-                detectPendingBadges();
+                if(!isCached)detectPendingBadges();
                 // 뱃지 탭이 열려있으면 자동 갱신
                 if (document.getElementById('tab-awards')?.classList.contains('active')) {renderAwardsTab();renderPendingBadges();}
+                if(!isCached){try{sessionStorage.setItem(TEACHER_VIEW_CACHE,JSON.stringify({savedAt:Date.now(),data:{...result,hiddenStudentIds:[...hiddenStudentIds]}}));}catch(_){}loadRemoteTeacherSettings();}
+                if(onReady)onReady();
             }catch(err){
-                document.getElementById('studentGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;background:white;border-radius:16px;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h3 style="color:#ef4444;margin-bottom:12px;">데이터를 불러오지 못했습니다</h3><p style="color:#6b7280;margin-bottom:20px;">'+err.message+'</p><button onclick="loadDataFromSheet()" class="btn btn-primary">🔄 다시 시도</button></div>';
-                ['totalStudents','notRecordedToday','caffeineWarning','sleepWarning'].forEach(function(id){document.getElementById(id).textContent='-';});
+                if(onError)onError(err);
+                if(!studentsData.length)document.getElementById('studentGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;background:white;border-radius:16px;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h3 style="color:#ef4444;margin-bottom:12px;">데이터를 불러오지 못했습니다</h3><p style="color:#6b7280;margin-bottom:20px;">'+err.message+'</p><button onclick="loadDataFromSheet()" class="btn btn-primary">🔄 다시 시도</button></div>';
+                if(!studentsData.length)['totalStudents','notRecordedToday','caffeineWarning','sleepWarning'].forEach(function(id){document.getElementById(id).textContent='-';});
+                else document.getElementById('lastUpdate').textContent='화면 갱신에 실패했습니다. 기존 자료는 유지됩니다. 다시 시도해주세요.';
             }
-            btn.disabled=false;btn.textContent='🔄 데이터 새로고침';
-        })
+            if(!isCached){teacherDataLoading=false;btn.disabled=false;btn.textContent='🔄 데이터 새로고침';}
+        };
+    if(cached)applyResult(cached.data,true);
+    google.script.run.withSuccessHandler(result=>applyResult(result,false))
         .withFailureHandler(function(err){
-            document.getElementById('studentGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;background:white;border-radius:16px;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h3 style="color:#ef4444;margin-bottom:12px;">데이터를 불러오지 못했습니다</h3><p style="color:#6b7280;margin-bottom:20px;">'+err.message+'</p><button onclick="loadDataFromSheet()" class="btn btn-primary">🔄 다시 시도</button></div>';
-            ['totalStudents','notRecordedToday','caffeineWarning','sleepWarning'].forEach(function(id){document.getElementById(id).textContent='-';});
-            btn.disabled=false;btn.textContent='🔄 데이터 새로고침';
+            if(onError)onError(err);
+            if(!studentsData.length)document.getElementById('studentGrid').innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px;background:white;border-radius:16px;"><div style="font-size:48px;margin-bottom:16px;">⚠️</div><h3 style="color:#ef4444;margin-bottom:12px;">데이터를 불러오지 못했습니다</h3><p style="color:#6b7280;margin-bottom:20px;">'+err.message+'</p><button onclick="loadDataFromSheet()" class="btn btn-primary">🔄 다시 시도</button></div>';
+            if(!studentsData.length)['totalStudents','notRecordedToday','caffeineWarning','sleepWarning'].forEach(function(id){document.getElementById(id).textContent='-';});
+            teacherDataLoading=false;btn.disabled=false;btn.textContent='🔄 데이터 새로고침';
+            if(studentsData.length)document.getElementById('lastUpdate').textContent='최신 조회에 실패했습니다. 기존 자료는 유지됩니다. 데이터 새로고침으로 다시 시도해주세요.';
         })
         .getTeacherData();
 }
@@ -2300,14 +2567,14 @@ function initFilters(){
     const classIds = ['classFilter','studentClassFilter','cafClassFilter','sleepClassFilter'];
 
     // 고유 학년/반 목록 (정렬: 숫자 → 문자) — 비표준 학년은 교직원으로 정규화
-    const grades = [...new Set(studentsData.map(s => normalizeGrade(s.학년)))].sort((a, b) => {
+    const grades = [...new Set(getAnalysisStudents().map(s => normalizeGrade(s.학년)))].sort((a, b) => {
         const na = parseInt(a), nb = parseInt(b);
         if (!isNaN(na) && !isNaN(nb)) return na - nb;
         if (!isNaN(na)) return -1;
         if (!isNaN(nb)) return 1;
         return String(a).localeCompare(String(b));
     });
-    const classes = [...new Set(studentsData.map(s => normalizeClass(s.반)))].sort((a, b) => {
+    const classes = [...new Set(getAnalysisStudents().map(s => normalizeClass(s.반)))].sort((a, b) => {
         const na = parseInt(a), nb = parseInt(b);
         if (!isNaN(na) && !isNaN(nb)) return na - nb;
         if (!isNaN(na)) return -1;
@@ -2345,11 +2612,11 @@ function initFilters(){
     ['cafEndDate','sleepEndDate','studentEndDate','overviewEndDate'].forEach(id=>{const el=document.getElementById(id);if(el){if(!el.value)el.value=today;el.max=today;}});
     ['cafStartDate','sleepStartDate','studentStartDate','overviewStartDate','modalStartDate'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=weekAgo;});
 }
-function switchTab(n,el){document.querySelectorAll('.tab-button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));if(el)el.classList.add('active');document.getElementById('tab-'+n).classList.add('active');if(n==='inquiries'){inquiryFilter='unanswered';loadInquiries();loadSentMessages();}if(n==='awards'){renderAwardsTab();renderPendingBadges();}if(n==='settings'){renderChallengeBadgeList();}}
+function switchTab(n,el){document.querySelectorAll('.tab-button').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.tab-content').forEach(c=>c.classList.remove('active'));if(el)el.classList.add('active');document.getElementById('tab-'+n).classList.add('active');if(n==='inquiries'){inquiryFilter='unanswered';loadInquiries();loadSentMessages();}if(n==='awards'){loadRemoteTeacherSettings();renderAwardsTab();renderPendingBadges();}if(n==='settings'){loadRemoteTeacherSettings();renderChallengeBadgeList();}if(n==='reminders'&&window.teacherReminders){window.teacherReminders.initialize().catch(()=>{});}}
 
 function updateDashboard(){
     const g=msGet('gradeFilter'), c=msGet('classFilter');
-    let f=studentsData.filter(s=>showTestStudents||!isTestStudent(s));if(g)f=f.filter(s=>g.has(normalizeGrade(s.학년)));if(c)f=f.filter(s=>c.has(normalizeClass(s.반)));
+    let f=getAnalysisStudents();if(g)f=f.filter(s=>g.has(normalizeGrade(s.학년)));if(c)f=f.filter(s=>c.has(normalizeClass(s.반)));
     const dates7=getOverviewDates();
     const daysText=dates7.length+'일';
     ['overviewCafTitle','overviewSleepTitle'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=daysText;});
@@ -2360,7 +2627,7 @@ function updateDashboard(){
     f.forEach(s=>{
         // ⭐ '카페인 섭취 안 함' 기록이 있으면 미기록으로 카운트하지 않음
         const hasTodayCafRecord=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(today));
-        if(!hasTodayCafRecord&&getYestSleep(s.학번)===null)nr++;
+        if(!hasTodayCafRecord&&!hasSleepRecordOnWakeDate(s.학번,today))nr++;
         const ac=avgCafForDates(s.학번,dates7),lim=getLimit(s.학번);
         if(ac>0&&ac/lim>=1.0)cw++;
         const as=avgSleepForDates(s.학번,dates7);
@@ -2396,7 +2663,7 @@ function getCafTabFilter(){
     const dates=getCafDates();
     const lbl=document.getElementById('cafDateRangeLabel');
     if(lbl)lbl.textContent=getPeriodLabel(dates);
-    let students=studentsData.filter(s=>showTestStudents||!isTestStudent(s));
+    let students=getAnalysisStudents();
     if(gv)students=students.filter(s=>gv.has(normalizeGrade(s.학년)));
     if(cv)students=students.filter(s=>cv.has(normalizeClass(s.반)));
     const ids=new Set(students.map(s=>s.학번));
@@ -2416,14 +2683,17 @@ function resetSleepDate(){
 function updateCaffeineTab(){
     const {students,dates,filteredCaf,ids}=getCafTabFilter();
     const daysText=dates.length+'일';
+    if(window.caffeineCompanies)window.caffeineCompanies.render(filteredCaf);
     ['cafChartLabel1','cafChartLabel2','cafChartLabel3','cafChartLabel4'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=daysText;});
     const l7=dates.map(d=>d.substring(5));
     // 일별 평균 카페인
-    const da=dates.map(d=>{const v=filteredCaf.filter(c=>c.섭취시간.startsWith(d));return v.length?Math.round(v.reduce((a,b)=>a+b.함량,0)/(students.length||1)):0;});
+    const dailyCaf=dates.map(d=>getDailyCaffeineSummary(filteredCaf,students.length,d));
+    const da=dailyCaf.map(r=>r.average);
+    const participation=document.getElementById('cafDailyParticipation');if(participation){const last=dailyCaf[dailyCaf.length-1];participation.textContent=dates[dates.length-1]+' 기록 '+(last?.recorded||0)+'명 / 분석 대상 '+students.length+'명 · 기록 학생만 평균 계산 (0mg 포함)';}
     if(charts.dc)charts.dc.destroy();
     charts.dc=new Chart(document.getElementById('dailyCaffeineChart').getContext('2d'),{
-        type:'line',data:{labels:l7,datasets:[{label:'평균 카페인(mg)',data:da,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.1)',borderWidth:3,fill:true,tension:0.4,pointRadius:5}]},
-        options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{display:false}}}
+        type:'line',data:{labels:l7,datasets:[{label:'기록 학생 평균 카페인(mg)',data:da,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.1)',borderWidth:3,fill:true,tension:0.4,pointRadius:5}]},
+        options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{display:false},tooltip:{callbacks:{afterLabel:ctx=>{const r=dailyCaf[ctx.dataIndex];return '기록 '+r.recorded+'명 / 분석 대상 '+r.total+'명';}}}}}
     });
     // 카페인 단계별 학생 수 (7일 평균 기준)
     // ⭐ '미기록' 제거, '카페인 섭취 안 함' 추가 (맨 왼쪽)
@@ -2607,7 +2877,7 @@ function getSleepTabFilter(){
     const dates=getSleepDates();
     const lbl=document.getElementById('sleepDateRangeLabel');
     if(lbl)lbl.textContent=getPeriodLabel(dates);
-    let students=studentsData.filter(s=>showTestStudents||!isTestStudent(s));
+    let students=getAnalysisStudents();
     if(gv)students=students.filter(s=>gv.has(normalizeGrade(s.학년)));
     if(cv)students=students.filter(s=>cv.has(normalizeClass(s.반)));
     const ids=new Set(students.map(s=>s.학번));
@@ -2919,7 +3189,7 @@ function resetStudentDate(){
 function filterStudents(){
     const sv=document.getElementById('studentSearchInput').value.toLowerCase();
     const gv=msGet('studentGradeFilter'), cv=msGet('studentClassFilter');
-    let f=studentsData;if(gv)f=f.filter(s=>gv.has(normalizeGrade(s.학년)));if(cv)f=f.filter(s=>cv.has(s.반));
+    let f=getAnalysisStudents();if(gv)f=f.filter(s=>gv.has(normalizeGrade(s.학년)));if(cv)f=f.filter(s=>cv.has(s.반));
     if(sv)f=f.filter(s=>s.학번.includes(sv)||s.이름.includes(sv));
     const fd=getStudentFilterDate();
     const d7=getStudentDates();
@@ -2938,7 +3208,7 @@ function filterStudents(){
             let cafMatch=true, sleepMatch=true, awardMatch=true, recordMatch=true;
             if(hasRecordFilter){
                 const hasCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd));
-                const hasSleep=sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd);
+                const hasSleep=hasSleepRecordOnWakeDate(s.학번,fd);
                 const recorded=hasCaf||hasSleep;
                 if(activeFilters.record.has('recorded')&&activeFilters.record.has('notRecorded'))recordMatch=true;
                 else if(activeFilters.record.has('recorded'))recordMatch=recorded;
@@ -2971,7 +3241,7 @@ function filterStudents(){
             if(hasAwardFilter){
                 const af=activeFilters.award;
                 const hasTodayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd));
-                const hasTodaySleep=sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd);
+                const hasTodaySleep=hasSleepRecordOnWakeDate(s.학번,fd);
                 const sAwards=getManualAwardsFor(s.학번);
                 // 자동 뱃지 그룹 (OR)
                 const hasAutoFilter=af.has('auto_today_caf')||af.has('auto_today_sleep');
@@ -3002,9 +3272,9 @@ function updateBadges(){
     const fd=getStudentFilterDate();
     const d7=getStudentDates();
     const n=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
-    n('badgeAll',studentsData.length);
-    n('cntRecorded',studentsData.filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))||sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd)).length);
-    n('cntNotRecorded',studentsData.filter(s=>!caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))&&!sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd)).length);
+    n('badgeAll',getAnalysisStudents().length);
+    n('cntRecorded',getAnalysisStudents().filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))||hasSleepRecordOnWakeDate(s.학번,fd)).length);
+    n('cntNotRecorded',getAnalysisStudents().filter(s=>!caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))&&!hasSleepRecordOnWakeDate(s.학번,fd)).length);
 
     // 카페인 단계별 카운트
     const getCafStage=s=>{
@@ -3018,13 +3288,13 @@ function updateBadges(){
         if(ratio<2.0)return'caf4';
         return'caf5';
     };
-    n('cntCaf0',studentsData.filter(s=>getCafStage(s)==='caf0').length);
-    n('cntCaf1',studentsData.filter(s=>getCafStage(s)==='caf1').length);
-    n('cntCaf2',studentsData.filter(s=>getCafStage(s)==='caf2').length);
-    n('cntCaf3',studentsData.filter(s=>getCafStage(s)==='caf3').length);
-    n('cntCaf4',studentsData.filter(s=>getCafStage(s)==='caf4').length);
-    n('cntCaf5',studentsData.filter(s=>getCafStage(s)==='caf5').length);
-    n('cntCafNone',studentsData.filter(s=>getCafStage(s)==='cafNone').length);
+    n('cntCaf0',getAnalysisStudents().filter(s=>getCafStage(s)==='caf0').length);
+    n('cntCaf1',getAnalysisStudents().filter(s=>getCafStage(s)==='caf1').length);
+    n('cntCaf2',getAnalysisStudents().filter(s=>getCafStage(s)==='caf2').length);
+    n('cntCaf3',getAnalysisStudents().filter(s=>getCafStage(s)==='caf3').length);
+    n('cntCaf4',getAnalysisStudents().filter(s=>getCafStage(s)==='caf4').length);
+    n('cntCaf5',getAnalysisStudents().filter(s=>getCafStage(s)==='caf5').length);
+    n('cntCafNone',getAnalysisStudents().filter(s=>getCafStage(s)==='cafNone').length);
 
     // 수면 단계별 카운트
     const getSleepStage=s=>{
@@ -3036,23 +3306,23 @@ function updateBadges(){
         if(y<(S.sleepMax||11))return'sleepVarExcess';
         return'sleepExcess';
     };
-    n('cntSleepSevere',studentsData.filter(s=>getSleepStage(s)==='sleepSevere').length);
-    n('cntSleepBad',studentsData.filter(s=>getSleepStage(s)==='sleepBad').length);
-    n('cntSleepGood',studentsData.filter(s=>getSleepStage(s)==='sleepGood').length);
-    n('cntSleepVarExcess',studentsData.filter(s=>getSleepStage(s)==='sleepVarExcess').length);
-    n('cntSleepExcess',studentsData.filter(s=>getSleepStage(s)==='sleepExcess').length);
-    n('cntSleepNone',studentsData.filter(s=>getSleepStage(s)==='sleepNone').length);
+    n('cntSleepSevere',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepSevere').length);
+    n('cntSleepBad',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepBad').length);
+    n('cntSleepGood',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepGood').length);
+    n('cntSleepVarExcess',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepVarExcess').length);
+    n('cntSleepExcess',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepExcess').length);
+    n('cntSleepNone',getAnalysisStudents().filter(s=>getSleepStage(s)==='sleepNone').length);
 
     // 뱃지 카운트
     const fd2=getStudentFilterDate();
-    n('cntAuto_today_caf',   studentsData.filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd2))).length);
-    n('cntAuto_today_sleep', studentsData.filter(s=>sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd2)).length);
-    n('cntAwardNoTeacher',   studentsData.filter(s=>getManualAwardsFor(s.학번).length===0).length);
+    n('cntAuto_today_caf',   getAnalysisStudents().filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd2))).length);
+    n('cntAuto_today_sleep', getAnalysisStudents().filter(s=>hasSleepRecordOnWakeDate(s.학번,fd2)).length);
+    n('cntAwardNoTeacher',   getAnalysisStudents().filter(s=>getManualAwardsFor(s.학번).length===0).length);
     // 개별 뱃지별 카운트
-    challengeBadges.forEach(b=>{
+    challengeBadges.filter(b=>!b.auto).forEach(b=>{
         const el=document.getElementById('cntBadge_'+b.id);
         if(!el)return;
-        el.textContent=studentsData.filter(s=>getManualAwardsFor(s.학번).some(a=>(a.awardId||a.badgeId)===b.id)).length;
+        el.textContent=getAnalysisStudents().filter(s=>getManualAwardsFor(s.학번).some(a=>(a.awardId||a.badgeId)===b.id)).length;
     });
 }
 // 드롭다운 토글
@@ -3124,7 +3394,7 @@ function _syncAwardUI(){
         // 선택된 뱃지 이름들로 버튼 제목 업데이트
         const labels=[];
         if(activeFilters.award.has('auto_today_caf'))labels.push('카페인 오늘기록');
-        if(activeFilters.award.has('auto_today_sleep'))labels.push('수면 오늘기록');
+        if(activeFilters.award.has('auto_today_sleep'))labels.push('수면 오늘 기록');
         if(activeFilters.award.has('awardNoTeacher'))labels.push('수여없음');
         activeFilters.award.forEach(k=>{
             if(!k.startsWith('badge_'))return;
@@ -3290,9 +3560,9 @@ function renderStudentGrid(students){
         const sleepSt=getSleepStatusInfo(as);
         // 오늘 기록 여부
         const todayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(filterDate));
-        const todaySleep=sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===filterDate);
+        const todaySleep=hasSleepRecordOnWakeDate(s.학번,filterDate);
         const todayCafBadge=todayCaf?'<span class="rec-badge rec-ok">✓ 기록</span>':'<span class="rec-badge rec-none">오늘 미기록</span>';
-        const todaySleepBadge=todaySleep?'<span class="rec-badge rec-ok">✓ 기록</span>':'<span class="rec-badge rec-none">오늘 미기록</span>';
+        const todaySleepBadge=todaySleep?'<span class="rec-badge rec-ok" title="선택 날짜에 기상한 수면">✓ 기록</span>':'<span class="rec-badge rec-none" title="선택 날짜에 기상한 수면">오늘 미기록</span>';
         const targetCafText=getTargetCafText(s.학번);
         const targetSleepText=getTargetSleepText(s.학번);
         // ⭐ 카페인 표시: 기록 있고 0mg → "카페인 섭취 안 함", 기록 없으면 "미기록"
@@ -3307,6 +3577,7 @@ function renderStudentGrid(students){
         const card=document.createElement('div');card.className='student-card';card.onclick=()=>openStudentModal(s.학번);
         const awardChipsHtml = renderAwardChips(s.학번, d7, filterDate, false);
         card.innerHTML=`
+<label style="float:right;font-size:12px;color:#6b7280;" onclick="event.stopPropagation()"><input type="checkbox" value="${escapeHtml(s.학번)}" ${studentHideSelection.has(s.학번)?'checked':''} onchange="toggleStudentHideSelection(this.value,this.checked)"> 선택</label>
 <div class="student-id">${escapeHtml(s.학년)}학년 ${escapeHtml(s.반)}반 ${escapeHtml(s.번호)}번 &nbsp;|&nbsp; ${escapeHtml(s.학번)}</div>
 <div class="student-name">${escapeHtml(s.이름)}</div>
 <div class="student-info">
@@ -3393,7 +3664,8 @@ function refreshModalData(){
     const labels=dates.map(d=>d.substring(5));
     const cafData=dates.map(d=>caffeineData.filter(c=>c.학번===currentStudentId&&c.섭취시간.startsWith(d)).reduce((a,b)=>a+b.함량,0));
     const sleepD=dates.map(d=>{const r=findSleepForLifeDate(currentStudentId,d);return r?r.시간:null;});
-    const limLine=new Array(dates.length).fill(lim);
+    const targetCafLimit=getTargetCafLimit(currentStudentId);
+    const limLine=targetCafLimit!==null?new Array(dates.length).fill(targetCafLimit):[];
     const targetSleepHours=getTargetSleepHours(currentStudentId);
     const targetSleepLine=targetSleepHours?new Array(dates.length).fill(targetSleepHours):[];
     if(charts.dual)charts.dual.destroy();
@@ -3401,12 +3673,12 @@ function refreshModalData(){
         type:'bar',
         data:{labels,datasets:[
             {label:'카페인 (mg)',pointStyle:'rect',data:cafData,backgroundColor:cafData.map(v=>{const p=(v/lim)*100;return p>=S.cafOver?'rgba(239,68,68,0.8)':p>=S.cafWarn?'rgba(245,158,11,0.8)':'rgba(99,102,241,0.8)';}),borderWidth:0,borderRadius:5,yAxisID:'y'},
-            {label:`최대섭취량 (${Math.round(lim)}mg)`,pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.4)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,yAxisID:'y'},
+            {label:targetCafLimit!==null?`최대섭취량 (${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.4)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,yAxisID:'y'},
             {label:'수면시간 (h)',pointStyle:'circle',data:sleepD,type:'line',borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.12)',borderWidth:3,fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:sleepD.map(v=>v!==null?getSleepStatusInfo(v).color:'transparent'),yAxisID:'y2',spanGaps:true},
             ...(targetSleepHours?[{label:`목표수면 (${targetSleepHours}h)`,pointStyle:'circle',data:targetSleepLine,type:'line',borderColor:'rgba(59,130,246,0.7)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[])
         ]},
         options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-            plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12}},tooltip:{callbacks:{label:ctx=>{if(ctx.dataset.label.includes('최대섭취량'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0)return `카페인: ${ctx.raw}mg`;return ctx.raw!==null?`수면: ${ctx.raw}h`:'수면: 미기록';}}}},
+            plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12,filter:item=>item.text!=='목표 미설정'}},tooltip:{callbacks:{label:ctx=>{if(ctx.dataset.label.includes('최대섭취량'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0)return `카페인: ${ctx.raw}mg`;return ctx.raw!==null?`수면: ${ctx.raw}h`:'수면: 미기록';}}}},
             scales:{y:{beginAtZero:true,position:'left',title:{display:true,text:'카페인 (mg)',color:'#6366f1'}},y2:{beginAtZero:true,position:'right',max:14,title:{display:true,text:'수면 (h)',color:'#10b981'},grid:{drawOnChartArea:false}}}}
     });
 
@@ -3755,6 +4027,18 @@ function shiftDateString(dateStr,offset){
     if(Number.isNaN(d.getTime()))return dateStr;
     d.setDate(d.getDate()+offset);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function getSleepWakeDate(r){
+    const explicit=String(r?.기상날짜||r?.wakeDate||'').trim();
+    const parts=explicit.match(/^(\d{4})[.\/-]\s*(\d{1,2})[.\/-]\s*(\d{1,2})/);
+    if(parts)return parts[1]+'-'+parts[2].padStart(2,'0')+'-'+parts[3].padStart(2,'0');
+    const date=String(r?.날짜||r?.date||'');
+    const start=formatSleepTime(r?.취침||r?.sleepTime||'');
+    const end=formatSleepTime(r?.기상||r?.wakeTime||'');
+    return date&&/^\d{2}:\d{2}$/.test(start)&&/^\d{2}:\d{2}$/.test(end)?shiftDateString(date,end<=start?1:0):'';
+}
+function hasSleepRecordOnWakeDate(id,date){
+    return sleepData.some(r=>String(r.학번)===String(id)&&getSleepWakeDate(r)===date);
 }
 function getSleepLifeDate(r){
     const sleepDate=String(r?.날짜||r?.date||'');
@@ -4174,7 +4458,7 @@ function exportStudentExcel(){
     // 현재 필터 적용된 학생 목록 생성
     const sv=document.getElementById('studentSearchInput').value.toLowerCase();
     const gv=msGet('studentGradeFilter'),cv=msGet('studentClassFilter');
-    let students=studentsData;
+    let students=getAnalysisStudents();
     if(gv)students=students.filter(s=>gv.has(normalizeGrade(s.학년)));
     if(cv)students=students.filter(s=>cv.has(s.반));
     if(sv)students=students.filter(s=>s.학번.includes(sv)||s.이름.includes(sv));
@@ -4183,7 +4467,7 @@ function exportStudentExcel(){
     const rows=[
         [`교사용 모니터링 다운로드 - 기간: ${rangeLabel}`],
         [],
-        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','오늘수면기록','목표카페인(mg)','목표취침','목표기상','자동뱃지','교사수여뱃지','교사수여코멘트']
+        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','오늘수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지','교사수여뱃지','교사수여코멘트']
     ];
 
     students.forEach(s=>{
@@ -4194,7 +4478,7 @@ function exportStudentExcel(){
         const cafSI=getCafStatusInfo(ac,lim,hasRecCSV);
         const sleepSI=getSleepStatusInfo(as);
         const todayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))?'O':'X';
-        const todaySleep=sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd)?'O':'X';
+        const todaySleep=hasSleepRecordOnWakeDate(s.학번,fd)?'O':'X';
         const info=getPersonalInfo(s.학번);
         // 뱃지 정보
         const autoList=evaluateAwards(s.학번,d7,fd);
@@ -4238,7 +4522,7 @@ function exportStudentToSheet(){
 
     const sv=document.getElementById('studentSearchInput').value.toLowerCase();
     const gv=msGet('studentGradeFilter'),cv=msGet('studentClassFilter');
-    let students=studentsData;
+    let students=getAnalysisStudents();
     if(gv)students=students.filter(s=>gv.has(normalizeGrade(s.학년)));
     if(cv)students=students.filter(s=>cv.has(s.반));
     if(sv)students=students.filter(s=>s.학번.includes(sv)||s.이름.includes(sv));
@@ -4247,7 +4531,7 @@ function exportStudentToSheet(){
 
     // ─── 요약 시트 (학생당 1행, 뱃지현황 별도시트 없음) ───
     const summaryRows=[
-        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','오늘수면기록','목표카페인(mg)','목표취침','목표기상','자동뱃지수','교사수여뱃지수','자동뱃지목록','교사수여뱃지목록','교사수여코멘트']
+        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','오늘수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지수','교사수여뱃지수','자동뱃지목록','교사수여뱃지목록','교사수여코멘트']
     ];
 
     // 드롭다운 값 수집
@@ -4264,7 +4548,7 @@ function exportStudentToSheet(){
         const cafSI=getCafStatusInfo(ac,lim,hasRec);
         const sleepSI=getSleepStatusInfo(as);
         const todayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))?'O':'X';
-        const todaySleep=sleepData.some(sl=>sl.학번===s.학번&&sl.날짜===fd)?'O':'X';
+        const todaySleep=hasSleepRecordOnWakeDate(s.학번,fd)?'O':'X';
         const info=getPersonalInfo(s.학번);
         const autoList=evaluateAwards(s.학번,d7,fd);
         const manualList=getManualAwardsFor(s.학번);
@@ -4513,7 +4797,8 @@ function exportPDF(options){
     pdfDiv.style.cssText='display:block;position:fixed;left:-9999px;top:0;width:800px;background:white;';
     const cafData=dates.map(d=>caffeineData.filter(c=>c.학번===currentStudentId&&c.섭취시간.startsWith(d)).reduce((a,b)=>a+b.함량,0));
     const sleepArr=dates.map(d=>{const r=findSleepForLifeDate(currentStudentId,d);return r?r.시간:null;});
-    const limLine=new Array(dates.length).fill(lim);
+    const targetCafLimit=getTargetCafLimit(currentStudentId);
+    const limLine=targetCafLimit!==null?new Array(dates.length).fill(targetCafLimit):[];
     const targetSleepHours=getTargetSleepHours(currentStudentId);
     const targetSleepLine=targetSleepHours?new Array(dates.length).fill(targetSleepHours):[];
     if(charts.pdfDual)charts.pdfDual.destroy();
@@ -4521,11 +4806,11 @@ function exportPDF(options){
         type:'bar',
         data:{labels:dates.map(d=>d.substring(5)),datasets:[
             {label:'카페인(mg)',pointStyle:'rect',data:cafData,backgroundColor:cafData.map(v=>{const p=(v/lim)*100;return p>=S.cafOver?'rgba(239,68,68,0.8)':p>=S.cafWarn?'rgba(245,158,11,0.8)':'rgba(99,102,241,0.8)';}),borderWidth:0,borderRadius:4,yAxisID:'y'},
-            {label:`최대섭취량(${Math.round(lim)}mg)`,pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.5)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false,yAxisID:'y'},
+            {label:targetCafLimit!==null?`최대섭취량(${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.5)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false,yAxisID:'y'},
             {label:'수면(h)',pointStyle:'circle',data:sleepArr,type:'line',borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.12)',borderWidth:2,pointRadius:4,fill:false,yAxisID:'y2',spanGaps:true},
             ...(targetSleepHours?[{label:`목표수면(${targetSleepHours}h)`,pointStyle:'circle',data:targetSleepLine,type:'line',borderColor:'rgba(59,130,246,0.65)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[])
         ]},
-        options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:10,boxHeight:10}}},scales:{y:{beginAtZero:true,position:'left'},y2:{beginAtZero:true,position:'right',max:14,grid:{drawOnChartArea:false}}}}
+        options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:10,boxHeight:10,filter:item=>item.text!=='목표 미설정'}}},scales:{y:{beginAtZero:true,position:'left'},y2:{beginAtZero:true,position:'right',max:14,grid:{drawOnChartArea:false}}}}
     });
 
     // 생활 패턴 차트 → 이미지 캡처 후 PDF 영역에 삽입
@@ -4628,12 +4913,12 @@ function buildStaticPdfDualChartHTML(){
     return `<div style="height:200px;position:relative;padding:4px 8px 26px 26px;box-sizing:border-box;background:white;">
         <div style="height:18px;text-align:center;font-size:9px;color:#6b7280;">
             <span style="display:inline-block;width:7px;height:7px;background:#ef4444;margin-right:3px;"></span>카페인(mg)
-            <span style="display:inline-block;width:14px;border-top:2px dashed rgba(239,68,68,.55);margin:0 3px 2px 12px;"></span>최대섭취량(${Math.round(limValue)}mg)
+            ${limValue>0?`<span style="display:inline-block;width:14px;border-top:2px dashed rgba(239,68,68,.55);margin:0 3px 2px 12px;"></span>최대섭취량(${Math.round(limValue)}mg)`:''}
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;margin:0 3px 0 12px;"></span>수면(h)
             ${targetSleep ? `<span style="display:inline-block;width:14px;border-top:2px dashed rgba(59,130,246,.65);margin:0 3px 2px 12px;"></span>목표수면(${targetSleep}h)` : ''}
         </div>
         <div style="height:146px;position:relative;border-left:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;background:repeating-linear-gradient(to top,#fff 0,#fff 28px,#f3f4f6 29px);">
-            <div style="position:absolute;left:0;right:0;top:${cafLimitTop}%;border-top:2px dashed rgba(239,68,68,.45);"></div>
+            ${limValue>0?`<div style="position:absolute;left:0;right:0;top:${cafLimitTop}%;border-top:2px dashed rgba(239,68,68,.45);"></div>`:''}
             ${targetSleepTop == null ? '' : `<div style="position:absolute;left:0;right:0;top:${targetSleepTop}%;border-top:2px dashed rgba(59,130,246,.55);"></div>`}
             <div style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:4px;padding:0 16px 0 10px;box-sizing:border-box;">${bars}</div>
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute;left:10px;right:16px;top:0;bottom:0;width:calc(100% - 26px);height:100%;overflow:visible;">${sleepLineSvg}${sleepPointsSvg}</svg>
@@ -4709,19 +4994,21 @@ function sendPDFToStudent(pdfOptions){
 
 function isMobile(){return window.innerWidth<=768;}
 function applyZoom(val){
-    const v=parseInt(val);
+    let v=parseInt(val)||100;
     if(isMobile()){
-        // 모바일: zoom 대신 font-size 조절 (zoom이 모바일에서 불안정)
-        document.documentElement.style.fontSize=(v/100*16)+'px';
+        v=100;
+        document.documentElement.style.fontSize='16px';
+        document.body.style.zoom='100%';
     } else {
+        document.documentElement.style.fontSize='';
         document.body.style.zoom=v+'%';
     }
     const lbl=document.getElementById('zoomLabel');
     if(lbl)lbl.textContent=v+'%';
-    try{localStorage.setItem('dashZoom',v);}catch(e){}
+    if(!isMobile()){try{localStorage.setItem('dashZoom',v);}catch(e){}}
 }
 window.startTeacherApp = function startTeacherApp(){
-    if (window.__teacherAppStarted) return;
+    if (window.__teacherAppStarted) return new Promise((resolve,reject)=>loadDataFromSheet(resolve,reject));
     window.__teacherAppStarted = true;
     loadSettings();
     ['setting_cafWarn','setting_cafOver'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('input',updateCafPreview);});
@@ -4731,14 +5018,19 @@ window.startTeacherApp = function startTeacherApp(){
     if(dtEl){dtEl.value=today;dtEl.max=today;}
     onStudentDateChange();
     // 화면 비율 복원
-    try{const z=localStorage.getItem('dashZoom');if(z){const sl=document.getElementById('zoomSlider');if(sl)sl.value=z;applyZoom(z);}}catch(e){}
-    loadDataFromSheet();
+    try{
+        if(isMobile())applyZoom(100);
+        else {const z=localStorage.getItem('dashZoom');if(z){const sl=document.getElementById('zoomSlider');if(sl)sl.value=z;applyZoom(z);}}
+    }catch(e){}
+    const ready=new Promise((resolve,reject)=>loadDataFromSheet(resolve,reject));
+
     // 학생 답장 알림 체크 (로드 후 3초, 이후 2분마다)
-    setTimeout(checkStudentReplies, 3000);
+    ready.then(()=>setTimeout(checkStudentReplies,3000),()=>{});
     setInterval(checkStudentReplies, 120000);
     // 새 문의 알림 체크 (로드 후 5초, 이후 2분마다)
-    setTimeout(checkUnreadInquiries, 5000);
+    ready.then(()=>setTimeout(checkUnreadInquiries,5000),()=>{});
     setInterval(checkUnreadInquiries, 120000);
+    return ready;
 };
 
 // ============================================
@@ -4762,13 +5054,20 @@ function formatMsgDate(ts) {
     return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}.(${days[d.getDay()]})`;
 }
 
-function formatTeacherMsgContent(content) {
-    const safe = String(content || '')
+function formatTeacherMsgContent(content, message = {}) {
+    const attachmentUrl = String(message.attachmentUrl || '').trim();
+    let text = String(content || '');
+    const bodyUrls = text.match(/https?:\/\/[^\s<]+/gi) || [];
+    if (/^https?:\/\/\S+$/i.test(attachmentUrl) && !bodyUrls.includes(attachmentUrl)) text += '\n\n' + attachmentUrl;
+    const escape = value => String(value)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-    return safe.replace(/(https?:\/\/[^\s<]+)/g, url => {
-        const label = url.includes('drive.google.com') ? 'PDF 열기' : '링크 열기';
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    const safe = escape(text);
+    return safe.replace(/(https?:\/\/[^\s<]+)/gi, url => {
+        const label = url.includes('drive.google.com') || (url === escape(attachmentUrl) && message.attachmentType === 'pdf') ? 'PDF 열기' : '링크 열기';
         return `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-top:6px;background:#3b82f6;color:white;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;text-decoration:none;">📎 ${label}</a>`;
     });
 }
@@ -5065,7 +5364,7 @@ function loadSentMessages() {
                             </div>
                         </div>
                         <div style="font-size:12px;color:#9ca3af;margin-top:4px;">${formatMsgDate(m.timestamp)} ${readTime}</div>
-                        <div style="font-size:13px;color:#374151;margin-top:8px;white-space:pre-wrap;">${formatTeacherMsgContent(m.content)}</div>
+                        <div style="font-size:13px;color:#374151;margin-top:8px;white-space:pre-wrap;">${formatTeacherMsgContent(m.content, m)}</div>
                         ${replySection}
                     </div>
                 </div>`;
@@ -5468,10 +5767,10 @@ function initBatchSelectors() {
     if (!gs || !cs) return;
     while (gs.options.length > 1) gs.remove(1);
     while (cs.options.length > 1) cs.remove(1);
-    [...new Set(studentsData.map(s => s.학년))].sort().forEach(g => {
+    [...new Set(getAnalysisStudents().map(s => s.학년))].sort().forEach(g => {
         const o = document.createElement('option'); o.value = g; o.textContent = g + '학년'; gs.appendChild(o);
     });
-    [...new Set(studentsData.map(s => s.반))].sort().forEach(c => {
+    [...new Set(getAnalysisStudents().map(s => s.반))].sort().forEach(c => {
         const o = document.createElement('option'); o.value = c; o.textContent = c + '반'; cs.appendChild(o);
     });
 }
@@ -5494,10 +5793,10 @@ function setBatchTab(tab) {
 function getBatchTargetStudents() {
     const gv = document.getElementById('batchGradeSelect')?.value || 'all';
     const cv = document.getElementById('batchClassSelect')?.value || 'all';
-    if (batchTabMode === 'all') return studentsData;
-    if (batchTabMode === 'grade') return studentsData.filter(s => s.학년 === gv || gv === 'all');
-    if (batchTabMode === 'class') return studentsData.filter(s => s.반 === cv || cv === 'all');
-    if (batchTabMode === 'manual') return studentsData.filter(s => batchSelectedStudents.has(s.학번));
+    if (batchTabMode === 'all') return getAnalysisStudents();
+    if (batchTabMode === 'grade') return getAnalysisStudents().filter(s => s.학년 === gv || gv === 'all');
+    if (batchTabMode === 'class') return getAnalysisStudents().filter(s => s.반 === cv || cv === 'all');
+    if (batchTabMode === 'manual') return getAnalysisStudents().filter(s => batchSelectedStudents.has(s.학번));
     return [];
 }
 
@@ -5505,7 +5804,7 @@ function renderBatchStudentList() {
     const list = document.getElementById('batchStudentList');
     if (!list) return;
     const sv = (document.getElementById('batchSearchInput')?.value || '').toLowerCase();
-    let filtered = studentsData;
+    let filtered = getAnalysisStudents();
     if (sv) filtered = filtered.filter(s => s.이름.includes(sv) || s.학번.includes(sv));
     list.innerHTML = filtered.map(s => {
         const checked = batchSelectedStudents.has(s.학번);
@@ -5532,7 +5831,7 @@ function toggleBatchStudent(id, row) {
 
 function toggleSelectAllBatch() {
     const sv = (document.getElementById('batchSearchInput')?.value || '').toLowerCase();
-    let filtered = studentsData;
+    let filtered = getAnalysisStudents();
     if (sv) filtered = filtered.filter(s => s.이름.includes(sv) || s.학번.includes(sv));
     const allSelected = filtered.every(s => batchSelectedStudents.has(s.학번));
     filtered.forEach(s => {
@@ -6119,7 +6418,7 @@ function saveAwardSettings() {
 function evaluateAutoTodayBadges(studentId, baseDate) {
     const earned = [];
     const todayCaf   = caffeineData.some(c  => c.학번  === studentId && c.섭취시간.startsWith(baseDate));
-    const todaySleep = sleepData.some(sl => sl.학번 === studentId && sl.날짜 === baseDate);
+    const todaySleep = hasSleepRecordOnWakeDate(studentId,baseDate);
     if (todayCaf)   earned.push({ id:'today_caf',   name:'카페인 오늘 기록', image:'☕', bg:'#ecfdf5', color:'#059669' });
     if (todaySleep) earned.push({ id:'today_sleep', name:'수면 오늘 기록',   image:'😴', bg:'#eff6ff', color:'#2563eb' });
     return earned;
@@ -6270,14 +6569,8 @@ document.addEventListener('click', function(e) {
 // ═══════════════════════════════════════════════════════════
 
 // 챌린지/연속 뱃지 정의 (교사 설정, localStorage 저장)
-let challengeBadges = [
-    { id:'badge_caf_habit3',     name:'카페인 습관의 시작', image:'🌱', bg:'#ecfdf5', color:'#065f46', type:'caffeine', method:'consecutive', days:3 },
-    { id:'badge_caf_streak7',    name:'카페인 꾸준한 습관', image:'🍀', bg:'#f0fdf4', color:'#166534', type:'caffeine', method:'consecutive', days:7 },
-    { id:'badge_caf_challenge',  name:'카페인 챌린지 달성', image:'🎯', bg:'#fff7ed', color:'#9a3412', type:'caffeine', method:'cumulative',  days:10 },
-    { id:'badge_sleep_habit3',   name:'수면 습관의 시작',   image:'🌙', bg:'#eff6ff', color:'#1e40af', type:'sleep',    method:'consecutive', days:3 },
-    { id:'badge_sleep_streak7',  name:'수면 꾸준한 습관',   image:'⭐', bg:'#fefce8', color:'#854d0e', type:'sleep',    method:'consecutive', days:7 },
-    { id:'badge_sleep_challenge',name:'수면 챌린지 달성',   image:'🏆', bg:'#f5f3ff', color:'#4c1d95', type:'sleep',    method:'cumulative',  days:10 },
-];
+let journeyConfig = BadgeJourney.mergeConfig(null);
+let challengeBadges = journeyConfig.badges.map(b=>({...b, type:'complete', method:'cumulative'}));
 let pendingBadges  = [];
 let dismissedBadges = [];
 let pendingBadgeFilter = null; // null=전체 | 'group:habit' | 'group:streak' | 'group:challenge' | 개별badgeId
@@ -6520,6 +6813,7 @@ function detectPendingBadges(){
     const newPending=[];
     studentsData.forEach(s=>{
         challengeBadges.forEach(badge=>{
+            if(badge.auto)return;
             const key=s.학번+'|'+badge.id;
             if(awarded.has(key)||dismissed.has(key))return;
             let achieved=false;
@@ -7136,6 +7430,120 @@ function resetChallengeSettings(){
     }
 }
 
+// ── 건강기록 여정 v4 ──────────────────────────────────────
+function journeyDateInput(classNo, field, value){
+    return `<input class="journey-date-input" type="date" id="journey_${classNo}_${field}" value="${value||''}" style="padding:5px;border:1px solid #d1d5db;border-radius:6px;font-size:11px;">`;
+}
+
+function renderJourneyScheduleRows(){
+    const body=document.getElementById('journeyScheduleRows');
+    if(!body)return;
+    body.innerHTML=['1','2','3','4'].map(classNo=>{
+        const s=journeyConfig.schedules[classNo];
+        return `<tr style="border-top:1px solid #dcfce7;"><td style="padding:7px 5px;font-weight:700;">2-${classNo}반</td>
+            <td data-label="전체 시작">${journeyDateInput(classNo,'start',s.start)}</td><td data-label="전체 종료">${journeyDateInput(classNo,'end',s.end)}</td>
+            <td data-label="초기 시작">${journeyDateInput(classNo,'initialStart',s.initialStart)}</td><td data-label="초기 종료">${journeyDateInput(classNo,'initialEnd',s.initialEnd)}</td>
+            <td data-label="실천 시작">${journeyDateInput(classNo,'actionStart',s.actionStart)}</td><td data-label="실천 종료">${journeyDateInput(classNo,'actionEnd',s.actionEnd)}</td></tr>`;
+    }).join('');
+}
+
+function readJourneySchedules(){
+    const schedules={};
+    ['1','2','3','4'].forEach(classNo=>{
+        const previous=journeyConfig.schedules[classNo];
+        schedules[classNo]={...previous};
+        ['start','end','initialStart','initialEnd','actionStart','actionEnd'].forEach(field=>{
+            schedules[classNo][field]=document.getElementById(`journey_${classNo}_${field}`)?.value||previous[field];
+        });
+    });
+    return schedules;
+}
+
+function renderChallengeBadgeList(){
+    const container=document.getElementById('challengeBadgeList');
+    if(!container)return;
+    challengeBadges=journeyConfig.badges.map(b=>({...b,type:'complete',method:'cumulative',auto:true}));
+    container.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">${challengeBadges.map(b=>`
+        <div style="display:flex;align-items:center;gap:9px;border:1px solid #e5e7eb;border-radius:10px;padding:10px;background:${b.bg};">
+            <span style="font-size:24px;">${b.image}</span><div><div style="font-size:12px;font-weight:700;color:${b.color};">${b.name}</div>
+            <div style="font-size:10px;color:#6b7280;margin-top:2px;">하루 기록 완료 누적 ${b.days}일 · 자동</div></div>
+        </div>`).join('')}</div>`;
+    renderJourneyScheduleRows();
+}
+
+function loadBadgeConfigFromGAS(){
+    google.script.run
+        .withSuccessHandler(function(result){
+            const remote=result&&result.success?result.config:null;
+            journeyConfig=BadgeJourney.mergeConfig(remote);
+            badgeConfigV2=journeyConfig;
+            challengeBadges=journeyConfig.badges.map(b=>({...b,type:'complete',method:'cumulative',auto:true}));
+            challengeConfigSaved=!!(remote&&remote.configSaved&&Number(remote.version)>=4);
+            S.challengeName=journeyConfig.challengeName;
+            const nameEl=document.getElementById('setting_challengeName');if(nameEl)nameEl.value=journeyConfig.challengeName;
+            saveChallengeBadges();
+            renderChallengeBadgeList();
+            rebuildAwardDropdown();
+            renderJourneyStatus();
+        })
+        .withFailureHandler(function(err){console.warn('건강기록 여정 설정 로드 실패:',err);renderChallengeBadgeList();renderJourneyStatus();})
+        .getChallengeBadgeConfig();
+}
+
+function saveChallengeBadgeSettings(){
+    journeyConfig={
+        ...journeyConfig,
+        version:4,
+        challengeName:document.getElementById('setting_challengeName')?.value.trim()||'나의 건강기록 여정',
+        schedules:readJourneySchedules(),
+        badges:BadgeJourney.DEFAULT_CONFIG.badges.map(b=>({...b})),
+        configSaved:true
+    };
+    challengeBadges=journeyConfig.badges.map(b=>({...b,type:'complete',method:'cumulative',auto:true}));
+    challengeConfigSaved=true;
+    S.challengeName=journeyConfig.challengeName;
+    saveChallengeBadges();
+    try{localStorage.setItem('challengeConfigSaved','1');localStorage.setItem('monSettings',JSON.stringify(S));}catch(e){}
+    rebuildAwardDropdown();renderChallengeBadgeList();renderJourneyStatus();
+    const status=document.getElementById('challengeSaveStatus');
+    google.script.run
+        .withSuccessHandler(()=>{if(status){status.textContent='✅ 서버 저장 완료';setTimeout(()=>status.textContent='',2500);}})
+        .withFailureHandler(()=>{if(status){status.textContent='⚠️ 저장 실패 — 다시 시도해 주세요';setTimeout(()=>status.textContent='',3500);}})
+        .saveChallengeBadgeConfig(journeyConfig);
+}
+
+function resetChallengeSettings(){
+    if(!confirm('건강기록 여정을 수업 운영 일정의 기본 날짜로 되돌리시겠습니까?'))return;
+    journeyConfig=BadgeJourney.mergeConfig(null);
+    challengeBadges=journeyConfig.badges.map(b=>({...b,type:'complete',method:'cumulative',auto:true}));
+    const nameEl=document.getElementById('setting_challengeName');if(nameEl)nameEl.value=journeyConfig.challengeName;
+    renderChallengeBadgeList();renderJourneyStatus();
+    const status=document.getElementById('challengeSaveStatus');if(status)status.textContent='기본 날짜를 불러왔습니다. 저장 버튼을 눌러 적용하세요.';
+}
+
+function renderJourneyStatus(){
+    const body=document.getElementById('journeyStatusBody');
+    if(!body)return;
+    const query=(document.getElementById('journeyStatusSearch')?.value||'').trim().toLowerCase();
+    const todayKst=getKSTDate(0);
+    const students=getAnalysisStudents().filter(s=>!query||s.학번.toLowerCase().includes(query)||s.이름.toLowerCase().includes(query));
+    if(!students.length){body.innerHTML='<tr><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;">표시할 학생이 없습니다.</td></tr>';return;}
+    body.innerHTML=students.map(s=>{
+        const schedule=journeyConfig.schedules[String(s.반)]||journeyConfig.schedules['3'];
+        const caf=caffeineData.filter(r=>r.학번===s.학번).map(r=>String(r.섭취시간||'').substring(0,10));
+        const sleep=sleepData.filter(r=>r.학번===s.학번).map(r=>r.날짜);
+        const summary=BadgeJourney.summarize({caffeineDates:caf,sleepDates:sleep,schedule,today:todayKst});
+        const week=BadgeJourney.weekProgress({caffeineDates:caf,sleepDates:sleep,today:todayKst});
+        const stage=BadgeJourney.studentStage(schedule,todayKst);
+        return `<tr style="border-top:1px solid #e5e7eb;"><td style="padding:9px;">${escapeHtml(s.학번)}</td><td>${escapeHtml(s.이름)}</td>
+            <td><strong>${summary.totalComplete}일</strong></td><td>${week.complete}/7</td>
+            <td>완료 ${summary.initial.complete}/7<br><span style="font-size:10px;color:#6b7280;">카페인 ${summary.initial.caffeine} · 수면 ${summary.initial.sleep}</span></td>
+            <td>완료 ${summary.action.complete}/7<br><span style="font-size:10px;color:#6b7280;">카페인 ${summary.action.caffeine} · 수면 ${summary.action.sleep}</span></td>
+            <td><span style="background:#ecfdf5;color:#047857;padding:4px 8px;border-radius:12px;font-size:11px;font-weight:700;">${stage.label}</span></td></tr>`;
+    }).join('');
+}
+
 </script>
+<script type="module" src="/public/js/caffeine-companies.js"></script>
 </body>
 </html>

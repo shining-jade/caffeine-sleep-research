@@ -4,7 +4,7 @@ import { verifyTeacherPassword } from '../_lib/password.js';
 import { createSession, setSessionCookie } from '../_lib/session.js';
 import { checkLoginRateLimit } from '../_lib/rate-limit.js';
 
-const SESSION_SECONDS = 8 * 60 * 60;
+const SESSION_SECONDS = 30 * 24 * 60 * 60;
 
 export function createLoginHandler({
   verifyPassword = verifyTeacherPassword,
@@ -46,7 +46,7 @@ export function createLoginHandler({
 
     const issuedAt = now();
     const token = createSession({ role: 'teacher', exp: issuedAt + SESSION_SECONDS }, issuedAt);
-    setSessionCookie(res, token, SESSION_SECONDS);
+    setSessionCookie(res, token, SESSION_SECONDS, "teacher");
     sendJson(res, 200, { success: true, authenticated: true, role: 'teacher' });
   };
 }

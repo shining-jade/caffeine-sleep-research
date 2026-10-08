@@ -3,7 +3,8 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import { requireEnv } from './env.js';
 
 const COOKIE_NAME = 'caffeine_session';
-const MAX_COOKIE_AGE = 8 * 60 * 60;
+const MAX_COOKIE_AGE = 90 * 24 * 60 * 60;
+export const STUDENT_SESSION_SECONDS = MAX_COOKIE_AGE;
 
 function encode(value) {
   return Buffer.from(value, 'utf8').toString('base64url');
@@ -61,32 +62,57 @@ export function verifySession(token, expectedRole, now = Math.floor(Date.now() /
   return payload;
 }
 
-export function readSessionCookie(req) {
+function cookieName(role) {
+  if (role === 'student') return 'caffeine_student_session';
+  if (role === 'teacher') return 'caffeine_teacher_session';
+  return COOKIE_NAME;
+}
+
+function cookieValue(req, name) {
   const header = req?.headers?.cookie;
   if (typeof header !== 'string' || header.length === 0) return null;
   const matches = header.split(';')
     .map((part) => part.trim())
-    .filter((part) => part.startsWith(`${COOKIE_NAME}=`));
+    .filter((part) => part.startsWith(`${name}=`));
   if (matches.length !== 1) return null;
   try {
-    const value = decodeURIComponent(matches[0].slice(COOKIE_NAME.length + 1));
+    const value = decodeURIComponent(matches[0].slice(name.length + 1));
     return value || null;
   } catch {
     return null;
   }
 }
 
-export function setSessionCookie(res, token, maxAge) {
+function legacyBelongsToRole(req, role) {
+  const legacy = cookieValue(req, COOKIE_NAME);
+  if (!legacy) return false;
+  try { verifySession(legacy, role, 0); return true; } catch { return false; }
+}
+
+export function readSessionCookie(req, role) {
+  const name = cookieName(role);
+  if (name === COOKIE_NAME) return cookieValue(req, name);
+  // A malformed role cookie must never fall back to an older login.
+  const parts = typeof req?.headers?.cookie === 'string' ? req.headers.cookie.split(';') : [];
+  if (parts.some(part => part.trim().startsWith(`${name}=`))) return cookieValue(req, name);
+  return legacyBelongsToRole(req, role) ? cookieValue(req, COOKIE_NAME) : null;
+}
+
+export function setSessionCookie(res, token, maxAge, role) {
   const boundedAge = Math.max(1, Math.min(MAX_COOKIE_AGE, Math.floor(maxAge)));
   res.setHeader(
     'Set-Cookie',
-    `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; Max-Age=${boundedAge}; HttpOnly; Secure; SameSite=Lax`,
+    `${cookieName(role)}=${encodeURIComponent(token)}; Path=/; Max-Age=${boundedAge}; HttpOnly; Secure; SameSite=Lax`,
   );
 }
 
-export function clearSessionCookie(res) {
+export function clearSessionCookie(res, role, req) {
+  const cookies = [`${cookieName(role)}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`];
+  if (role && legacyBelongsToRole(req, role)) {
+    cookies.push(`${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+  }
   res.setHeader(
     'Set-Cookie',
-    `${COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
+    cookies.length === 1 ? cookies[0] : cookies,
   );
 }
