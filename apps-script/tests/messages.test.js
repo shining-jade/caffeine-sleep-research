@@ -5,7 +5,7 @@ import { loadAppsScript } from './harness.js';
 const legacyHeaders = ['타임스탬프', '학번', '이름', '제목', '내용', '읽음여부', '읽은시간', '학생답장', '학생답장시간', '학생답장읽음'];
 const subject = { studentId: '1101', name: '합성학생' };
 
-async function setup({ legacy = false, englishHeaders = false, nativeTable = false } = {}) {
+async function setup({ legacy = false, englishHeaders = false, nativeTable = false, headerOnlyTable = false } = {}) {
   const rows = [[...legacyHeaders, ...(legacy ? [] : ['attachmentName', 'attachmentUrl', 'attachmentType'])]];
   if (englishHeaders) rows[0] = ['timestamp', 'studentId', 'studentName', 'title', 'content', 'readStatus', 'readTime', 'studentReply', 'studentReplyTime', 'studentReplyRead', 'attachmentName', 'attachmentUrl', 'attachmentType'];
   const sheet = {
@@ -28,14 +28,25 @@ async function setup({ legacy = false, englishHeaders = false, nativeTable = fal
   };
   const spreadsheet = { getSheetByName: () => sheet, getId: () => 'synthetic-spreadsheet' };
   const requests = [];
+  let tableEndRow = headerOnlyTable ? 1 : 2;
   const file = { setSharing() {}, getName: () => 'synthetic.pdf', getUrl: () => 'https://example.invalid/synthetic.pdf', getId: () => 'synthetic-file' };
   const blob = { getAs() { return this; }, setName() { return this; } };
   const { context } = await loadAppsScript({
     files: ['Spreadsheet.gs', 'Security.gs', 'Ownership.gs', 'Api.gs', 'Code.gs'],
     globals: {
-      Sheets: { Spreadsheets: { batchUpdate(body, id) {
+      Sheets: { Spreadsheets: {
+        get() { return { sheets: [{ tables: [{ tableId: '1114109815', range: { sheetId: 2044179537, startRowIndex: 0, endRowIndex: tableEndRow, startColumnIndex: 0, endColumnIndex: 13 } }] }] }; },
+        batchUpdate(body, id) {
         assert.equal(id, 'synthetic-spreadsheet');
-        const append = body.requests[0].appendCells;
+        for (const request of body.requests) {
+          if (request.updateTable) {
+            assert.equal(request.updateTable.fields, 'range');
+            assert.equal(request.updateTable.table.range.endColumnIndex, 13);
+            tableEndRow = request.updateTable.table.range.endRowIndex;
+          }
+        }
+        const append = body.requests.find(request => request.appendCells).appendCells;
+        if (headerOnlyTable && tableEndRow < 2) throw new Error('Header-only native table append rejected');
         assert.equal(append.tableId, '1114109815');
         requests.push(append);
         rows.push(append.rows[0].values.map(cell => cell.userEnteredValue ? Object.values(cell.userEnteredValue)[0] : ''));
@@ -122,4 +133,14 @@ test('PDF delivery preserves native table append and all thirteen message column
   assert.equal(rows.length, 2);
   assert.equal(rows[1].length, 13);
   assert.equal(context.getTeacherMessages('1101').data[0].attachmentType, 'pdf');
+});
+
+test('PDF delivery initializes an empty native message table body before appending once', async () => {
+  const { context, rows, requests } = await setup({ nativeTable: true, headerOnlyTable: true });
+  const result = context.saveTeacherPdfAndSendMessage({ studentId: '0', studentName: '테스트', html: '<p>Synthetic only</p>' });
+  assert.equal(result.success, true);
+  assert.equal(requests.length, 1);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[1].length, 13);
+  assert.equal(context.getTeacherMessages('0').data[0].attachmentType, 'pdf');
 });

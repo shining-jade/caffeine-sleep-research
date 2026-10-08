@@ -48,7 +48,24 @@ function appendRecordRow_(sheet, values, replaceRow, confirmation) {
   var request = replaceRow
     ? { updateCells: { start: { sheetId: sheet.getSheetId(), rowIndex: replaceRow-1, columnIndex: 0 }, rows: [{ values: cells }], fields: 'userEnteredValue' } }
     : { appendCells: { sheetId: sheet.getSheetId(), ...(nativeTable ? { tableId: tableId } : {}), rows: [{ values: cells }], fields: 'userEnteredValue' } };
-  try { Sheets.Spreadsheets.batchUpdate({ requests: confirmation ? [request, confirmation] : [request] }, sheet.getParent().getId()); }
+  var requests = confirmation ? [request, confirmation] : [request];
+  try {
+    // Sheets rejects appendCells on a message table containing only its header.
+    // Reserve its first body row in the same batch, keeping the existing columns.
+    if (nativeTable && !replaceRow && sheet.getName() === 'teacher_messages' && sheet.getLastRow() === 1) {
+      var metadata = Sheets.Spreadsheets.get(sheet.getParent().getId(), { fields: 'sheets(tables(tableId,range))' });
+      var table;
+      (metadata.sheets || []).forEach(function(item) {
+        (item.tables || []).forEach(function(candidate) { if (candidate.tableId === tableId) table = candidate; });
+      });
+      if (!table) throw new Error('TABLE_MAPPING_MISMATCH');
+      var firstBodyRow = (table.range.startRowIndex || 0) + 2;
+      if (table.range.endRowIndex < firstBodyRow) {
+        requests.unshift({ updateTable: { table: { tableId: tableId, range: Object.assign({}, table.range, { endRowIndex: firstBodyRow }) }, fields: 'range' } });
+      }
+    }
+    Sheets.Spreadsheets.batchUpdate({ requests: requests }, sheet.getParent().getId());
+  }
   catch (error) { throw new Error('TABLE_APPEND_FAILED'); }
   return sheet;
 }
