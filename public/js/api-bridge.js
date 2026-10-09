@@ -66,7 +66,8 @@
       throw publicError('INVALID_RESPONSE', '서버 응답을 확인할 수 없습니다.', 502);
     }
 
-    var currentSessionExpired = !url.endsWith('/login')
+    // A missing session during startup is an ordinary signed-out visit.
+    var currentSessionExpired = !url.endsWith('/login') && !url.endsWith('/session')
       && (response.status === 401 || payload?.error === 'SESSION_CHANGED') && generation === sessionGeneration;
     if (currentSessionExpired && typeof expiredHandler === 'function') {
       invalidateSession();

@@ -618,7 +618,7 @@
             <!-- 취침 날짜·시간 -->
             <div>
               <label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">취침 날짜·시간</label>
-              <input type="datetime-local" id="sleepStart"
+              <input type="datetime-local" id="sleepStart" oninput="sleepTimeDraftEdited = true"
                 class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400">
             </div>
 
@@ -683,7 +683,7 @@
             <!-- 기상 날짜·시간 -->
             <div>
               <label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">기상 날짜·시간 <span class="text-indigo-400 font-normal normal-case">기상날짜 함께 저장</span></label>
-              <input type="datetime-local" id="sleepEnd"
+              <input type="datetime-local" id="sleepEnd" oninput="sleepTimeDraftEdited = true"
                 class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400">
             </div>
 
@@ -1236,6 +1236,7 @@
     let confirmedPendingCaffeine = [];
     let pendingCaffeineSave = null;
     let sleepLogs = [];
+    let sleepTimeDraftEdited = false;
     let lastDashboardData = null;
     let badgeConfig = null; // 교사가 설정한 뱃지 구성 (getBadgeConfig에서 로드)
     let editingId = null;
@@ -1277,6 +1278,26 @@
       return `${s} ~ ${e}`;
     }
 
+    function applyRecentSleepTimeDefaults() {
+      if (sleepTimeDraftEdited || !user) return;
+      const startEl = document.getElementById('sleepStart');
+      const endEl = document.getElementById('sleepEnd');
+      if (!startEl || !endEl) return;
+      const validTime = value => /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(String(value || ''));
+      const recent = sleepLogs.filter(log => log && /^\d{4}-\d{2}-\d{2}$/.test(log.date)
+        && validTime(log.start) && validTime(log.end)).sort(compareSleepLogsByEndDesc)[0];
+      if (!recent) return;
+      const start = recent.start.slice(0, 5);
+      const end = recent.end.slice(0, 5);
+      const wakeDate = getTodayKST();
+      const bedDate = new Date(wakeDate + 'T00:00:00Z');
+      if (start >= end) bedDate.setUTCDate(bedDate.getUTCDate() - 1);
+      startEl.value = combineDateAndTime(bedDate.toISOString().slice(0, 10), start);
+      endEl.value = combineDateAndTime(wakeDate, end);
+      const dateEl = document.getElementById('sleepDate');
+      if (dateEl) dateEl.value = datePartFromDatetime(startEl.value);
+    }
+
     // 현재 시간을 KST로 설정
     function setCurrentTime() {
       const now = new Date();
@@ -1288,14 +1309,15 @@
       const sleepEndEl = document.getElementById('sleepEnd');
       const sleepStartEl = document.getElementById('sleepStart');
       const sleepDateEl = document.getElementById('sleepDate');
-      if (sleepEndEl && !sleepEndEl.value) sleepEndEl.value = formatted;
-      if (sleepStartEl && !sleepStartEl.value) {
+      if (!sleepTimeDraftEdited && sleepEndEl && !sleepEndEl.value) sleepEndEl.value = formatted;
+      if (!sleepTimeDraftEdited && sleepStartEl && !sleepStartEl.value) {
         const bed = new Date(kstTime);
         bed.setDate(bed.getDate() - 1);
         bed.setHours(23, 0, 0, 0);
         sleepStartEl.value = toDatetimeLocalValue(bed);
       }
       if (sleepDateEl) sleepDateEl.value = datePartFromDatetime(sleepStartEl?.value || formatted);
+      applyRecentSleepTimeDefaults();
     }
 
     // 마지막 탭만 저장하고, 로그인 상태는 서버 세션으로 확인한다.
@@ -1335,6 +1357,7 @@
       confirmedPendingCaffeine = [];
       pendingCaffeineSave = null;
       sleepLogs = [];
+      sleepTimeDraftEdited = false;
       teacherAwards = [];
       lastDashboardData = null;
       window._weightLoaded = false;
@@ -1774,20 +1797,6 @@
         selectedCondition = { emoji: '', score: 0 };
         resetSleepChoices();
 
-        // ⭐ 최근 취침/기상 시간 자동 채우기 (학번별)
-        const lastSleepStart = localStorage.getItem('lastSleepStart_' + user.studentId);
-        const lastSleepEnd = localStorage.getItem('lastSleepEnd_' + user.studentId);
-        const sleepEndEl = document.getElementById('sleepEnd');
-        const sleepStartEl = document.getElementById('sleepStart');
-        const baseWakeDate = datePartFromDatetime(sleepEndEl?.value) || getTodayKST();
-        if (lastSleepEnd && sleepEndEl) sleepEndEl.value = combineDateAndTime(baseWakeDate, lastSleepEnd);
-        if (lastSleepStart && sleepStartEl) {
-          const bedDate = new Date(baseWakeDate + 'T00:00');
-          bedDate.setDate(bedDate.getDate() - 1);
-          sleepStartEl.value = combineDateAndTime(toDateInputValue(bedDate), lastSleepStart);
-        }
-        const sleepDateEl = document.getElementById('sleepDate');
-        if (sleepDateEl && sleepStartEl) sleepDateEl.value = datePartFromDatetime(sleepStartEl.value);
       }
       if(id === 'settings') {
         setTimeout(loadMyInquiries, 300);
@@ -2105,11 +2114,8 @@
 
           if(btn) { btn.disabled = false; btn.innerText = "수면 기록 완료"; }
 
-          // ⭐ 최근 취침/기상 시간 학번별로 저장
-          localStorage.setItem('lastSleepStart_' + user.studentId, sleepStartTime);
-          localStorage.setItem('lastSleepEnd_' + user.studentId, sleepEndTime);
-
           // 입력 필드 초기화
+          sleepTimeDraftEdited = false;
           document.getElementById('sleepStart').value = '';
           document.getElementById('sleepEnd').value = '';
           document.getElementById('sleepMemo').value = '';
@@ -3547,6 +3553,7 @@
     }
 
     function renderSleepLogs() {
+      applyRecentSleepTimeDefaults();
       const container = document.getElementById('sleepLogsContainer');
       if(!container) return;
       if(sleepLogs.length === 0) {
