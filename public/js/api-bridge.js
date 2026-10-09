@@ -213,10 +213,10 @@
           var localOperation = sync && typeof localId === 'string' && localId.startsWith('local_') && ['updateCaffeineData','updateSleepData','deleteCaffeineData','deleteSleepData'].includes(action);
           var invocation = localOperation ? (action.startsWith('update') ? sync.editPending(localId.slice(6), params[0]) : sync.cancelPending(localId.slice(6))).then(function() { return {success:true,localSaved:true}; }) : sync && window.StudentSync.actions.has(action)
             ? sync.enqueue(action, params[0])
-            : callAction(action, params).then(function(value) { return sync && action.startsWith('get') ? sync.capture(action, value) : value; })
+            : callAction(action, params).then(function(value) { return sync && action.startsWith('get') ? sync.capture(action, value, params) : value; })
               .catch(function(error) {
                 if (sync && action.startsWith('get') && !liveNotificationReads.has(action)
-                    && ['NETWORK_ERROR','GAS_TIMEOUT','GAS_UNAVAILABLE'].includes(error.code)) return sync.read(action);
+                    && ['NETWORK_ERROR','GAS_TIMEOUT','GAS_UNAVAILABLE'].includes(error.code)) return sync.read(action, undefined, params);
                 throw error;
               });
           invocation
