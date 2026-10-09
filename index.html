@@ -1361,6 +1361,7 @@
       teacherAwards = [];
       lastDashboardData = null;
       window.studentDashboardEndDate = null;
+      window.studentAgeGroup = null;
       window.studentDashboardRequestId = (window.studentDashboardRequestId || 0) + 1;
       window._weightLoaded = false;
       window.currentAIAnalysis = null;
@@ -1525,9 +1526,13 @@
           const tw = document.getElementById('targetWakeTimeInput');
           if (tw) tw.value = result.targetWakeTime;
         }
-        if (result.ageGroup) changeSettingsAgeGroup(result.ageGroup);
+        if (result.ageGroup) {
+          window.studentAgeGroup = result.ageGroup === 'adult' ? 'adult' : 'teen';
+          changeSettingsAgeGroup(window.studentAgeGroup, true);
+        }
         updateLimitDisplay();
         updateTargetSleepDisplay();
+        if (lastDashboardData) renderCharts(lastDashboardData);
       } else {
         showWeightSetupModal();
       }
@@ -1561,8 +1566,9 @@
       google.script.run
         .withSuccessHandler(function(res) {
           if (res && res.success && res.settings) {
-            SLEEP_CFG = res.settings;
-            changeSettingsAgeGroup(res.settings.ageGroup || 'teen');
+            SLEEP_CFG = { ...res.settings };
+            changeSettingsAgeGroup(window.studentAgeGroup || res.settings.ageGroup || 'teen', true);
+            if (lastDashboardData) renderCharts(lastDashboardData);
           }
         })
         .withFailureHandler(function() {})
@@ -1581,6 +1587,10 @@
 
     function applyStudentBootstrap(data) {
       window._weightLoaded = true;
+      if (data.sleepSettings && data.sleepSettings.success && data.sleepSettings.settings) {
+        SLEEP_CFG = { ...data.sleepSettings.settings };
+        changeSettingsAgeGroup(data.weight?.ageGroup || window.studentAgeGroup || SLEEP_CFG.ageGroup || 'teen', true);
+      }
       applyWeightData(data.weight);
       caffeineLogs = data.caffeineLogs || []; caffeineHistoryLoaded = Array.isArray(data.caffeineLogs);
       confirmedPendingCaffeine = [];
@@ -1592,10 +1602,6 @@
       if (data.dashboardRequestId === (window.studentDashboardRequestId || 0)) {
         if (window.studentDashboardEndDate) refreshData();
         else updateDashboard(data.stats || {});
-      }
-      if (data.sleepSettings && data.sleepSettings.success && data.sleepSettings.settings) {
-        SLEEP_CFG = data.sleepSettings.settings;
-        changeSettingsAgeGroup(data.sleepSettings.settings.ageGroup || 'teen');
       }
       if (lastDashboardData) renderCharts(lastDashboardData);
     }
@@ -2350,20 +2356,26 @@
         return '5단계: 위험/중독';
       }
 
-      // ── 수면 단계 색상 함수 ──────────────────────────
-      // 심각부족(<6h) 빨 / 부족(<8h) 주황 / 적정(8~10h) 녹 / 과다(>10h) 보라
+      // Use the same saved thresholds as the sleep-completion guidance.
+      const sleepCfg = typeof SLEEP_CFG === 'undefined' ? {} : SLEEP_CFG;
+      const sleepSevere = Number(sleepCfg.sleepSevere) || 7;
+      const sleepWarn = Number(sleepCfg.sleepWarn) || 8;
+      const sleepGood = Number(sleepCfg.sleepGood) || 10;
+      const sleepMax = Number(sleepCfg.sleepMax) || 11;
       function getSleepColor(h) {
         if (h === 0)   return 'rgba(209,213,219,0.4)'; // 미기록: 연회색
-        if (h < 6)     return '#ef4444'; // 심각 빨
-        if (h < 8)     return '#f97316'; // 부족 주황
-        if (h <= 10)   return '#22c55e'; // 적정 녹
-        return '#a855f7';                 // 과다 보라
+        if (h < sleepSevere) return '#ef4444';
+        if (h < sleepWarn) return '#f97316';
+        if (h <= sleepGood) return '#22c55e';
+        if (h < sleepMax) return '#eab308';
+        return '#a855f7';
       }
       function getSleepStageName(h) {
         if (h === 0)   return '미기록';
-        if (h < 6)     return '심각한 수면 부족';
-        if (h < 8)     return '수면 부족';
-        if (h <= 10)   return '적정 수면';
+        if (h < sleepSevere) return '수면 부족';
+        if (h < sleepWarn) return '적당한 수면 (권장 미만)';
+        if (h <= sleepGood) return '권장 수면';
+        if (h < sleepMax) return '적당한 수면 (권장 초과)';
         return '수면 과다';
       }
 
@@ -2453,7 +2465,7 @@
         const sleepAvg = validSleepVals.length > 0
           ? parseFloat((validSleepVals.reduce((a, b) => a + b, 0) / validSleepVals.length).toFixed(1))
           : 0;
-        const sleepPeak = Math.max(10, ...validSleepVals.filter(Number.isFinite));
+        const sleepPeak = Math.max(sleepGood, ...validSleepVals.filter(Number.isFinite));
         const sleepChartMax = Math.max(12, Math.ceil(sleepPeak / 2) * 2 + 2);
 
         sleepChart = new Chart(ctx2, {
@@ -2479,22 +2491,22 @@
               },
               {
                 type: 'line',
-                data: labels.map(() => 8),
+                data: labels.map(() => sleepWarn),
                 borderColor: 'rgba(34,197,94,0.6)',
                 borderWidth: 1.5,
                 borderDash: [4, 4],
                 pointRadius: 0,
-                label: '권장 하한(8h)',
+                label: `권장 하한(${sleepWarn}h)`,
                 fill: false
               },
               {
                 type: 'line',
-                data: labels.map(() => 10),
+                data: labels.map(() => sleepGood),
                 borderColor: 'rgba(168,85,247,0.6)',
                 borderWidth: 1.5,
                 borderDash: [4, 4],
                 pointRadius: 0,
-                label: '권장 상한(10h)',
+                label: `권장 상한(${sleepGood}h)`,
                 fill: false
               }
             ]
@@ -2508,8 +2520,8 @@
                 callbacks: {
                   label: function(context) {
                     if (context.datasetIndex === 1) return `주간 평균: ${sleepAvg}시간`;
-                    if (context.datasetIndex === 2) return '권장 하한: 8시간';
-                    if (context.datasetIndex === 3) return '권장 상한: 10시간';
+                    if (context.datasetIndex === 2) return `권장 하한: ${sleepWarn}시간`;
+                    if (context.datasetIndex === 3) return `권장 상한: ${sleepGood}시간`;
                     const h = sleepData[context.dataIndex];
                     if (h === 0) return '미기록';
                     return `${h}시간 / ${getSleepStageName(h)}`;
@@ -2528,13 +2540,14 @@
         if (sleepLegendEl) {
           sleepLegendEl.innerHTML = `
             <div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:11px;color:#6b7280;">
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#ef4444;margin-right:3px;"></span>심각 부족(&lt;6h)</span>
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f97316;margin-right:3px;"></span>수면 부족(&lt;8h)</span>
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#22c55e;margin-right:3px;"></span>적정(8~10h)</span>
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#a855f7;margin-right:3px;"></span>과다(&gt;10h)</span>
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#ef4444;margin-right:3px;"></span>수면 부족(&lt;${sleepSevere}h)</span>
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f97316;margin-right:3px;"></span>적당(${sleepSevere}~${sleepWarn}h 미만)</span>
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#22c55e;margin-right:3px;"></span>권장(${sleepWarn}~${sleepGood}h)</span>
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#eab308;margin-right:3px;"></span>적당(${sleepGood}h 초과~${sleepMax}h 미만)</span>
+              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#a855f7;margin-right:3px;"></span>과다(${sleepMax}h 이상)</span>
               <span><span style="display:inline-block;width:22px;height:3px;border-top:2px dashed rgba(99,102,241,0.7);margin-right:3px;vertical-align:middle;"></span>주간 평균</span>
-              <span><span style="display:inline-block;width:22px;height:3px;border-top:2px dashed rgba(34,197,94,0.6);margin-right:3px;vertical-align:middle;"></span>권장 하한(8h)</span>
-              <span><span style="display:inline-block;width:22px;height:3px;border-top:2px dashed rgba(168,85,247,0.6);margin-right:3px;vertical-align:middle;"></span>권장 상한(10h)</span>
+              <span><span style="display:inline-block;width:22px;height:3px;border-top:2px dashed rgba(34,197,94,0.6);margin-right:3px;vertical-align:middle;"></span>권장 하한(${sleepWarn}h)</span>
+              <span><span style="display:inline-block;width:22px;height:3px;border-top:2px dashed rgba(168,85,247,0.6);margin-right:3px;vertical-align:middle;"></span>권장 상한(${sleepGood}h)</span>
             </div>`;
         }
       }
@@ -2738,12 +2751,13 @@
         .saveInitialSetup(payload);
     }
 
-    function changeSettingsAgeGroup(group) {
+    function changeSettingsAgeGroup(group, preserveThresholds) {
+      const keepThresholds = preserveThresholds && SLEEP_CFG.ageGroup === group;
       SLEEP_CFG.ageGroup = group;
-      if (group === 'adult') {
+      if (!keepThresholds && group === 'adult') {
         SLEEP_CFG.sleepSevere = 6; SLEEP_CFG.sleepWarn = 7;
         SLEEP_CFG.sleepGood = 9;   SLEEP_CFG.sleepMax = 10;
-      } else {
+      } else if (!keepThresholds) {
         SLEEP_CFG.sleepSevere = 7; SLEEP_CFG.sleepWarn = 8;
         SLEEP_CFG.sleepGood = 10;  SLEEP_CFG.sleepMax = 11;
       }
