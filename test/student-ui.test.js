@@ -31,6 +31,33 @@ function extract(name) {
   return html.slice(start, end);
 }
 
+test('background synchronization preserves the queried day total instead of replacing it with today', () => {
+  let updated;
+  const context = vm.createContext({ caffeineHistoryLoaded:true,
+    caffeineLogs:[{time:'2026-10-06',amount:150},{time:'2026-10-09',amount:6}],
+    lastDashboardData:{chartEndDate:'2026-10-06',todayTotal:150,labels:['10/05','10/06'],sleepData:[7,8]},
+    getTodayKST:()=> '2026-10-09', getLogDateKST:x=>x, updateDashboard:x=>updated=x });
+  vm.runInContext(extract('syncConfirmedCaffeineStats')+'\nsyncConfirmedCaffeineStats();',context);
+  assert.equal(updated.todayTotal,150);
+  assert.equal(updated.todayHasRecord,true);
+  assert.deepEqual(Array.from(updated.caffeineData),[0,150]);
+  assert.deepEqual(Array.from(updated.sleepData),[7,8]);
+});
+
+for (const [endDate, expected] of [['2026-10-06',150],[undefined,6]]) {
+  test(`caffeine badge uses ${endDate || 'today before a dashboard query'}`, () => {
+    const badge = {};
+    const context = vm.createContext({
+      caffeineLogs:[{time:'2026-10-06',amount:150},{time:'2026-10-09',amount:6}],
+      lastDashboardData:endDate ? {chartEndDate:endDate} : null, userLimit:150,
+      getTodayKST:()=> '2026-10-09', getLogDateKST:x=>x,
+      document:{getElementById:id=>id === 'caffeineBadge' ? badge : null} });
+    vm.runInContext(extract('updateCaffeineBadge')+'\nupdateCaffeineBadge();',context);
+    assert.match(badge.innerText,new RegExp(`\\(${expected}mg,`));
+    if (endDate) assert.match(badge.innerText,/3단계: 과다/);
+  });
+}
+
 function runCaffeineEdit(amount) {
   const requests = [], notices = [];
   let success, failure;
@@ -281,7 +308,7 @@ test('confirmed save renders the trusted record immediately without needing a hi
 });
 
 test('caffeine badge updates independently of save warning state',()=>{
- const badge={};const context=vm.createContext({document:{getElementById:()=>badge},caffeineLogs:[{time:'today',amount:160}],getTodayKST:()=> 'today',getLogDateKST:x=>x,userLimit:150});
+ const badge={};const context=vm.createContext({document:{getElementById:()=>badge},lastDashboardData:null,caffeineLogs:[{time:'today',amount:160}],getTodayKST:()=> 'today',getLogDateKST:x=>x,userLimit:150});
  vm.runInContext(extract('updateCaffeineBadge')+'\nupdateCaffeineBadge();',context);assert.match(badge.innerText,/160mg/);
 });
 

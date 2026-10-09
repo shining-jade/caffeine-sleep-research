@@ -3957,10 +3957,10 @@
         const date = getLogDateKST(log.time);
         totals.set(date, (totals.get(date) || 0) + Number(log.amount || 0));
       });
-      const data = { ...(lastDashboardData || {}), todayTotal: totals.get(today) || 0, todayHasRecord: totals.has(today) };
+      const endDate = lastDashboardData?.chartEndDate || today;
+      const data = { ...(lastDashboardData || {}), todayTotal: totals.get(endDate) || 0, todayHasRecord: totals.has(endDate) };
       const labels = data.labels || [];
       // Dashboard labels are the seven calendar days ending on the selected date.
-      const endDate = data.chartEndDate || today;
       const dates = labels.map(label => {
         let date = `${endDate.slice(0, 4)}-${String(label).replace('/', '-')}`;
         if (date > endDate) date = `${Number(date.slice(0, 4)) - 1}${date.slice(4)}`;
@@ -4066,7 +4066,7 @@
     function updateCaffeineBadge() {
       const badge = document.getElementById('caffeineBadge');
       if(!badge) return;
-      const today = getTodayKST();
+      const today = lastDashboardData?.chartEndDate || getTodayKST();
       let todayTotal = 0;
       caffeineLogs.forEach(log => { if(getLogDateKST(log.time) === today) todayTotal += log.amount; });
       const ratio = todayTotal / userLimit;
