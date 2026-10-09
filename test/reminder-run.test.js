@@ -52,6 +52,20 @@ function authorizedRequest() {
   return request('GET', `Bearer ${SECRET}`);
 }
 
+test('retired scheduled test URLs cannot fall through into ordinary student dispatch', async () => {
+  let calls = 0;
+  const handler = createReminderRunHandler({ getCronSecret: () => SECRET, now: () => NOW,
+    callGas: async () => { calls++; throw new Error('must not dispatch'); },
+  });
+  for (const id of ['20261010-sleep-03', '20261010-sleep-06', '']) {
+    const req = authorizedRequest(); req.url = `/api/reminders/run?scheduledTest=${id}`;
+    const res = response(); await handler(req, res);
+    assert.equal(res.statusCode, 410);
+    assert.equal(res.json().error, 'SCHEDULED_TEST_EXPIRED');
+  }
+  assert.equal(calls, 0);
+});
+
 test('Cron endpoint rejects wrong methods and missing wrong or duplicate authorization', async () => {
   let gatewayCalls = 0;
   const handler = createReminderRunHandler({
