@@ -1346,6 +1346,7 @@
       pendingDelete = { type: null, id: null };
       editingId = null;
       editingType = null;
+      setEditSavePending(false);
       if (caffeineChart) { caffeineChart.destroy(); caffeineChart = null; }
       if (sleepChart) { sleepChart.destroy(); sleepChart = null; }
       privateUiDefaults.forEach(saved => {
@@ -3929,8 +3930,16 @@
       event.target.classList.add('selected');
     }
 
+    function setEditSavePending(pending) {
+      const btn = document.getElementById('editSaveBtn');
+      if (!btn) return;
+      btn.disabled = pending;
+      btn.innerText = pending ? '저장 결과 확인 중...' : '저장하기';
+    }
+
     function saveEdit() {
       if(!editingType || !editingId) return;
+      if(document.getElementById('editSaveBtn')?.disabled) return;
 
       if(editingType === 'caffeine') {
         const name = document.getElementById('editDrinkName').value.trim();
@@ -3948,8 +3957,10 @@
         // 편집된 시간이 오늘인지 여부 (경고 모달 표시 결정용)
         const isEditToday = getLogDateKST(time) === getTodayKST();
 
+        setEditSavePending(true);
         google.script.run
           .withSuccessHandler(() => {
+            setEditSavePending(false);
             showSaveCompleteModal('카페인 기록이 수정되었습니다.');
             closeEditModal(); refreshData();
             // 오늘 날짜 편집이고 용량이 바뀐 경우만 경고 모달 표시
@@ -3962,7 +3973,8 @@
             }
           })
           .withFailureHandler(err => {
-            showInfoModal('수정 확인 필요', '수정하지 못했습니다. 전송 대기 기록은 시트 반영을 확인한 뒤 다시 수정해주세요.');
+            setEditSavePending(false);
+            showInfoModal('저장 여부 확인 필요', '응답을 확인하지 못해 저장 여부를 확정할 수 없습니다. 재접속 후 기록을 확인하고, 변경되지 않았을 때만 다시 수정해주세요.');
           })
           .updateCaffeineData({ id: editingId, studentId: user.studentId, name: user.name, drink: name, mg: amount, time, reason, symptom });
 
@@ -3979,13 +3991,12 @@
         if(isNaN(startTime.getTime()) || isNaN(endTime.getTime()) || !date || !wakeDate) { showInfoModal('입력 확인', '취침 날짜·시간과 기상 날짜·시간을 다시 확인해주세요.'); return; }
         if(endTime <= startTime) { showInfoModal('입력 확인', '기상 날짜·시간은 취침 날짜·시간보다 늦어야 합니다.'); return; }
         const hours = ((endTime - startTime) / (1000 * 60 * 60)).toFixed(1);
-        const index = sleepLogs.findIndex(l => l.id === editingId);
         const sleepStartTime = timePartFromDatetime(start);
         const sleepEndTime = timePartFromDatetime(end);
-        if(index !== -1) sleepLogs[index] = { ...sleepLogs[index], date, wakeDate, start: sleepStartTime, end: sleepEndTime, hours: parseFloat(hours), condition, memo };
+        setEditSavePending(true);
         google.script.run
-          .withSuccessHandler(() => { closeEditModal(); loadSleepLogs(); refreshData(); showSleepCompleteModal(hours, true); })
-          .withFailureHandler(err => { showInfoModal('수정 확인 필요', '수정하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.'); })
+          .withSuccessHandler(() => { setEditSavePending(false); closeEditModal(); loadSleepLogs(); refreshData(); showSleepCompleteModal(hours, true); })
+          .withFailureHandler(err => { setEditSavePending(false); showInfoModal('저장 여부 확인 필요', '응답을 확인하지 못해 저장 여부를 확정할 수 없습니다. 재접속 후 기록을 확인하고, 변경되지 않았을 때만 다시 수정해주세요.'); })
           .updateSleepData({ id: editingId, studentId: user.studentId, name: user.name, date, wakeDate, sleepTime: sleepStartTime, wakeTime: sleepEndTime, hours: parseFloat(hours), condition, memo, ...(window.editSleepChoices || {}) });
       }
     }

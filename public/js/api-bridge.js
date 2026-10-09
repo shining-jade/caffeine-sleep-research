@@ -99,6 +99,28 @@
       Promise.resolve().then(job.run).then(job.resolve,job.reject).finally(function(){teacherActive--;drainTeacherQueue();});
     }
   }
+  function editedRecordMatches(action, expected, record) {
+    if (!expected || !expected.id || String(record.id) !== String(expected.id)) return false;
+    if (action === 'updateCaffeineData') {
+      function timestamp(value) {
+        var match = typeof value === 'string' && value.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})(?::(\d{2}))?$/);
+        return match ? match[1] + 'T' + match[2] + ':' + (match[3] || '00') : null;
+      }
+      return typeof expected.drink === 'string' && record.name === expected.drink
+        && Number.isFinite(expected.mg) && record.amount === expected.mg
+        && timestamp(expected.time) !== null && timestamp(record.time) === timestamp(expected.time)
+        && record.reason === (expected.reason || '') && record.symptom === (expected.symptom || '');
+    }
+    return ['date','wakeDate','condition'].every(function(key) {
+      return typeof expected[key] === 'string' && expected[key] !== '' && record[key] === expected[key];
+    }) && typeof expected.sleepTime === 'string' && record.start === expected.sleepTime
+      && typeof expected.wakeTime === 'string' && record.end === expected.wakeTime
+      && Number.isFinite(expected.hours) && record.hours === expected.hours
+      && record.memo === (expected.memo || '')
+      && ['smartphone','activity','latency','awakenings','daytime'].every(function(key) {
+        return !Object.hasOwn(expected, key) || record[key] === (expected[key] || '');
+      });
+  }
   function callAction(action, params) {
     var generation = sessionGeneration;
     var revision = readRevision;
@@ -113,6 +135,29 @@
     };
     var runRequest=function(){return requestJson('/api/' + role + '/action', requestOptions);};
     var request = (role==='teacher'?scheduleTeacherRead(runRequest,action,generation):runRequest()).catch(async function(error) {
+      var recoverEdit = role === 'student' && expectedSubject
+        && ['updateCaffeineData','updateSleepData'].includes(action)
+        && ['GAS_UNAVAILABLE','GAS_TIMEOUT','NETWORK_ERROR','INVALID_RESPONSE'].includes(error.code);
+      if (recoverEdit && generation === sessionGeneration) {
+        // A lost acknowledgment does not prove a failed write. Read fresh server data;
+        // never replay the edit or use an offline/shared snapshot as confirmation.
+        readRevision++;
+        pendingReads.clear();
+        try {
+          var records = await callAction(action === 'updateCaffeineData' ? 'getCaffeineLogs' : 'getSleepLogs', [expectedSubject.studentId]);
+          if (generation !== sessionGeneration) throw publicError('STALE_SESSION', '로그인 정보가 변경되었습니다.', 409);
+          var expected = JSON.parse(requestOptions.body).params[0];
+          var matchingIds = Array.isArray(records) ? records.filter(function(record) {
+            return record && expected?.id && String(record.id) === String(expected.id);
+          }) : [];
+          if (matchingIds.length === 1 && editedRecordMatches(action, expected, matchingIds[0])) {
+            return { data: { success: true, reconciled: true }, subject: expectedSubject };
+          }
+        } catch (readError) {
+          if (['STALE_SESSION','SESSION_CHANGED','UNAUTHENTICATED'].includes(readError.code)) throw readError;
+        }
+        throw error;
+      }
       var retryableRead = role === 'student' && ['getStudentBootstrap', 'getStats', 'getFilteredStats', 'getCaffeineLogs', 'getSleepLogs'].includes(action);
       if (!retryableRead || !['GAS_UNAVAILABLE', 'NETWORK_ERROR'].includes(error.code) || generation !== sessionGeneration) throw error;
       await new Promise(function(resolve) { setTimeout(resolve, 600); });
