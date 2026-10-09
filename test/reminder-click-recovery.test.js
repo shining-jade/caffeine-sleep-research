@@ -68,6 +68,21 @@ test('warm app recovers a click even when iPhone navigate rejects', async () => 
   assert.equal(opened.length, 1);
 });
 
+test('native notification URL wins over a previous different cached click in either direction', async () => {
+  for (const [previous, current] of [['sleep', 'caffeine'], ['caffeine', 'sleep']]) {
+    const caches = cacheStorage();
+    await (await worker(caches)).click(`/?open=${previous}&date=2026-10-09`);
+    // Declarative delivery bypasses the worker, so no new click replaces this cache.
+    const { controller, opened } = app(caches, `?open=${current}&date=2026-10-10`);
+    await controller.initialize({ studentId: '0' });
+    await controller.resume();
+    assert.deepEqual(opened, [{ type: current, date: '2026-10-10' }]);
+    const later = app(caches);
+    await later.controller.initialize({ studentId: '0' });
+    assert.deepEqual(later.opened, [], 'the superseded click must be cleared');
+  }
+});
+
 test('cached click waits for login and URL plus recovery does not open the form twice', async () => {
   const caches = cacheStorage(); await (await worker(caches)).click();
   const { controller, opened } = app(caches, sleepUrl.slice(1));

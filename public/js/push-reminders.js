@@ -153,7 +153,9 @@ export function createPushReminders({
       }));
       if (!activeStudentId || version !== sessionVersion) return;
       const latest = entries.filter(Boolean).sort((a, b) => b.clickedAt - a.clickedAt)[0];
-      if (latest && !(alreadyOpened?.type === latest.record.type && alreadyOpened?.date === latest.record.date)) {
+      // An explicit notification URL takes precedence over older recovery clicks.
+      // Native declarative delivery does not write a new worker cache entry.
+      if (latest && !alreadyOpened) {
         openRecord(latest.record);
       }
       // Delete this snapshot only; a new click saved during the read stays pending.
