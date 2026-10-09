@@ -1443,7 +1443,7 @@ function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine,
   safeLog_(`   - 일평균 카페인: ${avgCaffeine}mg`);
   safeLog_(`   - 평균 수면: ${avgSleep}시간`);
   safeLog_(`   - 체중: ${weight}kg`);
-  safeLog_(`   - 일일 권장량: ${limit}mg`);
+  safeLog_(`   - 일일 목표 섭취량: ${limit}mg`);
 
   // API 호출 여부와 무관하게 실제 기록일을 보존해 규칙 기반 분석에 사용한다.
   let caffeineRecordedDays = 0;
@@ -1588,9 +1588,9 @@ const prompt = `너는 친근한 건강 코치야. 아래 데이터를 보고 �
 
 [데이터]
 이름: ${name} | 기준일: ${todayStr}
-카페인 평균: ${Math.round(avgCaffeine)}mg/일 (권장량 ${limit}mg) | 기록: ${caffeineRecordedDays}/7일
+카페인 평균: ${Math.round(avgCaffeine)}mg/일 (목표 섭취량 ${limit}mg) | 기록: ${caffeineRecordedDays}/7일
 수면 평균: ${avgSleep.toFixed(1)}h | 기록: ${sleepRecordedDays}/7일
-권장량 초과일: ${overDaysText}
+목표 섭취량 초과일: ${overDaysText}
 일별: ${weeklyDetails}
 
 [출력 형식 — 반드시 이 구조 그대로]
@@ -1598,7 +1598,7 @@ ${name}님 건강 한줄평 (${todayStr})
 [칭찬 또는 격려 한 문장. 이모지 1개]
 
 ☕ 카페인
-[1~2문장. 평균 ${Math.round(avgCaffeine)}mg과 권장량 ${limit}mg 비교. 초과일 있으면 날짜·수치 언급. 없으면 칭찬.]
+[1~2문장. 평균 ${Math.round(avgCaffeine)}mg과 목표 섭취량 ${limit}mg 비교. 초과일 있으면 날짜·수치 언급. 없으면 칭찬.]
 
 😴 수면
 [1~2문장. 평균 ${avgSleep.toFixed(1)}h와 권장 8~10h 비교.${sleepRecordedDays < 3 ? ` 수면 기록이 ${sleepRecordedDays}일뿐임을 언급하고 더 기록 권장.` : ''}]
@@ -1817,17 +1817,17 @@ function getStructuredFallbackAnalysis(avgCaffeine, avgSleep, limit, weekTotal, 
   else                                          cafStatus = "이내 👍";
 
   // 1번째 줄: 일평균 (제목 바로 다음, 빈 줄 없음)
-  t += `- 일평균 ${Math.round(avgCaffeine)}mg / 권장량 ${Math.round(limit)}mg (${cafStatus})\n`;
+  t += `- 일평균 ${Math.round(avgCaffeine)}mg / 목표 섭취량 ${Math.round(limit)}mg (${cafStatus})\n`;
 
   // 0mg 기록일 수 계산 (overCaffeineDays는 기록된 모든 날 포함)
   const zeroDays = overCaffeineDays.filter(d => d.mg === 0).length;
 
-  // 실제 권장량 초과일 목록
+  // 실제 목표 섭취량 초과일 목록
   const overDays = overCaffeineDays.filter(d => d.mg > limit);
 
   // ⭐ 2번째 줄: 초과일 경고 (초과일이 1일 이상이면 반드시 표시)
   if (overDays.length > 0) {
-    t += `- 이번 주 ${overDays.length}일 권장량을 초과했어요, 카페인 섭취에 주의가 필요해요 ⚠️\n`;
+    t += `- 이번 주 ${overDays.length}일 목표 섭취량을 초과했어요, 카페인 섭취에 주의가 필요해요 ⚠️\n`;
     // 3번째 줄: 최고치 날짜
     const topDay = overDays.reduce((a, b) => a.mg > b.mg ? a : b);
     const dayNames = ['일','월','화','수','목','금','토'];
