@@ -8,6 +8,11 @@ function requireTarget(rowIndex, key) {
   if (!Number.isInteger(rowIndex) || rowIndex < 2 || typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key)) invalidInput();
 }
 export function validateMessageInput(action, params) {
+  if (action === 'markInquiryRepliesSeen') {
+    const keys = params[2];
+    if (!Array.isArray(keys) || !keys.length || keys.length > 100
+        || keys.some(key => typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key))) invalidInput();
+  }
   if (action === 'submitInquiry' || action === 'sendTeacherMessage') {
     const payload = params[0];
     requireText(payload?.title);

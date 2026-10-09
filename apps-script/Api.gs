@@ -7,6 +7,7 @@ var STUDENT_ACTIONS_ = {
   getStats: 'identityFirst', getStudentBootstrap: 'identityFirst', getFilteredStats: 'identityFirst',
   getTeacherAwardsForStudent: 'identityFirst', markTeacherAwardsSeen: 'identityPair',
   submitInquiry: 'identityPayload', getMyInquiries: 'identityFirst',
+  markInquiryRepliesSeen: 'identityPair',
   getCaffeineDB: 'passthrough', testConnection: 'passthrough',
   generateAIHealthReport: 'identityPair', analyzeDrinkImageWithAI: 'passthrough',
   getTeacherMessages: 'identityFirst', markTeacherMessageRead: 'messageRow',
@@ -47,6 +48,7 @@ var STUDENT_MUTATIONS_ = {
   saveCaffeineData: true, deleteCaffeineData: true, updateCaffeineData: true,
   saveSleepData: true, deleteSleepData: true, updateSleepData: true,
   saveInitialSetup: true, markTeacherAwardsSeen: true, submitInquiry: true,
+  markInquiryRepliesSeen: true,
   markTeacherMessageRead: true, replyToTeacherMessage: true
 };
 
@@ -245,6 +247,7 @@ function invokeAction_(action, params) {
     case 'deleteInquiry': return deleteInquiry.apply(null, params);
     case 'getUnreadInquiries': return getUnreadInquiries.apply(null, params);
     case 'markInquiryNotified': return markInquiryNotified.apply(null, params);
+    case 'markInquiryRepliesSeen': return markInquiryRepliesSeen.apply(null, params);
     case 'exportDataToNewSheet': return exportDataToNewSheet.apply(null, params);
     case 'sendTeacherMessage': return sendTeacherMessage.apply(null, params);
     case 'saveTeacherPdfAndSendMessage': return saveTeacherPdfAndSendMessage.apply(null, params);
