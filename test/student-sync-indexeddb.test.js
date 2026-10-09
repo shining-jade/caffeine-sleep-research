@@ -1,4 +1,16 @@
 import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import {randomUUID} from 'node:crypto';import {IDBFactory} from 'fake-indexeddb';import test from 'node:test';
+test('two tabs atomically preserve concurrent confirmed deletions in IndexedDB snapshots',async()=>{
+ const c=vm.createContext({window:{},indexedDB:new IDBFactory(),crypto:{randomUUID},Date,JSON,setTimeout:()=>0,clearTimeout(){}});
+ vm.runInContext(fs.readFileSync('public/js/student-sync.js','utf8'),c);
+ const first=c.window.StudentSync.create({send:async()=>{},online:()=>false});
+ const second=c.window.StudentSync.create({send:async()=>{},online:()=>false});
+ const subject={studentId:'2101',name:'합성'};first.setSubject(subject);second.setSubject(subject);
+ await first.capture('getStudentBootstrap',{weight:{success:true},caffeineLogs:[{id:'a',amount:50},{id:'b',amount:100}],sleepLogs:[]});
+ await Promise.all([first.confirmRecordMutation('deleteCaffeineData',['a']),second.confirmRecordMutation('deleteCaffeineData',['b'])]);
+ assert.equal((await first.read('getCaffeineLogs')).length,0);
+ assert.equal((await second.read('getStudentBootstrap')).caffeineLogs.length,0);
+ const cached=await first.store.snapshot(JSON.stringify([subject.studentId,subject.name])+':getStudentBootstrap');assert.equal(cached.caffeineLogs.length,0);
+});
 test('actual IndexedDB commits survive restarting the sync instance and separate students',async()=>{
  const c=vm.createContext({window:{},indexedDB:new IDBFactory(),crypto:{randomUUID},Date,JSON,setTimeout:()=>0,clearTimeout(){}});vm.runInContext(fs.readFileSync('public/js/student-sync.js','utf8'),c);
  const first=c.window.StudentSync.create({send:async()=>{throw new Error('offline');},online:()=>false});first.setSubject({studentId:'2101',name:'합성'});await first.enqueue('saveCaffeineData',{drink:'합성',mg:0,time:'2026-10-08 12:00:00'});

@@ -46,6 +46,23 @@ function loadBridge({ role = 'student', fetchImpl, withStudentSync = false }) {
   return { window, warnings };
 }
 
+test('confirmed edits and deletions update offline histories before a later sync refresh',async()=>{
+ const subject={studentId:'0',name:'테스트'};let records=[{id:'caf-a',name:'old',amount:50,time:'2026-10-09T12:00'}];
+ const x=loadBridge({withStudentSync:true,fetchImpl:async(url,options)=>{
+   if(url.endsWith('/session'))return response({authenticated:true,...subject});
+   const {action,params}=JSON.parse(options.body);
+   if(action==='getCaffeineLogs')return response({success:true,data:records,subject});
+   if(action==='updateCaffeineData'){records=[{...records[0],name:params[0].drink,amount:params[0].mg}];return response({success:true,data:{success:true},subject});}
+   if(action==='deleteCaffeineData'){records=[];return response({success:true,data:{success:true},subject});}
+ }});
+ await x.window.appAuth.getSession();
+ const run=(action,...params)=>new Promise((resolve,reject)=>x.window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[action](...params));
+ await run('getCaffeineLogs','0');
+ await run('updateCaffeineData',{id:'caf-a',drink:'new',mg:100,time:'2026-10-08T12:00',reason:'',symptom:''});
+ const edited=await x.window.studentSync.read('getCaffeineLogs');assert.equal(edited[0].amount,100);assert.equal(edited[0].name,'new');assert.equal(edited[0].time,'2026-10-08T12:00');
+ await run('deleteCaffeineData','caf-a');assert.equal((await x.window.studentSync.read('getCaffeineLogs')).length,0);
+});
+
 test('notification reads expose outage instead of claiming an old StudentSync cache is current',async()=>{
   for(const action of ['getTeacherMessages','getMyInquiries','getTeacherAwardsForStudent']){
     const subject={studentId:'0',name:'테스트'};let calls=0;

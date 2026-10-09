@@ -35,6 +35,13 @@
       snapshot: (key, value) => transaction('snapshots', value === undefined ? 'readonly' : 'readwrite', (s, done) => {
         const req = value === undefined ? s.get(key) : s.put(value, key); req.onsuccess = () => done(req.result);
       }),
+      mutateSnapshot: (key, apply) => transaction('snapshots', 'readwrite', (s, done) => {
+        const req = s.get(key); req.onsuccess = () => {
+          const value = apply(req.result);
+          if (value !== undefined) s.put(value, key);
+          done(value);
+        };
+      }),
       lease: (key, token) => transaction('leases', 'readwrite', (s, done) => {
         const req = s.get(key); req.onsuccess = () => {
           const old = req.result;
@@ -50,7 +57,17 @@
   function create({ store = indexedStore(), send, onChange = () => {}, online = () => true }) {
     let subject = null, generation = 0, running = null, retryTimer = null, enqueued = 0;
     const token = crypto.randomUUID();
-    const instance = { store, setSubject, enqueue, flush, list, capture, read, editPending, cancelPending, forgetRecord };
+    let snapshotQueue = Promise.resolve();
+    function serializeSnapshot(work) {
+      const g = generation;
+      const pending = snapshotQueue.then(() => {
+        if (g !== generation) throw error('SESSION_CHANGED');
+        return work();
+      });
+      snapshotQueue = pending.catch(() => {});
+      return pending;
+    }
+    const instance = { store, setSubject, enqueue, flush, list, capture, read, editPending, cancelPending, forgetRecord, confirmRecordMutation };
     function setSubject(value) { subject = value ? clone(value) : null; generation++; clearTimeout(retryTimer); }
     async function list() { return subject ? store.list(ownerKey(subject)) : []; }
     async function changed() { try { await onChange(await list()); } catch (_) {} }
@@ -139,7 +156,10 @@
       // Older action-only filtered snapshots have no trustworthy period and are intentionally unused.
       return action === 'getFilteredStats' ? action + ':' + String(params?.[1] || '') : action;
     }
-    async function capture(action, value, params) {
+    function capture(action, value, params) {
+      return serializeSnapshot(() => captureSnapshot(action, value, params));
+    }
+    async function captureSnapshot(action, value, params) {
       if (!subject) return value;
       const g = generation, key = ownerKey(subject);
       try {
@@ -203,6 +223,38 @@
       for (const row of await list()) if (row.state === 'synced' && String(row.receipt?.recordId) === String(id)) {
         row.serverObserved = true; await store.put(row);
       }
+    }
+    function confirmRecordMutation(action, params) {
+      return serializeSnapshot(() => applyConfirmedRecordMutation(action, params));
+    }
+    async function applyConfirmedRecordMutation(action, params) {
+      if (!subject || !['updateCaffeineData','updateSleepData','deleteCaffeineData','deleteSleepData'].includes(action)) return;
+      const g = generation, owner = ownerKey(subject), updating = action.startsWith('update');
+      const patch = updating ? clone(params[0]) : null, id = String(updating ? patch.id : params[0]);
+      const caffeine = action.endsWith('CaffeineData'), history = caffeine ? 'getCaffeineLogs' : 'getSleepLogs';
+      function apply(records) {
+        if (!Array.isArray(records)) return records;
+        if (!updating) return records.filter(record => String(record.id) !== id);
+        return records.map(record => String(record.id) !== id ? record : caffeine
+          ? { ...record, name: patch.drink, amount: patch.mg, time: patch.time, reason: patch.reason || '', symptom: patch.symptom || '' }
+          : { ...record, ...patch, start: patch.sleepTime, end: patch.wakeTime });
+      }
+      async function mutate(key, transform) {
+        if (g !== generation) throw error('SESSION_CHANGED');
+        if (store.mutateSnapshot) return store.mutateSnapshot(key, transform);
+        const saved = await store.snapshot(key);
+        if (g !== generation) throw error('SESSION_CHANGED');
+        const next = transform(saved);
+        if (next !== undefined) await store.snapshot(key, next);
+      }
+      await mutate(owner + ':' + history, apply);
+      await mutate(owner + ':getStudentBootstrap', bootstrap => {
+        const field = caffeine ? 'caffeineLogs' : 'sleepLogs';
+        return bootstrap ? { ...bootstrap, [field]: apply(bootstrap[field]) } : bootstrap;
+      });
+      if (g !== generation) throw error('SESSION_CHANGED');
+      await forgetRecord(id);
+      await changed();
     }
     async function cancelPending(mutationId) {
       const row = (await list()).find(r => r.mutationId === mutationId);

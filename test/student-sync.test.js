@@ -3,6 +3,30 @@ const code=fs.readFileSync('public/js/student-sync.js','utf8');
 function setup(send){const c=vm.createContext({window:{},crypto:{randomUUID:()=>String(++seq)},structuredClone,Date,JSON,setTimeout:()=>0,clearTimeout(){}});let seq=0;vm.runInContext(code,c);const rows=new Map();const store={put:async r=>rows.set(r.mutationId,structuredClone(r)),list:async owner=>[...rows.values()].filter(r=>r.owner===owner),lease:async()=>true,release:async()=>{},snapshot:async()=>null};const sync=c.window.StudentSync.create({store,send});sync.setSubject({studentId:'2101',name:'합성'});return {sync,rows};}
 const payload={drink:'합성',mg:0,time:'2026-10-08 12:00:00'};
 
+test('concurrent confirmations cannot resurrect records through stale snapshot writes',async()=>{
+ const x=setup(async()=>{}),snapshots=new Map();
+ x.sync.store.snapshot=async(key,value)=>{await Promise.resolve();if(value!==undefined)snapshots.set(key,structuredClone(value));return structuredClone(snapshots.get(key));};
+ await x.sync.capture('getCaffeineLogs',[{id:'a',amount:50},{id:'b',amount:100}]);
+ await Promise.all([x.sync.confirmRecordMutation('deleteCaffeineData',['a']),x.sync.confirmRecordMutation('deleteCaffeineData',['b'])]);
+ assert.equal((await x.sync.read('getCaffeineLogs')).length,0);
+ await Promise.all([x.sync.capture('getCaffeineLogs',[{id:'c',amount:50}]),x.sync.confirmRecordMutation('deleteCaffeineData',['c'])]);
+ assert.equal((await x.sync.read('getCaffeineLogs')).length,0);
+});
+
+test('confirmed sleep edits and deletes persist in offline history and bootstrap without adding unknown records',async()=>{
+ const x=setup(async()=>{}),snapshots=new Map();
+ x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};
+ const record={id:'sleep-a',date:'2026-10-08',wakeDate:'2026-10-09',start:'23:00',end:'07:00',hours:8,memo:'old'};
+ await x.sync.capture('getStudentBootstrap',{weight:{success:true},caffeineLogs:[],sleepLogs:[record]});
+ await x.sync.confirmRecordMutation('updateSleepData',[{id:record.id,date:record.date,wakeDate:record.wakeDate,sleepTime:'22:00',wakeTime:'07:00',hours:9,memo:'new'}]);
+ let logs=await x.sync.read('getSleepLogs');assert.equal(logs[0].hours,9);assert.equal(logs[0].start,'22:00');assert.equal(logs[0].memo,'new');
+ assert.equal((await x.sync.read('getStudentBootstrap')).sleepLogs[0].hours,9);
+ await x.sync.confirmRecordMutation('updateSleepData',[{id:'unknown',hours:1}]);assert.equal((await x.sync.read('getSleepLogs')).length,1);
+ await x.sync.confirmRecordMutation('deleteSleepData',[record.id]);assert.equal((await x.sync.read('getSleepLogs')).length,0);
+ assert.equal((await x.sync.read('getStudentBootstrap')).sleepLogs.length,0);
+ x.sync.setSubject({studentId:'other',name:'다른'});await assert.rejects(x.sync.read('getStudentBootstrap'),{code:'OFFLINE_CACHE_MISSING'});
+});
+
 test('offline filtered statistics are isolated by queried end date and student',async()=>{
  const x=setup(async()=>{}), snapshots=new Map();
  x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};

@@ -17,7 +17,8 @@ function form(records = [], oldDefaults = new Map()) {
   let success;
   const context = vm.createContext({ sleepLogs:records, sleepTimeDraftEdited:false, user:{studentId:'0',name:'테스트'},
     window:{scrollTo(){}}, selectedCondition:{}, lastDashboardData:null,
-    document:{getElementById:id=>fields[id] || null,querySelectorAll:()=>[],createElement:()=>({})},
+    document:{getElementById:id=>fields[id] || null,querySelectorAll:()=>[],createElement:()=>({querySelector:()=>({})})},
+    escapeHtml:v=>String(v??''),
     localStorage:{getItem:key=>oldDefaults.get(key),setItem(){}},saveCurrentTab(){},resetSleepChoices(){},
     loadCaffeineLogs(){}, renderCharts(){},cacheStudentRecords(){},showRecordConnectionError(){},
     google:{script:{run:{withSuccessHandler(fn){success=fn;return this;},withFailureHandler(){return this;},getSleepLogs(){}}}},
@@ -25,7 +26,7 @@ function form(records = [], oldDefaults = new Map()) {
   });
   for (const name of ['toDateInputValue','toDatetimeLocalValue','datePartFromDatetime','timePartFromDatetime',
     'combineDateAndTime','sleepLogEndKey','compareSleepLogsByEndDesc','applyRecentSleepTimeDefaults',
-    'setCurrentTime','renderSleepLogs','loadSleepLogs','showTab']) vm.runInContext(extract(name),context);
+    'setCurrentTime','refreshCalendarIfVisible','renderSleepLogs','loadSleepLogs','showTab']) vm.runInContext(extract(name),context);
   return { context,fields,open:()=>context.showTab('sleep'),receive:logs=>{context.loadSleepLogs();success(logs);},
     edit(id,value){
       fields[id].value=value;
