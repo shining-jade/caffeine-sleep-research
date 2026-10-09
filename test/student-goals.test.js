@@ -24,7 +24,7 @@ function goals(initial = false, target = '150') {
     withFailureHandler(fn) { failure = fn; return this; },
     saveInitialSetup(payload) { requests.push(JSON.parse(JSON.stringify(payload))); },
   };
-  const c = vm.createContext({ document: { getElementById: id => fields[id] || null },
+  const c = vm.createContext({ window: {}, lastDashboardData: null, document: { getElementById: id => fields[id] || null },
     user: { studentId: '0', name: '테스트' }, userWeight: 55, userLimit: 137.5,
     _goalSavePending: false, _setupAgeGroup: 'teen', SLEEP_CFG: { ageGroup: 'teen' },
     google: { script: { run: runner } }, changeSettingsAgeGroup() {},
