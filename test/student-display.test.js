@@ -12,7 +12,7 @@ function setup(){
  const fields={},overlays=[];
  const buttons=[{dataset:{messageIndex:'0'},addEventListener(type,handler){this[type]=handler;}}];
  function element(){return {style:{},dataset:{},innerHTML:'',appendChild(el){this.child=el;},remove(){this.removed=true;},querySelectorAll(){return buttons;}};}
- fields.teacherMsgContainer=element();fields.myInquiriesContainer=element();fields.studentReplySendBtn=element();fields.studentReplyCancelBtn=element();
+ fields.teacherMsgContainer=element();fields.myInquiriesContainer=element();fields.studentReplySendBtn=element();fields.studentReplyCancelBtn=element();fields.studentReplyText={value:''};
  let callback;const run={withSuccessHandler(fn){callback=fn;return this;},withFailureHandler(){return this;},getTeacherMessages(){},getMyInquiries(){}};
  const context=vm.createContext({window:{},document:{getElementById:id=>fields[id]||null,createElement:element,body:{appendChild(el){overlays.push(el);}}},
   user:{studentId:'0'},google:{script:{run}},ReadFeedback:{begin:()=>true,success:()=>true,fail(){}},updateMsgBubble(){},acknowledgeTeacherMessages(){},closeStudentReplyModal(){},submitStudentReply(){},setTimeout(){}});
@@ -31,7 +31,7 @@ test('reply and edit buttons pass literal titles and original message identities
  for(const reply of ['',raw]){
   const {context,buttons,respond}=setup();let selected;
   context.openReplyModal=(...args)=>{selected=args;};vm.runInContext(extract('loadTeacherMessages'),context);context.loadTeacherMessages();respond([{...message,studentReply:reply}]);
-  assert.equal(typeof buttons[0].click,'function');buttons[0].click();assert.deepEqual(selected,[3,raw,!!reply,message.messageKey]);
+  assert.equal(typeof buttons[0].click,'function');buttons[0].click();assert.deepEqual(selected,[3,raw,!!reply,message.messageKey,reply]);
  }
 });
 test('student inquiry title body status and teacher response remain plain text',()=>{
@@ -51,6 +51,20 @@ test('reply modal safely displays the title and binds buttons without inline gen
  const {context,fields,overlays}=setup();fields.studentReplySendBtn.disabled=false;vm.runInContext(extract('openReplyModal'),context);context.openReplyModal(3,raw,true,message.messageKey);
  assert.ok(overlays[0].innerHTML.includes(escaped));assert.doesNotMatch(overlays[0].innerHTML,/<img\b|onclick=/);
  assert.equal(overlays[0].dataset.messageKey,message.messageKey);
+});
+test('editing a reply prefills exact stored text without interpolating it into modal HTML',()=>{
+ const reply='\n기존 답장 "내용" & ${1+1}\n</textarea><img src=x onerror="alert(1)">';
+ const {context,fields,overlays}=setup();vm.runInContext(extract('openReplyModal'),context);context.openReplyModal(3,raw,true,message.messageKey,reply);
+ assert.equal(fields.studentReplyText.value,reply);
+ assert.doesNotMatch(overlays[0].innerHTML,/<img\b/);assert.equal(overlays[0].dataset.messageKey,message.messageKey);
+});
+test('a new reply starts empty even if a caller supplies previous text',()=>{
+ const {context,fields}=setup();fields.studentReplyText.value='previous message';vm.runInContext(extract('openReplyModal'),context);context.openReplyModal(4,'새 메시지',false,'b'.repeat(64),'other reply');
+ assert.equal(fields.studentReplyText.value,'');
+});
+test('opening another reply during a pending send cannot replace the current draft',()=>{
+ const {context,fields,overlays}=setup();fields.studentReplySendBtn.disabled=true;fields.studentReplyText.value='전송 중 작성 내용';vm.runInContext(extract('openReplyModal'),context);context.openReplyModal(4,'다른 메시지',true,'b'.repeat(64),'다른 답장');
+ assert.equal(fields.studentReplyText.value,'전송 중 작성 내용');assert.equal(overlays.length,0);
 });
 test('resumed student data loads without consulting removed image UI and refreshes only stale beverage cache',()=>{
  const name=html.includes('function loadStudentDataOnResume(')?'loadStudentDataOnResume':'waitForCameraAnalysisThenLoad';
