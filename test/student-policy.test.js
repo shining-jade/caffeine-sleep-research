@@ -91,6 +91,14 @@ test('student policy requires an array of parameters', () => {
   assert.throws(() => normalizeStudentRequest('getStats', { studentId: '9999' }, SESSION), /parameters/i);
 });
 
+test('student settings reject invalid goal ranges and times before the gateway request', () => {
+  const base = { weight: 68, targetCaf: 150, targetBedtime: '23:00', targetWakeTime: '07:00', ageGroup: 'teen' };
+  for (const patch of [{ targetCaf: 0 }, { targetCaf: -1 }, { targetCaf: 1001 }, { targetCaf: 1.5 }, { weight: Infinity }, { targetBedtime: '25:00' }]) {
+    assert.throws(() => normalizeStudentRequest('saveInitialSetup', [{ ...base, ...patch }], SESSION), { code: 'INVALID_INPUT' });
+  }
+  assert.equal(normalizeStudentRequest('saveInitialSetup', [base], SESSION).params[0].targetCaf, 150);
+});
+
 test('student push action cannot retain a browser supplied identity', () => {
   const input = {
     role: 'teacher-test', studentId: '9999', name: '다른학생',

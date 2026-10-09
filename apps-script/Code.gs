@@ -369,6 +369,17 @@ function saveWeightData(payload) {
   }
 }
 
+function toProfileHHMM_(value) {
+  if (value === '' || value === null || value === undefined) return '';
+  if (value instanceof Date) return isNaN(value.getTime()) ? '' : Utilities.formatDate(value, 'Asia/Seoul', 'HH:mm');
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value < 1) {
+    var minutes = Math.round(value * 1440) % 1440;
+    return String(Math.floor(minutes / 60)).padStart(2, '0') + ':' + String(minutes % 60).padStart(2, '0');
+  }
+  var match = String(value).trim().match(/^(\d{1,2}):([0-5]\d)(?::[0-5]\d)?$/);
+  return match && Number(match[1]) < 24 ? match[1].padStart(2, '0') + ':' + match[2] : '';
+}
+
 // 체중 데이터 조회
 function getWeightData(studentId) {
   try {
@@ -399,8 +410,8 @@ function getWeightData(studentId) {
             success: true,
             weight: weight,
             targetCaf:     data[i][2] ? parseInt(data[i][2])    : null,
-            targetBedtime: data[i][3] ? String(data[i][3]).trim() : null,
-            targetWakeTime:data[i][4] ? String(data[i][4]).trim() : null,
+            targetBedtime: toProfileHHMM_(data[i][3]) || null,
+            targetWakeTime: toProfileHHMM_(data[i][4]) || null,
             ageGroup:      data[i][5] ? String(data[i][5]).trim() : 'teen'
           };
         }
@@ -3509,12 +3520,6 @@ function getTeacherData() {
     const infoRaw = infoSheet.getDataRange().getValues();
     const info = [];
     const seenInfo = new Set();
-    function toInfoHHMM(val) {
-      if (!val) return '';
-      if (val instanceof Date) return Utilities.formatDate(val, 'Asia/Seoul', 'HH:mm');
-      const m = String(val).match(/^(\d{1,2}):(\d{2})/);
-      return m ? m[1].padStart(2, '0') + ':' + m[2] : String(val);
-    }
 
     for (let i = 1; i < infoRaw.length; i++) {
       const r = infoRaw[i];
@@ -3526,8 +3531,8 @@ function getTeacherData() {
         학번: id,
         몸무게: parseFloat(r[6]) || 60,        // G열: 몸무게
         목표카페인: parseFloat(r[7]) || null,  // H열: 목표 카페인
-        목표취침: toInfoHHMM(r[8]),           // I열: 목표 취침
-        목표기상: toInfoHHMM(r[9])            // J열: 목표 기상
+        목표취침: toProfileHHMM_(r[8]),           // I열: 목표 취침
+        목표기상: toProfileHHMM_(r[9])            // J열: 목표 기상
       });
     }
 

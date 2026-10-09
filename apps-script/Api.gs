@@ -123,6 +123,13 @@ function handleApiRequest_(request) {
   throw new Error('REQUEST_REJECTED');
 }
 
+function validateGoalPayload_(payload) {
+  var time = /^([01]\d|2[0-3]):[0-5]\d$/;
+  if (!Number.isFinite(payload.weight) || payload.weight <= 0 || payload.weight > 200
+      || !Number.isInteger(payload.targetCaf) || payload.targetCaf < 1 || payload.targetCaf > 1000
+      || !time.test(payload.targetBedtime) || !time.test(payload.targetWakeTime)) throw new Error('REQUEST_REJECTED');
+}
+
 function dispatchStudentAction_(action, params, subject) {
   var rule = STUDENT_ACTIONS_[action];
   if (!rule) throw new Error('REQUEST_REJECTED');
@@ -138,6 +145,7 @@ function dispatchStudentAction_(action, params, subject) {
     safeParams[0] = Object.assign({}, safeParams[0], { role: 'student', studentId: subject.studentId });
     delete safeParams[0].name;
   }
+  if (action === 'saveInitialSetup') validateGoalPayload_(safeParams[0]);
   if (rule === 'subscriptionOwned') {
     safeParams = action === 'savePushPreferences'
       ? [safeParams[0], subject, safeParams[1]]
