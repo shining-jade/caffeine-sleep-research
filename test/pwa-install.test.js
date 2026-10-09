@@ -4,6 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 import * as installGuideModule from '../public/js/install-guide.js';
+import { buildNotificationPayload } from '../api/_lib/web-push.js';
 
 const { detectInstallEnvironment } = installGuideModule;
 
@@ -109,6 +110,7 @@ test('service worker shows push payload and focuses a matching same-origin deep 
   await pushWork;
   assert.deepEqual(shown[0][0], '제목');
   assert.equal(shown[0][1].data.url, '/?open=sleep&date=2026-09-09');
+  assert.equal(shown[0][1].navigate, 'https://app.example/?open=sleep&date=2026-09-09');
 
   let clickWork;
   listeners.notificationclick({
@@ -117,6 +119,32 @@ test('service worker shows push payload and focuses a matching same-origin deep 
   });
   await clickWork;
   assert.deepEqual(focused, ['existing']);
+});
+
+test('legacy worker handling of dual-format push shows one notification and clamps native navigation', async () => {
+  const source = await readFile(new URL('public/sw.js', root), 'utf8');
+  const listeners = {};
+  const shown = [];
+  vm.runInNewContext(source, { URL, self: {
+    location: { origin: 'https://app.example' },
+    registration: { showNotification: async (...args) => { shown.push(args); } },
+    addEventListener(type, listener) { listeners[type] = listener; },
+  } });
+  for (const type of ['caffeine', 'sleep']) {
+    const payload = JSON.parse(buildNotificationPayload({ type, referenceDate: '2026-10-09' }));
+    let work;
+    listeners.push({ data: { json: () => payload }, waitUntil(value) { work = value; } });
+    await work;
+    assert.equal(shown.length, type === 'caffeine' ? 1 : 2);
+    assert.equal(shown.at(-1)[0], payload.title);
+    assert.equal(shown.at(-1)[1].body, payload.body);
+    assert.equal(shown.at(-1)[1].navigate, `https://app.example/?open=${type}&date=2026-10-09`);
+  }
+  let work;
+  listeners.push({ data: { json: () => ({ data: { url: 'https://evil.example/' } }) }, waitUntil(value) { work = value; } });
+  await work;
+  assert.equal(shown.at(-1)[1].navigate, 'https://app.example/');
+  assert.equal(shown.at(-1)[1].data.url, '/');
 });
 
 test('service worker rejects cross-origin click URLs and opens a safe same-origin fallback', async () => {

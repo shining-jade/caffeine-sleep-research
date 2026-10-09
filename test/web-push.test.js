@@ -59,9 +59,10 @@ test('push runtime config rejects a subject without the required URL scheme', ()
 });
 
 test('sleep notification payload uses the approved copy and deep link', () => {
-  assert.deepEqual(JSON.parse(buildNotificationPayload({
+  const { web_push, mutable, notification, ...legacy } = JSON.parse(buildNotificationPayload({
     type: 'sleep', referenceDate: '2026-09-09',
-  })), {
+  }));
+  assert.deepEqual(legacy, {
     title: '좋은 아침이에요 ☀️',
     body: '어젯밤 수면 기록을 간단히 남겨보세요.',
     tag: 'record-sleep-2026-09-09',
@@ -74,9 +75,10 @@ test('sleep notification payload uses the approved copy and deep link', () => {
 });
 
 test('caffeine notification payload uses the approved copy and deep link', () => {
-  assert.deepEqual(JSON.parse(buildNotificationPayload({
+  const { web_push, mutable, notification, ...legacy } = JSON.parse(buildNotificationPayload({
     type: 'caffeine', referenceDate: '2026-09-10',
-  })), {
+  }));
+  assert.deepEqual(legacy, {
     title: '오늘의 기록을 돌아볼 시간이에요 🌙',
     body: '오늘의 카페인 기록을 확인해 주세요. 마시지 않았다면 ‘섭취 안 함’을 선택하면 돼요.',
     tag: 'record-caffeine-2026-09-10',
@@ -102,6 +104,21 @@ test('push sender configures VAPID and maps a successful delivery', async () => 
   assert.deepEqual(await sender.send(subscription, payload), { status: 'success', errorCode: null });
   assert.deepEqual(vapidArgs, [config.subject, config.publicKey, config.privateKey]);
   assert.equal(deliveredPayload, payload);
+});
+
+test('declarative notifications navigate to distinct record screens without worker click handling', () => {
+  for (const type of ['sleep', 'caffeine']) {
+    const payload = JSON.parse(buildNotificationPayload({ type, referenceDate: '2026-10-09' }));
+    assert.equal(payload.web_push, 8030);
+    assert.equal(payload.mutable, false);
+    assert.equal(payload.notification.navigate, `/?open=${type}&date=2026-10-09`);
+    assert.equal(payload.notification.title, payload.title);
+    assert.equal(payload.notification.body, payload.body);
+    assert.equal(payload.notification.tag, `record-${type}-2026-10-09`);
+    assert.equal(payload.notification.icon, '/public/icons/icon-192.png');
+    assert.deepEqual(payload.notification.data, payload.data);
+    assert.equal(new URL(payload.notification.navigate, 'https://app.example/').origin, 'https://app.example');
+  }
 });
 
 test('push provider requests have a finite timeout and transport timeouts are not replayed', async () => {

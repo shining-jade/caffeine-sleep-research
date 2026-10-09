@@ -36,7 +36,7 @@ export function buildNotificationPayload({ type, referenceDate }) {
   if (!copy || typeof referenceDate !== 'string' || !DATE_PATTERN.test(referenceDate)) {
     throw new Error('Invalid notification payload.');
   }
-  return JSON.stringify({
+  const legacy = {
     title: copy.title,
     body: copy.body,
     tag: `record-${type}-${referenceDate}`,
@@ -44,6 +44,19 @@ export function buildNotificationPayload({ type, referenceDate }) {
       type,
       referenceDate,
       url: `/?open=${type}&date=${referenceDate}`,
+    },
+  };
+  // Supporting browsers open the record URL natively, even when worker click
+  // handling is unavailable. Other browsers keep using the legacy fields.
+  return JSON.stringify({
+    ...legacy,
+    web_push: 8030,
+    mutable: false,
+    notification: {
+      ...legacy,
+      navigate: legacy.data.url,
+      icon: '/public/icons/icon-192.png',
+      badge: '/public/icons/icon-192.png',
     },
   });
 }

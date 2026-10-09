@@ -17,6 +17,7 @@ self.addEventListener('push', (event) => {
     tag: typeof payload.tag === 'string' ? payload.tag : 'record-reminder',
     icon: '/public/icons/icon-192.png',
     badge: '/public/icons/icon-192.png',
+    navigate: new URL(safeRelativeUrl(payload.data?.url), self.location.origin).href,
     data: { url: safeRelativeUrl(payload.data?.url) },
   };
   event.waitUntil(self.registration.showNotification(title, options));
