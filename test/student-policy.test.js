@@ -12,7 +12,7 @@ const EXPECTED_ACTIONS = [
   'getWeightData', 'saveInitialSetup', 'getStats', 'getFilteredStats',
   'getStudentBootstrap',
   'getTeacherAwardsForStudent', 'markTeacherAwardsSeen', 'submitInquiry',
-  'getMyInquiries', 'getCaffeineDB', 'testConnection', 'generateAIHealthReport',
+  'getMyInquiries', 'markInquiryRepliesSeen', 'getCaffeineDB', 'testConnection', 'generateAIHealthReport',
   'analyzeDrinkImageWithAI', 'getTeacherMessages', 'markTeacherMessageRead',
   'replyToTeacherMessage', 'getBadgeConfig', 'getChallengeBadgeConfig',
   'getSleepSettings',

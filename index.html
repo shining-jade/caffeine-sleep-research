@@ -4723,31 +4723,34 @@
     }
 
     // ── 문의 답변 팝업 관리 ──────────────────────────────
-    // 확인한 답변은 "timestamp|title" 키로 localStorage에 저장
-    function _replySeenKey() { return 'seenReplyKeys_' + (user && user.studentId); }
-    function getSeenReplyKeys() {
-      try { return JSON.parse(localStorage.getItem(_replySeenKey()) || '[]'); } catch(e) { return []; }
-    }
-    function markReplyKeysSeen(items) {
-      try {
-        const keys = items.map(i => i.timestamp + '|' + i.title);
-        const prev = getSeenReplyKeys();
-        localStorage.setItem(_replySeenKey(), JSON.stringify([...new Set([...prev, ...keys])]));
-      } catch(e) {}
+    function acknowledgeInquiryReplies(replies) {
+      const subject = user && {studentId:user.studentId, name:user.name};
+      return new Promise((resolve, reject) => {
+        if (!subject || !subject.studentId || !subject.name) return reject(new Error('로그인 상태를 확인해주세요.'));
+        google.script.run
+          .withSuccessHandler(res => {
+            if (!user || user.studentId !== subject.studentId || user.name !== subject.name) return reject(new Error('로그인 정보가 변경되었습니다.'));
+            if (!res || res.success !== true) return reject(Object.assign(new Error('확인 상태를 저장하지 못했습니다. 다시 눌러주세요.'), {code:res && res.code}));
+            resolve();
+          })
+          .withFailureHandler(reject)
+          .markInquiryRepliesSeen(subject.studentId, subject.name, replies.map(item => item.replyKey));
+      });
     }
     function checkReplyBubble() {
       if (!user || !user.studentId) return;
+      const subject = {studentId:user.studentId, name:user.name};
       google.script.run
         .withSuccessHandler(res => {
+          if (!user || user.studentId !== subject.studentId || user.name !== subject.name) return;
           if (!res || !res.success || !Array.isArray(res.data)) {
             setNotificationReadError('replies', true);
             return;
           }
           setNotificationReadError('replies', false);
           const replied = res.data.filter(i => i.status === '응답완료' && i.reply);
-          const seen = getSeenReplyKeys();
-          const newReplies = replied.filter(i => !seen.includes(i.timestamp + '|' + i.title));
-          if (newReplies.length > 0) showReplyPopup(newReplies);
+          const newReplies = replied.filter(i => i.replySeen !== true);
+          if (newReplies.length > 0) showReplyPopup(newReplies.slice(0, 100));
         })
         .withFailureHandler(() => setNotificationReadError('replies', true))
         .getMyInquiries(user.studentId);
@@ -4782,6 +4785,7 @@
             <div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:2px;">새 답변 ${replies.length}건</div>
           </div>
           <div style="padding:20px;max-height:55vh;overflow-y:auto;">${itemsHtml}</div>
+          <p id="replyPopupError" role="alert" style="display:none;margin:0 20px 12px;color:#dc2626;font-size:12px;"></p>
           <div style="padding:0 20px 20px;display:flex;gap:10px;">
             <button id="replyPopupConfirmBtn" style="flex:1;padding:13px;background:#f3f4f6;color:#374151;border:none;border-radius:14px;font-size:14px;font-weight:700;cursor:pointer;">확인했습니다</button>
             <button id="replyPopupAskBtn" style="flex:1;padding:13px;background:#6366f1;color:white;border:none;border-radius:14px;font-size:14px;font-weight:700;cursor:pointer;">추가 문의하기</button>
@@ -4789,24 +4793,43 @@
         </div>`;
       document.body.appendChild(overlay);
 
-      const close = () => {
-        markReplyKeysSeen(replies);
-        const bubble = document.getElementById('replyBubble');
-        if (bubble) bubble.style.display = 'none';
-        overlay.remove();
-        const body = document.getElementById('inquiryBody');
-        if (body && !body.classList.contains('hidden')) loadMyInquiries();
+      const confirmBtn = document.getElementById('replyPopupConfirmBtn');
+      const askBtn = document.getElementById('replyPopupAskBtn');
+      const errorEl = document.getElementById('replyPopupError');
+      const close = async (askMore = false) => {
+        if (confirmBtn.disabled) return;
+        confirmBtn.disabled = askBtn.disabled = true;
+        confirmBtn.textContent = '확인 중…';
+        errorEl.style.display = 'none';
+        try {
+          await acknowledgeInquiryReplies(replies);
+          const bubble = document.getElementById('replyBubble');
+          if (bubble) bubble.style.display = 'none';
+          overlay.remove();
+          const body = document.getElementById('inquiryBody');
+          if (body && !body.classList.contains('hidden')) loadMyInquiries();
+          if (askMore) {
+            if (body && body.classList.contains('hidden')) toggleInquirySection();
+            const section = document.getElementById('inquirySection');
+            if (section) section.scrollIntoView({behavior:'smooth', block:'start'});
+            setTimeout(() => document.getElementById('inquiryTitle') && document.getElementById('inquiryTitle').focus(), 400);
+          }
+          checkReplyBubble();
+        } catch (error) {
+          if (error && error.code === 'INQUIRY_TARGET_CHANGED') {
+            overlay.remove();
+            checkReplyBubble();
+            return;
+          }
+          errorEl.textContent = '확인 상태를 저장하지 못했습니다. 다시 눌러주세요.';
+          errorEl.style.display = 'block';
+        } finally {
+          confirmBtn.disabled = askBtn.disabled = false;
+          confirmBtn.textContent = '확인했습니다';
+        }
       };
-      document.getElementById('replyPopupConfirmBtn').onclick = close;
-      document.getElementById('replyPopupAskBtn').onclick = () => {
-        close();
-        // 문의하기 섹션 열기
-        const inquiryBody = document.getElementById('inquiryBody');
-        if (inquiryBody && inquiryBody.classList.contains('hidden')) toggleInquirySection();
-        const section = document.getElementById('inquirySection');
-        if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        setTimeout(() => document.getElementById('inquiryTitle') && document.getElementById('inquiryTitle').focus(), 400);
-      };
+      confirmBtn.onclick = () => close();
+      askBtn.onclick = () => close(true);
     }
 
     // ═══════════════════════════════════════════════════════

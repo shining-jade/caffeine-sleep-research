@@ -4336,6 +4336,46 @@ function markInquiryNotified(rowIndex, expectedKey) {
 /**
  * 학생용: 자신의 문의 목록 및 응답 확인 (E열=학번[4])
  */
+function inquiryReplyKey_(row) {
+  if (String(row[8]) !== '응답완료' || !row[9]) return '';
+  const time = row[10] instanceof Date ? row[10].toISOString() : String(row[10] || '');
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+    JSON.stringify([inquiryKey_(row), String(row[9]), time]), Utilities.Charset.UTF_8)
+    .map(byte => ('0' + ((byte + 256) % 256).toString(16)).slice(-2)).join('');
+}
+
+// M stores the exact reply receipt; an edited answer has a different key.
+// The authenticated gateway supplies the identity and holds the script lock.
+function markInquiryRepliesSeen(studentId, name, replyKeys) {
+  try {
+    if (!Array.isArray(replyKeys) || !replyKeys.length || replyKeys.length > 100
+        || replyKeys.some(key => typeof key !== 'string' || !/^[a-f0-9]{64}$/.test(key))) {
+      return {success:false, error:'확인할 답변 정보가 올바르지 않습니다.'};
+    }
+    const sheet = getSpreadsheet_().getSheetByName('inquiries');
+    if (!sheet) return inquiryTargetChanged_();
+    const rows = sheet.getDataRange().getValues();
+    const header = String((rows[0] || [])[12] || '');
+    if (header && header !== '학생답변확인키') return {success:false, error:'답변 확인 저장 열을 확인해주세요.'};
+    const subject = {studentId:studentId, name:name};
+    const targets = [];
+    for (const key of [...new Set(replyKeys)]) {
+      const matches = [];
+      for (let i = 1; i < rows.length; i++) {
+        if (ownerMatchesSubject_(rows[i][4], rows[i][5], subject) && inquiryReplyKey_(rows[i]) === key) matches.push(i + 1);
+      }
+      if (matches.length !== 1) return inquiryTargetChanged_();
+      targets.push({row:matches[0], key:key});
+    }
+    if (!header) sheet.getRange(1, 13).setValue('학생답변확인키');
+    targets.forEach(target => sheet.getRange(target.row, 13).setValue(target.key));
+    return {success:true};
+  } catch (error) {
+    safeLog_('답변 확인 저장 실패: ' + error.message);
+    return {success:false, error:'답변 확인 상태를 저장하지 못했습니다.'};
+  }
+}
+
 function getMyInquiries(studentId) {
   try {
     const ss = getSpreadsheet_();
@@ -4349,7 +4389,10 @@ function getMyInquiries(studentId) {
     const inquiries = [];
     for (let i = 1; i < data.length; i++) {
       if (normalizeId(data[i][4]) === normalizeId(studentId)) { // E열: 학번
+        const replyKey = inquiryReplyKey_(data[i]);
         inquiries.push({
+          replyKey: replyKey,
+          replySeen: !!replyKey && String(data[i][12] || '') === replyKey,
           timestamp: data[i][0] ? String(data[i][0]) : '',
           title:     String(data[i][6] || ''),  // G열
           content:   String(data[i][7] || ''),  // H열

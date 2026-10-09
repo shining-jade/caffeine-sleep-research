@@ -16,6 +16,7 @@ export const STUDENT_ACTION_RULES = Object.freeze({
   markTeacherAwardsSeen: 'identityPair',
   submitInquiry: 'identityPayload',
   getMyInquiries: 'identityFirst',
+  markInquiryRepliesSeen: 'identityPair',
   getCaffeineDB: 'passthrough',
   testConnection: 'passthrough',
   generateAIHealthReport: 'identityPair',
