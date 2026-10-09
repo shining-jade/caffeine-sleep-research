@@ -38,6 +38,11 @@ test('dashboard refresh preserves queried period while ignoring unsubmitted date
   assert.equal(x.calls[1].args[1], '2000-01-07');
   x.calls[1].success({ todayTotal: 150 }); assert.equal(x.displayed.at(-1).date, '2000-01-07');
 });
+
+test('dashboard identifies locally rebuilt statistics in its existing range status', () => {
+  const x = setup(); x.c.applyDateFilter(); x.calls[0].success({ todayTotal: 75, localStats: true });
+  assert.match(x.range.textContent, /기기 저장본 표시 중/);
+});
 test('older query success and failure cannot overwrite latest queried range', () => {
   const x = setup(); x.c.applyDateFilter(); x.input.value = '2000-01-14'; x.c.applyDateFilter();
   x.calls[1].success({ todayTotal: 200 }); const before = x.range.textContent;

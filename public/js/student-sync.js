@@ -192,7 +192,14 @@
       if (g !== generation) throw error('SESSION_CHANGED');
       if (action === 'getStudentBootstrap') {
         if (!value) throw error('OFFLINE_CACHE_MISSING');
-        return { ...value, weight: await read('getWeightData', supplied === undefined ? undefined : value.weight), caffeineLogs: await read('getCaffeineLogs', supplied === undefined ? undefined : value.caffeineLogs), sleepLogs: await read('getSleepLogs', supplied === undefined ? undefined : value.sleepLogs) };
+        const bundle = { ...value,
+          weight: await read('getWeightData', supplied === undefined ? undefined : value.weight),
+          caffeineLogs: await read('getCaffeineLogs', supplied === undefined ? undefined : value.caffeineLogs),
+          sleepLogs: await read('getSleepLogs', supplied === undefined ? undefined : value.sleepLogs),
+          stats: await mergeRecordStats(value.stats, koreanToday(), supplied === undefined),
+        };
+        if (g !== generation) throw error('SESSION_CHANGED');
+        return bundle;
       }
       if (action === 'getWeightData') {
         const latest = rows.filter(r => r.action === 'saveInitialSetup' && r.state !== 'synced').sort((a, b) => b.createdAt - a.createdAt)[0];
@@ -203,6 +210,9 @@
         const records = Array.isArray(value) ? clone(value) : [];
         for (const row of matching) {
           const record = localRecord(row);
+          const serverId = row.receipt?.recordId || await syncedRecordId(row);
+          if (g !== generation) throw error('SESSION_CHANGED');
+          if (records.some(r => String(r.id) === String(record.id) || (serverId && String(r.id) === serverId))) continue;
           if (action === 'getSleepLogs') {
             for (let i = records.length - 1; i >= 0; i--) if (records[i].date === record.date && records[i].id !== record.id) records.splice(i, 1);
           }
@@ -211,7 +221,52 @@
         return records;
       }
       if (value === undefined || value === null) throw error('OFFLINE_CACHE_MISSING');
+      if (action === 'getFilteredStats' || action === 'getStats') {
+        const result = await mergeRecordStats(value, action === 'getFilteredStats' ? params?.[1] : koreanToday(), supplied === undefined);
+        if (g !== generation) throw error('SESSION_CHANGED');
+        return result;
+      }
       return value;
+    }
+    function koreanToday() { return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); }
+    async function mergeRecordStats(value, endDate, offline) {
+      if (!offline || !value || !/^\d{4}-\d{2}-\d{2}$/.test(endDate || '')) return value;
+      const g = generation, owner = ownerKey(subject), result = { ...value };
+      const end = Date.parse(endDate + 'T00:00:00Z');
+      if (!Number.isFinite(end)) return value;
+      const dates = Array.from({ length: 7 }, (_, i) => new Date(end - (6 - i) * 86400000).toISOString().slice(0, 10));
+      let rebuilt = false;
+      for (const kind of ['Caffeine', 'Sleep']) {
+        const history = 'get' + kind + 'Logs';
+        // A complete cached history is required; partial pending rows cannot replace server totals.
+        if (!Array.isArray(await store.snapshot(owner + ':' + history))) continue;
+        const records = await read(history);
+        if (g !== generation) throw error('SESSION_CHANGED');
+        if (kind === 'Caffeine') {
+          const totals = new Map();
+          records.forEach(record => {
+            const time = String(record.time || '');
+            const stamp = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(time) ? Date.parse(time) : NaN;
+            const date = Number.isFinite(stamp) ? new Date(stamp + 9 * 3600000).toISOString().slice(0, 10) : time.slice(0, 10);
+            totals.set(date, (totals.get(date) || 0) + (Number(record.amount) || 0));
+          });
+          result.todayTotal = totals.get(endDate) || 0;
+          result.todayHasRecord = totals.has(endDate);
+          result.caffeineData = dates.map(date => totals.get(date) || 0);
+          result.caffeineHasData = dates.map(date => totals.has(date));
+        } else {
+          const byDate = new Map();
+          records.forEach(record => {
+            const previous = byDate.get(record.date);
+            const endKey = log => String(log.wakeDate || log.date || '') + ' ' + String(log.end || '');
+            if (!previous || endKey(record) >= endKey(previous)) byDate.set(record.date, record);
+          });
+          result.sleepData = dates.map(date => Number(byDate.get(date)?.hours) || 0);
+        }
+        rebuilt = true;
+      }
+      if (g !== generation) throw error('SESSION_CHANGED');
+      return rebuilt ? { ...result, labels: dates.map(date => date.slice(5).replace('-', '/')), chartEndDate: endDate, localStats: true } : value;
     }
     async function editPending(mutationId, patch) {
       const row = (await list()).find(r => r.mutationId === mutationId);
@@ -262,6 +317,13 @@
       row.state = 'cancelled'; await store.put(row); await changed();
     }
     return instance;
+  }
+  async function syncedRecordId(row) {
+    if (!crypto.subtle || typeof TextEncoder === 'undefined') return null;
+    // Match Sync.gs runSyncedMutation_: a server record is keyed by identity, action and mutation UUID.
+    const key = JSON.stringify([row.subject.studentId, row.subject.name, row.action, row.mutationId]);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key));
+    return 'sync_' + Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
   }
   function localRecord(row) {
     const p = row.payload;
