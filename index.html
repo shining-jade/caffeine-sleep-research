@@ -1237,6 +1237,7 @@
     let pendingCaffeineSave = null;
     let sleepLogs = [];
     let sleepTimeDraftEdited = false;
+    let sleepReminderDate = null;
     let lastDashboardData = null;
     let badgeConfig = null; // 교사가 설정한 뱃지 구성 (getBadgeConfig에서 로드)
     let editingId = null;
@@ -1278,6 +1279,30 @@
       return `${s} ~ ${e}`;
     }
 
+    function setSleepFormTimes(start, end) {
+      const bedDate = new Date((sleepReminderDate || getTodayKST()) + 'T00:00:00Z');
+      const wakeDate = new Date(bedDate);
+      if (start >= end) {
+        if (sleepReminderDate) wakeDate.setUTCDate(wakeDate.getUTCDate() + 1);
+        else bedDate.setUTCDate(bedDate.getUTCDate() - 1);
+      }
+      document.getElementById('sleepStart').value = combineDateAndTime(bedDate.toISOString().slice(0, 10), start);
+      document.getElementById('sleepEnd').value = combineDateAndTime(wakeDate.toISOString().slice(0, 10), end);
+      const dateEl = document.getElementById('sleepDate');
+      if (dateEl) dateEl.value = bedDate.toISOString().slice(0, 10);
+    }
+
+    function applySleepReminderDate(date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date + 'T00:00:00Z'))
+          || new Date(date + 'T00:00:00Z').toISOString().slice(0, 10) !== date) return;
+      sleepReminderDate = date;
+      sleepTimeDraftEdited = false;
+      const start = timePartFromDatetime(document.getElementById('sleepStart').value).slice(0, 5) || '23:00';
+      const end = timePartFromDatetime(document.getElementById('sleepEnd').value).slice(0, 5) || '07:00';
+      setSleepFormTimes(start, end);
+      applyRecentSleepTimeDefaults();
+    }
+
     function applyRecentSleepTimeDefaults() {
       if (sleepTimeDraftEdited || !user) return;
       const startEl = document.getElementById('sleepStart');
@@ -1289,13 +1314,7 @@
       if (!recent) return;
       const start = recent.start.slice(0, 5);
       const end = recent.end.slice(0, 5);
-      const wakeDate = getTodayKST();
-      const bedDate = new Date(wakeDate + 'T00:00:00Z');
-      if (start >= end) bedDate.setUTCDate(bedDate.getUTCDate() - 1);
-      startEl.value = combineDateAndTime(bedDate.toISOString().slice(0, 10), start);
-      endEl.value = combineDateAndTime(wakeDate, end);
-      const dateEl = document.getElementById('sleepDate');
-      if (dateEl) dateEl.value = datePartFromDatetime(startEl.value);
+      setSleepFormTimes(start, end);
     }
 
     // 현재 시간을 KST로 설정
@@ -1358,6 +1377,7 @@
       pendingCaffeineSave = null;
       sleepLogs = [];
       sleepTimeDraftEdited = false;
+      sleepReminderDate = null;
       teacherAwards = [];
       lastDashboardData = null;
       window.studentDashboardEndDate = null;
@@ -1427,7 +1447,6 @@
       if(bootPage) bootPage.classList.add('hidden');
       if(userTitle) userTitle.textContent = `${res.name} 님`;
       if (typeof hideTutFab === 'function') hideTutFab();
-      if (window.pushReminders) window.pushReminders.initialize(res);
 
       // 세션 복구 시 마지막 탭을 먼저 표시하고 서버 데이터를 갱신한다.
       if (isRestore) {
@@ -1455,6 +1474,7 @@
         setTimeout(checkTeacherAwards, 2500);
         setTimeout(loadBadgeConfig, 800);
         loadStudentDataOnResume();
+        if (window.pushReminders) window.pushReminders.initialize(res);
         return;
       }
 
@@ -1474,6 +1494,7 @@
       setTimeout(loadBadgeConfig, 800);
       initCalendarDate();
       showTab('dashboard');
+      if (window.pushReminders) window.pushReminders.initialize(res);
     }
 
     // 로그인
@@ -2130,6 +2151,7 @@
 
           // 입력 필드 초기화
           sleepTimeDraftEdited = false;
+          sleepReminderDate = null;
           document.getElementById('sleepStart').value = '';
           document.getElementById('sleepEnd').value = '';
           document.getElementById('sleepMemo').value = '';

@@ -147,6 +147,7 @@ export function createPushReminders({
 
   async function initialize(session) {
     if (!session?.studentId) return emit();
+    consumePendingLink();
     const supported = isSupported();
     const permission = permissionState();
     emit({ supported, permission, status: permission });
@@ -162,8 +163,6 @@ export function createPushReminders({
       return safeState(state);
     } catch {
       return emit({ status: 'error' });
-    } finally {
-      consumePendingLink();
     }
   }
 
@@ -283,6 +282,10 @@ function renderStudentReminderState(state) {
 function openRecordFromReminder(value) {
   if (typeof window.showTab !== 'function') return;
   window.showTab(value.type);
+  if (value.type === 'sleep' && typeof window.applySleepReminderDate === 'function') {
+    window.applySleepReminderDate(value.date);
+    return;
+  }
   const dateInput = document.getElementById(value.type === 'sleep' ? 'sleepDate' : 'caffeineTime');
   if (!dateInput) return;
   if (value.type === 'sleep') dateInput.value = value.date;

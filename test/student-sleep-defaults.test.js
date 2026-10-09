@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createPushReminders } from '../public/js/push-reminders.js';
 
 const source = fs.readFileSync(new URL('../index.html', import.meta.url),'utf8');
 function extract(name) {
@@ -11,23 +12,37 @@ function extract(name) {
 }
 function form(records = [], oldDefaults = new Map()) {
   const fields = Object.fromEntries(['sleepStart','sleepEnd','sleepDate','caffeineTime','sleepLogsContainer',
-    'tab-sleep','nav-sleep','tab-caffeine','nav-caffeine'].map(id => [id, {
-    value:'', classList:{add(){},remove(){},contains(){return false;}}, appendChild(){}, innerHTML:'',
+    'tab-sleep','nav-sleep','tab-caffeine','nav-caffeine','tab-dashboard','nav-dashboard'].map(id => [id, {
+    value:'', classList:{ values:new Set(),add(...names){names.forEach(n=>this.values.add(n));},remove(...names){names.forEach(n=>this.values.delete(n));},contains(name){return this.values.has(name);}}, appendChild(){}, innerHTML:'',
   }]));
   let success;
-  const context = vm.createContext({ sleepLogs:records, sleepTimeDraftEdited:false, user:{studentId:'0',name:'테스트'},
+  let savedTab = 'dashboard';
+  const context = vm.createContext({ sleepLogs:records, sleepTimeDraftEdited:false, sleepReminderDate:null, user:{studentId:'0',name:'테스트'},
     window:{scrollTo(){}}, selectedCondition:{}, lastDashboardData:null,
-    document:{getElementById:id=>fields[id] || null,querySelectorAll:()=>[],createElement:()=>({querySelector:()=>({})})},
+    document:{getElementById:id=>fields[id] || null,querySelectorAll:selector=>selector==='.tab-content'?Object.entries(fields).filter(([id])=>id.startsWith('tab-')).map(([,el])=>el):[],createElement:()=>({querySelector:()=>({})})},
     escapeHtml:v=>String(v??''),
-    localStorage:{getItem:key=>oldDefaults.get(key),setItem(){}},saveCurrentTab(){},resetSleepChoices(){},
+    localStorage:{getItem:key=>oldDefaults.get(key),setItem(){}},saveCurrentTab:id=>{savedTab=id;},resetSleepChoices(){},
     loadCaffeineLogs(){}, renderCharts(){},cacheStudentRecords(){},showRecordConnectionError(){},
     google:{script:{run:{withSuccessHandler(fn){success=fn;return this;},withFailureHandler(){return this;},getSleepLogs(){}}}},
     getTodayKST:()=> '2026-10-09', getSleepTimingInfo:()=>({}),formatConditionWithLabel:()=>'',
   });
   for (const name of ['toDateInputValue','toDatetimeLocalValue','datePartFromDatetime','timePartFromDatetime',
-    'combineDateAndTime','sleepLogEndKey','compareSleepLogsByEndDesc','applyRecentSleepTimeDefaults',
+    'combineDateAndTime','sleepLogEndKey','compareSleepLogsByEndDesc','setSleepFormTimes','applySleepReminderDate','applyRecentSleepTimeDefaults',
     'setCurrentTime','refreshCalendarIfVisible','renderSleepLogs','loadSleepLogs','showTab']) vm.runInContext(extract(name),context);
-  return { context,fields,open:()=>context.showTab('sleep'),receive:logs=>{context.loadSleepLogs();success(logs);},
+  const reminders = fs.readFileSync(new URL('../public/js/push-reminders.js',import.meta.url),'utf8');
+  const reminderStart = reminders.indexOf('function openRecordFromReminder(');
+  vm.runInContext(reminders.slice(reminderStart,reminders.indexOf('\n}',reminderStart)+2),context);
+  context.window.showTab=context.showTab;
+  context.window.applySleepReminderDate=context.applySleepReminderDate;
+  Object.assign(context, {
+    resetStudentData(){},saveSession(){},loadSessionTab:()=>savedTab,setTimeout(){},
+    updateDisplayStudentInfo(){},loadQuickMenuFromStorage(){},initQuickMenuEditor(){},renderQuickMenus(){},
+    setToday(){},startAutoRefresh(){},checkReplyBubble(){},checkMsgBubble(){},checkTeacherAwards(){},
+    loadBadgeConfig(){},loadStudentDataOnResume(){},closeQuickSubItems(){},loadInitialStudentData(){},
+    initCalendarDate(){},refreshData(){},
+  });
+  vm.runInContext(extract('enterApp'),context);
+  return { context,fields,open:()=>context.showTab('sleep'),reminder:date=>context.openRecordFromReminder({type:'sleep',date}),receive:logs=>{context.loadSleepLogs();success(logs);},
     edit(id,value){
       fields[id].value=value;
       const tag=source.match(new RegExp(`<input[^>]*id="${id}"[^>]*>`))[0];
@@ -37,6 +52,51 @@ function form(records = [], oldDefaults = new Map()) {
 }
 const older = { id:'old',date:'2026-10-05',wakeDate:'2026-10-06',start:'22:00',end:'06:00' };
 const latest = { id:'recent',date:'2026-10-08',wakeDate:'2026-10-09',start:'23:45',end:'07:15' };
+
+for (const isRestore of [false,true]) for (const type of ['sleep','caffeine']) {
+  test(`${isRestore?'restored session':'first login'} preserves the requested ${type} reminder tab and date`,async()=>{
+    const f=form([latest]);
+    const pending=new Map();
+    const controller=createPushReminders({
+      api:{},navigatorRef:{},NotificationRef:undefined,PushManagerRef:undefined,
+      sessionStorageRef:{getItem:key=>pending.get(key),setItem:(key,value)=>pending.set(key,value),removeItem:key=>pending.delete(key)},
+      locationRef:{search:`?open=${type}&date=2026-10-07`,pathname:'/'},historyRef:{replaceState(){}},
+      openRecord:value=>f.context.openRecordFromReminder(value),onState(){},detectEnvironment:()=> 'unsupported',
+    });
+    f.context.window.pushReminders=controller;
+    f.context.enterApp({studentId:'0',name:'테스트'},isRestore);
+    assert.equal(f.fields[`tab-${type}`].classList.contains('active'),true);
+    if(type==='sleep') {
+      assert.equal(f.fields.sleepStart.value,'2026-10-07T23:45');
+      assert.equal(f.fields.sleepEnd.value,'2026-10-08T07:15');
+    } else assert.equal(f.fields.caffeineTime.value.slice(0,10),'2026-10-07');
+  });
+}
+
+test('an older sleep reminder applies its bedtime date to both visible inputs',()=>{
+  const f=form([latest]); f.reminder('2026-10-07');
+  assert.equal(f.fields.sleepStart.value,'2026-10-07T23:45');
+  assert.equal(f.fields.sleepEnd.value,'2026-10-08T07:15');
+  assert.equal(f.fields.sleepDate.value,'2026-10-07');
+});
+test('late sleep history keeps the reminder date while updating the remembered times',()=>{
+  const f=form(); f.reminder('2026-10-07');f.receive([latest]);
+  assert.equal(f.fields.sleepStart.value,'2026-10-07T23:45');
+  assert.equal(f.fields.sleepEnd.value,'2026-10-08T07:15');
+  f.context.showTab('caffeine');f.open();
+  assert.equal(f.fields.sleepStart.value,'2026-10-07T23:45');
+  f.edit('sleepStart','2026-10-06T22:30');f.edit('sleepEnd','2026-10-07T06:30');f.receive([older]);
+  assert.equal(f.fields.sleepStart.value,'2026-10-06T22:30');
+  assert.equal(f.fields.sleepEnd.value,'2026-10-07T06:30');
+});
+test('sleep reminder handles year rollover and same-day after-midnight sleep',()=>{
+  const overnight=form([latest]);overnight.reminder('2026-12-31');
+  assert.equal(overnight.fields.sleepStart.value,'2026-12-31T23:45');
+  assert.equal(overnight.fields.sleepEnd.value,'2027-01-01T07:15');
+  const sameDay=form([{...latest,start:'01:10',end:'08:00'}]);sameDay.reminder('2026-10-07');
+  assert.equal(sameDay.fields.sleepStart.value,'2026-10-07T01:10');
+  assert.equal(sameDay.fields.sleepEnd.value,'2026-10-07T08:00');
+});
 
 test('a fresh browser fills recent server sleep times using current record dates',()=>{
   const f=form([older,latest]); f.open();
