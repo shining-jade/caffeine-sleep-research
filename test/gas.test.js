@@ -81,6 +81,71 @@ test('persistent output 404 has one bounded reread and execution 404 is never re
   assert.equal(executions, 1);
 });
 
+test('transient output 302 rereads the same result once without following its target or replaying a mutation', async () => {
+  for (const action of ['getReminderStudentConfig', 'getReminderAdminConfig', 'saveCaffeineData']) {
+    let executions = 0, reads = 0;
+    const recoveries = [];
+    const outputUrl = 'https://script.googleusercontent.com/macros/echo?key=private-output';
+    const result = await callGas({ ...request, action, onRecovery: event => recoveries.push(event),
+      fetchImpl: async (url, options) => {
+        if (options.method === 'POST') {
+          executions++;
+          return new Response(null, { status: 302, headers: { Location: outputUrl } });
+        }
+        assert.equal(url, outputUrl); assert.equal(options.body, undefined); assert.equal(options.headers, undefined);
+        reads++;
+        if (reads === 1) return new Response(null, { status: 302,
+          headers: { Location: 'https://accounts.google.com/private-auth?token=private-value' } });
+        return new Response(JSON.stringify({ success: true, data: { ok: true } }));
+      },
+    });
+    assert.equal(result.ok, true); assert.equal(executions, 1); assert.equal(reads, 2);
+    assert.deepEqual(recoveries, [{ role: request.role, action, upstreamStatus: 302, outputReads: 2 }]);
+    assert.doesNotMatch(JSON.stringify(recoveries), /private|1101|테스트학생/);
+  }
+});
+
+test('persistent output 302 stays blocked after one safe reread and diagnoses only a fixed redirect category', async () => {
+  for (const [location, expectedKind] of [
+    ['https://accounts.google.com/private?token=secret', 'google_sign_in'],
+    ['https://example.com/collect?secret=private', 'external_host'],
+    ['https://script.google.com/macros/s/private/exec', 'execution_from_output'],
+  ]) {
+    let executions = 0, reads = 0;
+    const diagnostics = [];
+    await assert.rejects(callGas({ ...request, action: 'saveCaffeineData', onDiagnostic: event => diagnostics.push(event),
+      fetchImpl: async (url, options) => {
+        if (options.method === 'POST') {
+          executions++;
+          return new Response(null, { status: 302, headers: {
+            Location: 'https://script.googleusercontent.com/macros/echo?key=private-output' } });
+        }
+        assert.equal(new URL(url).hostname, 'script.googleusercontent.com');
+        reads++; return new Response(null, { status: 302, headers: { Location: location } });
+      },
+    }), error => error.code === 'GAS_UNAVAILABLE');
+    assert.equal(executions, 1); assert.equal(reads, 2);
+    assert.equal(diagnostics[0].redirectKind, expectedKind);
+    assert.doesNotMatch(JSON.stringify(diagnostics), /secret|private|example\.com|1101|테스트학생/);
+  }
+});
+
+test('recovery diagnostics count actual output reads across allowed output redirects', async () => {
+  let reads = 0;
+  const recoveries = [];
+  const first = 'https://script.googleusercontent.com/macros/echo?key=first';
+  const second = 'https://script.googleusercontent.com/macros/echo?key=second';
+  const result = await callGas({ ...request, onRecovery: event => recoveries.push(event),
+    fetchImpl: async (url, options) => {
+      if (options.method === 'POST') return new Response(null, { status: 302, headers: { Location: first } });
+      reads++;
+      if (reads <= 2) { assert.equal(url, first); return new Response(null, { status: 302, headers: { Location: second } }); }
+      assert.equal(url, second); return new Response(JSON.stringify({ success: true, data: { ok: true } }));
+    },
+  });
+  assert.equal(result.ok, true); assert.equal(reads, 3); assert.equal(recoveries[0].outputReads, 3);
+});
+
 test('output retries stop after one retry and log only safe failure metadata', async () => {
   const diagnostics = [];
   let writes = 0;
