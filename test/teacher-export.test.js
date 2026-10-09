@@ -24,7 +24,7 @@ function setup({days=7,filter='',mode='7',search=''}={}){
   URL:{createObjectURL(blob){saved.blob=blob;return 'blob:synthetic'},revokeObjectURL(){}},
   showTeacherModal(){},alert(){},google:{script:{run:{withSuccessHandler(){return this},withFailureHandler(){return this},exportDataToNewSheet(payload){saved.sheet=payload}}}}
  });
- vm.runInContext(['getStudentFilterDate','getFilteredStudents','filterStudents','avgCafForDates','hasCafRecordOnDates','avgSleepForDates','getCafStatusInfo','getSleepStatusInfo','exportStudentExcel','exportStudentToSheet'].map(extract).join('\n'),c);
+ vm.runInContext(['getStudentFilterDate','getFilteredStudents','filterStudents','avgCafForDates','hasCafRecordOnDates','avgSleepForDates','getCafThresholds','getCafStageKey','getCafStatusInfo','getSleepStatusInfo','exportStudentExcel','exportStudentToSheet'].map(extract).join('\n'),c);
  return {c,saved};
 }
 function parseCsv(text){const rows=[];let row=[],cell='',quoted=false;for(let i=0;i<text.length;i++){const ch=text[i];if(ch==='"'){if(quoted&&text[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(!quoted&&(ch===','||ch==='\n')){row.push(cell);cell='';if(ch==='\n'){rows.push(row);row=[];}}else cell+=ch;}row.push(cell);rows.push(row);return rows;}

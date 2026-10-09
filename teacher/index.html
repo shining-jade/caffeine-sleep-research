@@ -591,11 +591,11 @@
         </div>
     </div>
     <div class="pdf-stats">
-        <div class="pdf-stat"><div class="pdf-stat-label">목표 카페인 최대섭취량</div><div class="pdf-stat-value" id="pdf_yestCaf">-</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-label">개인 카페인 목표</div><div class="pdf-stat-value" id="pdf_yestCaf">-</div></div>
         <div class="pdf-stat"><div class="pdf-stat-label">목표 수면 취침/기상</div><div class="pdf-stat-value" id="pdf_yestSleep">-</div></div>
         <div class="pdf-stat"><div class="pdf-stat-label">기간 평균 카페인</div><div class="pdf-stat-value" id="pdf_avgCaf">-</div></div>
         <div class="pdf-stat"><div class="pdf-stat-label">기간 평균 수면</div><div class="pdf-stat-value" id="pdf_avgSleep">-</div></div>
-        <div class="pdf-stat"><div class="pdf-stat-label">카페인 상태</div><div class="pdf-stat-value" id="pdf_cafStatus">-</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-label" id="pdf_cafBasis">카페인 상태</div><div class="pdf-stat-value" id="pdf_cafStatus">-</div></div>
         <div class="pdf-stat"><div class="pdf-stat-label">수면 상태</div><div class="pdf-stat-value" id="pdf_sleepStatus">-</div></div>
     </div>
     <div class="pdf-ai-box" id="pdf_aiBox" style="display:none;">
@@ -760,7 +760,7 @@
         <div class="stats-grid">
             <div class="stat-card"><div class="stat-label">전체 학생 수</div><div class="stat-value" id="totalStudents">-</div><div class="stat-detail">모니터링 중</div></div>
             <div class="stat-card"><div class="stat-label">오늘 미기록</div><div class="stat-value" style="color:#6b7280" id="notRecordedToday">-</div><div class="stat-detail">오늘 기록 없음</div></div>
-            <div class="stat-card"><div class="stat-label">카페인 주의</div><div class="stat-value" style="color:#ef4444" id="caffeineWarning">-</div><div class="stat-detail" id="cafWarningDetail">7일 평균 최대섭취량 초과</div></div>
+            <div class="stat-card"><div class="stat-label">카페인 주의</div><div class="stat-value" style="color:#ef4444" id="caffeineWarning">-</div><div class="stat-detail" id="cafWarningDetail">7일 평균 교사 판정 초과</div></div>
             <div class="stat-card"><div class="stat-label">수면 부족 🔴</div><div class="stat-value" style="color:#ef4444" id="sleepWarning">-</div><div class="stat-detail" id="sleepWarningDetail">7일 평균 7시간 미만</div></div>
         </div>
         <div class="chart-grid">
@@ -1297,7 +1297,7 @@
             <div class="settings-card">
                 <div class="settings-card-title">☕ 카페인 섭취 기준</div>
                 <div class="settings-field">
-                    <div class="settings-field-label">일일 최대 카페인 (고정값)</div>
+                    <div class="settings-field-label">교사 카페인 판정 기준 (고정값)</div>
                     <div class="settings-field-desc">0 입력 시 체중 기반 자동 계산 (체중 × 2.5mg, 최대 400mg)</div>
                     <div class="settings-input-row" style="margin-top:6px;">
                         <input type="number" id="setting_cafMax" class="settings-input" min="0" max="1000" step="10" placeholder="0">
@@ -1306,29 +1306,29 @@
                 </div>
                 <div class="settings-field">
                     <div class="settings-field-label">⚠️ 주의 기준 (%)</div>
-                    <div class="settings-field-desc">목표 카페인 최대섭취량의 이 비율 이상이면 주의 표시</div>
+                    <div class="settings-field-desc">교사 판정 기준의 이 비율 이상이면 2단계 표시</div>
                     <div class="settings-input-row" style="margin-top:6px;">
-                        <input type="number" id="setting_cafWarn" class="settings-input" min="10" max="200" step="5" value="56">
+                        <input type="number" id="setting_cafWarn" class="settings-input" min="10" max="119" step="1" value="56">
                         <span class="settings-unit">%</span>
                     </div>
                 </div>
                 <div class="settings-field">
                     <div class="settings-field-label">🔴 초과 기준 (%)</div>
-                    <div class="settings-field-desc">목표 카페인 최대섭취량의 이 비율 이상이면 초과(빨간색) 표시</div>
+                    <div class="settings-field-desc">교사 판정 기준의 이 비율 이상이면 3단계 표시 (120% 미만)</div>
                     <div class="settings-input-row" style="margin-top:6px;">
-                        <input type="number" id="setting_cafOver" class="settings-input" min="50" max="300" step="5" value="100">
+                        <input type="number" id="setting_cafOver" class="settings-input" min="50" max="119" step="1" value="100">
                         <span class="settings-unit">%</span>
                     </div>
                 </div>
                 <div class="settings-info-box">
-                    <strong>☕ 카페인 상태 5단계 기준 (체중 1kg당 mg)</strong>
+                    <strong>☕ 카페인 상태 5단계 (교사 판정 기준 대비 %)</strong>
                     <div class="caf-level-preview" id="cafLevelPreview">
                         <div class="caf-level-row"><div class="caf-level-dot" style="background:#10b981;"></div><span id="lvl_ok">0% ~ 56% 미만 → 1단계: 안전</span></div>
                         <div class="caf-level-row"><div class="caf-level-dot" style="background:#f59e0b;"></div><span id="lvl_warn">56% ~ 100% 미만 → 2단계: 적정/제한</span></div>
                         <div class="caf-level-row"><div class="caf-level-dot" style="background:#f97316;"></div><span id="lvl_over">100% ~ 120% 미만 → 3단계: 과다</span></div>
                         <div class="caf-level-row"><div class="caf-level-dot" style="background:#ef4444;"></div><span id="lvl_danger">120% ~ 200% 미만 → 4단계: 고위험</span></div>
                         <div class="caf-level-row"><div class="caf-level-dot" style="background:#9333ea;"></div><span id="lvl_critical">200% 이상 → 5단계: 위험/중독</span></div>
-                        <div class="caf-level-row" style="color:#9ca3af;font-size:11px;"><span>※ 아무 기록 없으면 미기록 / 기준: 체중×2.5mg</span></div>
+                        <div class="caf-level-row" style="color:#9ca3af;font-size:11px;"><span>※ 미기록과 0mg 기록을 구분합니다. 4·5단계 경계는 120%·200%입니다.</span></div>
                     </div>
                 </div>
             </div>
@@ -1482,11 +1482,11 @@
                 <span style="color:#6b7280;font-size:16px;font-weight:500;margin-left:12px;" id="modalStudentId">-</span>
             </h2>
             <div class="modal-stats-row">
-                <div class="modal-stat"><span class="modal-stat-label">목표 카페인 최대섭취량</span><span class="modal-stat-value" style="color:#ef4444;" id="modalYestCaffeine">-</span></div>
+                <div class="modal-stat"><span class="modal-stat-label">개인 카페인 목표</span><span class="modal-stat-value" style="color:#ef4444;" id="modalYestCaffeine">-</span></div>
                 <div class="modal-stat"><span class="modal-stat-label">목표 수면 취침/기상</span><span class="modal-stat-value" style="color:#3b82f6;" id="modalYestSleep">-</span></div>
                 <div class="modal-stat"><span class="modal-stat-label">기간 평균 카페인</span><span class="modal-stat-value" style="color:#6366f1;" id="modalAvgCaffeine">-</span></div>
                 <div class="modal-stat"><span class="modal-stat-label">기간 평균 수면</span><span class="modal-stat-value" style="color:#10b981;" id="modalAvgSleep">-</span></div>
-                <div class="modal-stat"><span class="modal-stat-label">카페인 상태</span><span id="modalCafStatus">-</span></div>
+                <div class="modal-stat"><span class="modal-stat-label" id="modalCafBasis">카페인 상태</span><span id="modalCafStatus">-</span></div>
                 <div class="modal-stat"><span class="modal-stat-label">수면 상태</span><span id="modalSleepStatus">-</span></div>
             </div>
             <!-- 🏅 학생 평균 기록 뱃지 패널 -->
@@ -1756,6 +1756,7 @@ let S={cafMaxFixed:0,cafWarn:56,cafOver:100,
 function loadSettings(){
     syncTestStudentsControls();
     try{const sv=localStorage.getItem('monSettings');if(sv)S={...S,...JSON.parse(sv)};}catch(e){}
+    const cafThresholds=getCafThresholds();S.cafWarn=cafThresholds.warn;S.cafOver=cafThresholds.over;
     document.getElementById('setting_cafMax').value=S.cafMaxFixed||0;
     document.getElementById('setting_cafWarn').value=S.cafWarn||56;
     document.getElementById('setting_cafOver').value=S.cafOver||100;
@@ -1791,10 +1792,11 @@ function loadSettings(){
     // Legacy remote migration runs after primary data arrives.
 }
 function saveSettings(){
+    let caffeineSettings;
+    try{caffeineSettings=readCafSettings();}
+    catch(error){showTeacherModal('⚠️','입력 확인',error.message,'error');return;}
     const action=()=>{
-        S.cafMaxFixed=parseFloat(document.getElementById('setting_cafMax').value)||0;
-        S.cafWarn=parseFloat(document.getElementById('setting_cafWarn').value)||80;
-        S.cafOver=parseFloat(document.getElementById('setting_cafOver').value)||100;
+        Object.assign(S,caffeineSettings);
         S.sleepSevere=parseFloat(document.getElementById('setting_sleepSevere').value)||7;
         S.sleepWarn=parseFloat(document.getElementById('setting_sleepWarn').value)||8;
         S.sleepGood=parseFloat(document.getElementById('setting_sleepGood').value)||10;
@@ -1819,10 +1821,24 @@ function saveSettings(){
     try{action();showTeacherModal('💾','설정 저장 완료','설정이 성공적으로 저장되었습니다.','success');}
     catch(error){showTeacherModal('⚠️','설정 저장 실패','다시 시도해 주세요.','error');throw error;}
 }
+function getCafThresholds(values=S){
+    const warn=Number(values?.warn??values?.cafWarn??56),over=Number(values?.over??values?.cafOver??100);
+    return Number.isFinite(warn)&&Number.isFinite(over)&&warn>=10&&over>=50&&warn<over&&over<120
+        ? {warn,over,danger:120,critical:200} : {warn:56,over:100,danger:120,critical:200};
+}
+function readCafSettings(){
+    const read=(id,fallback)=>{const raw=String(document.getElementById(id)?.value??'').trim();return raw===''?fallback:Number(raw);};
+    const cafMaxFixed=read('setting_cafMax',0),cafWarn=read('setting_cafWarn',56),cafOver=read('setting_cafOver',100);
+    if(!Number.isFinite(cafMaxFixed)||cafMaxFixed<0||cafMaxFixed>1000)throw new Error('교사 판정 기준은 0~1000mg으로 입력해주세요.');
+    if(!Number.isFinite(cafWarn)||!Number.isFinite(cafOver)||cafWarn<10||cafOver<50||cafWarn>=cafOver||cafOver>=120)
+        throw new Error('주의는 10% 이상, 초과는 50% 이상으로 입력하고 주의 < 초과 < 120% 순서를 지켜주세요.');
+    return {cafMaxFixed,cafWarn,cafOver};
+}
 function updateCafPreview(){
-    document.getElementById('lvl_ok').textContent='0% ~ 56% 미만 → 1단계: 안전';
-    document.getElementById('lvl_warn').textContent='56% ~ 100% 미만 → 2단계: 적정/제한';
-    document.getElementById('lvl_over').textContent='100% ~ 120% 미만 → 3단계: 과다';
+    const {warn,over}=getCafThresholds({cafWarn:document.getElementById('setting_cafWarn').value||56,cafOver:document.getElementById('setting_cafOver').value||100});
+    document.getElementById('lvl_ok').textContent=`0% ~ ${warn}% 미만 → 1단계: 안전`;
+    document.getElementById('lvl_warn').textContent=`${warn}% ~ ${over}% 미만 → 2단계: 적정/제한`;
+    document.getElementById('lvl_over').textContent=`${over}% ~ 120% 미만 → 3단계: 과다`;
     if(document.getElementById('lvl_danger'))document.getElementById('lvl_danger').textContent='120% ~ 200% 미만 → 4단계: 고위험';
     if(document.getElementById('lvl_critical'))document.getElementById('lvl_critical').textContent='200% 이상 → 5단계: 위험/중독';
 }
@@ -2227,19 +2243,25 @@ function setAxisLabelWidth(width){
     };
 }
 
+function getCafStageKey(dailyTotal,limit,hasRecord){
+    if(!hasRecord)return'cafNone';
+    if(dailyTotal===0)return'caf0';
+    const pct=dailyTotal/limit*100,{warn,over,danger,critical}=getCafThresholds();
+    return pct>=critical?'caf5':pct>=danger?'caf4':pct>=over?'caf3':pct>=warn?'caf2':'caf1';
+}
 function getCafStatusInfo(dailyTotal,limit,hasRecord){
-    const ratio=dailyTotal/limit;
-    // ⭐ hasRecord: 해당 기간에 기록이 존재하는지 여부 (0mg 포함)
-    // 기록 없으면 미기록, 기록 있고 합이 0이면 카페인 섭취 안 함
-    if(dailyTotal===0){
-        if(hasRecord)return{text:'카페인 섭취 안 함',cls:'badge-caf-zero',color:'#0d9488'};
-        return{text:'미기록',cls:'badge-none',color:'#9ca3af'};
-    }
-    if(ratio>=2.0)return{text:'5단계: 위험/중독',cls:'badge-caf-critical',color:'#9333ea'};
-    if(ratio>=1.2)return{text:'4단계: 고위험',cls:'badge-caf-danger',color:'#ef4444'};
-    if(ratio>=1.0)return{text:'3단계: 과다',cls:'badge-caf-over',color:'#f97316'};
-    if(ratio>=0.56)return{text:'2단계: 적정/제한',cls:'badge-caf-warn',color:'#f59e0b'};
-    return{text:'1단계: 안전',cls:'badge-caf-ok',color:'#10b981'};
+    return {
+        cafNone:{text:'미기록',cls:'badge-none',color:'#9ca3af'},
+        caf0:{text:'카페인 섭취 안 함',cls:'badge-caf-zero',color:'#0d9488'},
+        caf1:{text:'1단계: 안전',cls:'badge-caf-ok',color:'#10b981'},
+        caf2:{text:'2단계: 적정/제한',cls:'badge-caf-warn',color:'#f59e0b'},
+        caf3:{text:'3단계: 과다',cls:'badge-caf-over',color:'#f97316'},
+        caf4:{text:'4단계: 고위험',cls:'badge-caf-danger',color:'#ef4444'},
+        caf5:{text:'5단계: 위험/중독',cls:'badge-caf-critical',color:'#9333ea'}
+    }[getCafStageKey(dailyTotal,limit,hasRecord)];
+}
+function getCafBarColor(dailyTotal,limit,hasRecord=true){
+    return getCafStatusInfo(dailyTotal,limit,hasRecord).color;
 }
 
 function getConditionLabel(e){
@@ -2628,7 +2650,7 @@ function updateDashboard(){
     const daysText=dates7.length+'일';
     ['overviewCafTitle','overviewSleepTitle'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=daysText;});
     const lbl=document.getElementById('overviewDateRangeLabel');if(lbl)lbl.textContent=getPeriodLabel(dates7);
-    const cwd=document.getElementById('cafWarningDetail');if(cwd)cwd.textContent=daysText+' 평균 최대섭취량 초과';
+    const cwd=document.getElementById('cafWarningDetail');if(cwd)cwd.textContent=daysText+' 평균 교사 판정 초과';
     const swd=document.getElementById('sleepWarningDetail');if(swd)swd.textContent=daysText+' 평균 '+S.sleepSevere+'시간 미만';
     let nr=0,cw=0,sw=0;
     f.forEach(s=>{
@@ -2636,7 +2658,7 @@ function updateDashboard(){
         const hasTodayCafRecord=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(today));
         if(!hasTodayCafRecord&&!hasSleepRecordOnWakeDate(s.학번,today))nr++;
         const ac=avgCafForDates(s.학번,dates7),lim=getLimit(s.학번);
-        if(ac>0&&ac/lim>=1.0)cw++;
+        if(ac>0&&ac/lim*100>=getCafThresholds().over)cw++;
         const as=avgSleepForDates(s.학번,dates7);
         if(as>0&&as<S.sleepSevere)sw++;
     });
@@ -2646,14 +2668,14 @@ function updateDashboard(){
     document.getElementById('sleepWarning').textContent=sw+'명';
     const cs=f.filter(s=>avgCafForDates(s.학번,dates7)>0);
     if(charts.sc)charts.sc.destroy();
-    charts.sc=new Chart(document.getElementById('studentCaffeineChart').getContext('2d'),{type:'bar',data:{labels:cs.map(s=>s.이름),datasets:[{label:'7일 평균 카페인(mg)',data:cs.map(s=>Math.round(avgCafForDates(s.학번,dates7))),backgroundColor:cs.map(s=>{const ac=avgCafForDates(s.학번,dates7),lim=getLimit(s.학번),pct=(ac/lim)*100;return (ac/lim)>=2.0?'rgba(147,51,234,0.8)':(ac/lim)>=1.2?'rgba(239,68,68,0.8)':(ac/lim)>=1.0?'rgba(249,115,22,0.8)':(ac/lim)>=0.56?'rgba(245,158,11,0.8)':'rgba(16,185,129,0.8)';}),borderWidth:0,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+    charts.sc=new Chart(document.getElementById('studentCaffeineChart').getContext('2d'),{type:'bar',data:{labels:cs.map(s=>s.이름),datasets:[{label:'7일 평균 카페인(mg)',data:cs.map(s=>Math.round(avgCafForDates(s.학번,dates7))),backgroundColor:cs.map(s=>getCafBarColor(avgCafForDates(s.학번,dates7),getLimit(s.학번),hasCafRecordOnDates(s.학번,dates7))),borderWidth:0,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
     const ss=f.filter(s=>avgSleepForDates(s.학번,dates7)>0);
     if(charts.sl)charts.sl.destroy();
     charts.sl=new Chart(document.getElementById('studentSleepChart').getContext('2d'),{type:'bar',data:{labels:ss.map(s=>s.이름),datasets:[{label:'7일 평균 수면(h)',data:ss.map(s=>parseFloat(avgSleepForDates(s.학번,dates7).toFixed(1))),backgroundColor:ss.map(s=>{const v=avgSleepForDates(s.학번,dates7);return v<S.sleepSevere?'rgba(239,68,68,0.8)':v<S.sleepWarn?'rgba(249,115,22,0.8)':v<=(S.sleepGood)?'rgba(16,185,129,0.8)':v<(S.sleepMax||11)?'rgba(234,179,8,0.8)':'rgba(139,92,246,0.8)';}),borderWidth:0,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:12}}}});
     const div=document.getElementById('alerts');div.innerHTML='';const dl=[],ssl=[],sl=[],sel=[];
     f.forEach(s=>{
         const ac=avgCafForDates(s.학번,dates7),lim=getLimit(s.학번);
-        if(ac>0&&ac/lim>=1.0)dl.push(`⚠️ ${s.이름} (${s.학번}): 평균 ${Math.round(ac)}mg / 최대섭취량 ${Math.round(lim)}mg`);
+        if(ac>0&&ac/lim*100>=getCafThresholds().over)dl.push(`⚠️ ${s.이름} (${s.학번}): 평균 ${Math.round(ac)}mg / 교사 기준 ${Math.round(lim)}mg · 초과 경계 ${getCafThresholds().over}%`);
         const as=avgSleepForDates(s.학번,dates7);
         if(as>0&&as<S.sleepSevere)ssl.push(`🔴 ${s.이름} (${s.학번}): 평균 ${as.toFixed(1)}시간`);
         else if(as>0&&as<S.sleepWarn)sl.push(`🟠 ${s.이름} (${s.학번}): 평균 ${as.toFixed(1)}시간`);
@@ -3225,15 +3247,8 @@ function getFilteredStudents(){
             }
             if(hasCafFilter){
                 const ac=avgCafForDates(s.학번,d7),lim=getLimit(s.학번);
-                const hasRec=hasCafRecordOnDates(s.학번,d7),ratio=ac/lim;
-                let stage='';
-                if(!hasRec)stage='cafNone';
-                else if(ac===0)stage='caf0';
-                else if(ratio<0.56)stage='caf1';
-                else if(ratio<1.0)stage='caf2';
-                else if(ratio<1.2)stage='caf3';
-                else if(ratio<2.0)stage='caf4';
-                else stage='caf5';
+                const hasRec=hasCafRecordOnDates(s.학번,d7);
+                const stage=getCafStageKey(ac,lim,hasRec);
                 cafMatch=cafChips.has(stage);
             }
             if(hasSleepFilter){
@@ -3291,14 +3306,8 @@ function updateBadges(){
     // 카페인 단계별 카운트
     const getCafStage=s=>{
         const ac=avgCafForDates(s.학번,d7), lim=getLimit(s.학번);
-        const hasRec=hasCafRecordOnDates(s.학번,d7), ratio=ac/lim;
-        if(!hasRec)return'cafNone';
-        if(ac===0)return'caf0';
-        if(ratio<0.56)return'caf1';
-        if(ratio<1.0)return'caf2';
-        if(ratio<1.2)return'caf3';
-        if(ratio<2.0)return'caf4';
-        return'caf5';
+        const hasRec=hasCafRecordOnDates(s.학번,d7);
+        return getCafStageKey(ac,lim,hasRec);
     };
     n('cntCaf0',getAnalysisStudents().filter(s=>getCafStage(s)==='caf0').length);
     n('cntCaf1',getAnalysisStudents().filter(s=>getCafStage(s)==='caf1').length);
@@ -3584,7 +3593,7 @@ function renderStudentGrid(students){
         else if(hasRec) cafDisplay=`<span style="color:#0d9488;font-weight:600;">카페인 섭취 안 함</span>`;
         else cafDisplay='<span style="color:#9ca3af;">미기록</span>';
         const sleepDisplay=as>0?`<span style="color:${sleepSt.color};font-weight:600;">${as.toFixed(1)}h</span> <span class="avg-note">${avgNote}</span>`:'<span style="color:#9ca3af;">미기록</span>';
-        const targetCafSubText=`<span class="avg-note">목표 최대섭취량: ${targetCafText}</span>`;
+        const targetCafSubText=`<span class="avg-note">개인 목표: ${targetCafText} · 교사 기준: ${Math.round(lim)}mg</span>`;
         const targetSleepSubText=`<span class="avg-note">목표 취침/기상: ${targetSleepText}</span>`;
         const card=document.createElement('div');card.className='student-card';card.onclick=()=>openStudentModal(s.학번);
         const awardChipsHtml = renderAwardChips(s.학번, d7, filterDate, false);
@@ -3665,6 +3674,7 @@ function refreshModalData(){
     document.getElementById('modalAvgSleep').textContent=asl>0?asl.toFixed(1)+'h':'-';
     // 카페인 상태
     const cafSI=getCafStatusInfo(ac,lim,hasRecModal);
+    document.getElementById('modalCafBasis').textContent=`카페인 상태 · 교사 기준 ${Math.round(lim)}mg`;
     document.getElementById('modalCafStatus').innerHTML=`<span class="status-badge ${cafSI.cls}">${cafSI.text}</span>`;
     // 수면 상태
     const sleepSI=getSleepStatusInfo(asl);
@@ -3684,13 +3694,13 @@ function refreshModalData(){
     charts.dual=new Chart(document.getElementById('modalDualChart').getContext('2d'),{
         type:'bar',
         data:{labels,datasets:[
-            {label:'카페인 (mg)',pointStyle:'rect',data:cafData,backgroundColor:cafData.map(v=>{const p=(v/lim)*100;return p>=S.cafOver?'rgba(239,68,68,0.8)':p>=S.cafWarn?'rgba(245,158,11,0.8)':'rgba(99,102,241,0.8)';}),borderWidth:0,borderRadius:5,yAxisID:'y'},
-            {label:targetCafLimit!==null?`최대섭취량 (${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.4)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,yAxisID:'y'},
+            {label:'카페인 (mg)',pointStyle:'rect',data:cafData,assessmentLimit:lim,backgroundColor:cafData.map((v,i)=>getCafBarColor(v,lim,hasCafRecordOnDates(currentStudentId,[dates[i]]))),borderWidth:0,borderRadius:5,yAxisID:'y'},
+            {label:targetCafLimit!==null?`개인 목표 (${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.4)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,yAxisID:'y'},
             {label:'수면시간 (h)',pointStyle:'circle',data:sleepD,type:'line',borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.12)',borderWidth:3,fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:sleepD.map(v=>v!==null?getSleepStatusInfo(v).color:'transparent'),yAxisID:'y2',spanGaps:true},
             ...(targetSleepHours?[{label:`목표수면 (${targetSleepHours}h)`,pointStyle:'circle',data:targetSleepLine,type:'line',borderColor:'rgba(59,130,246,0.7)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[])
         ]},
         options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-            plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12,filter:item=>item.text!=='목표 미설정'}},tooltip:{callbacks:{label:ctx=>{if(ctx.dataset.label.includes('최대섭취량'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0)return `카페인: ${ctx.raw}mg`;return ctx.raw!==null?`수면: ${ctx.raw}h`:'수면: 미기록';}}}},
+            plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12,filter:item=>item.text!=='목표 미설정'}},tooltip:{callbacks:{label:ctx=>{if(ctx.dataset.label.includes('개인 목표'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0)return `카페인: ${ctx.raw}mg`;return ctx.raw!==null?`수면: ${ctx.raw}h`:'수면: 미기록';}}}},
             scales:{y:{beginAtZero:true,position:'left',title:{display:true,text:'카페인 (mg)',color:'#6366f1'}},y2:{beginAtZero:true,position:'right',max:14,title:{display:true,text:'수면 (h)',color:'#10b981'},grid:{drawOnChartArea:false}}}}
     });
 
@@ -4143,8 +4153,8 @@ async function requestAIAnalysis(){
     const avgSlp=avgSleepForDates(currentStudentId,dates);
     const maxSleep=slpRecs.length?Math.max(...slpRecs.map(r=>r.시간)):0;
     const minSleep=slpRecs.length?Math.min(...slpRecs.map(r=>r.시간)):0;
-    const overDays=Object.values(dailyCafMap).filter(v=>v>lim).length;
-    const badSlpDays=slpRecs.filter(r=>r.시간<S.sleepBad).length;
+    const overDays=Object.values(dailyCafMap).filter(v=>v>0&&v/lim*100>=getCafThresholds().over).length;
+    const badSlpDays=slpRecs.filter(r=>r.시간<S.sleepSevere).length;
     const excessSlpDays=slpRecs.filter(r=>r.시간>=(S.sleepMax||11)).length;
 
     // 카페인 섭취 이유 분포
@@ -4156,7 +4166,7 @@ async function requestAIAnalysis(){
     const _sMap={};let symTotal=0;
     cafRecs.forEach(c=>{if(!c.부작용||!c.부작용.trim())return;c.부작용.split(',').forEach(s=>{const k=s.trim();if(k&&k!=='없음'){_sMap[k]=(_sMap[k]||0)+1;symTotal++;}});});
     const topSymptoms=Object.entries(_sMap).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k}(${v}회)`).join(', ')||'없음';
-    const symRecords=cafRecs.filter(c=>c.부작용&&c.부작용.trim()).length;
+    const symRecords=cafRecs.filter(c=>String(c.부작용||'').split(',').some(v=>v.trim()&&v.trim()!=='없음')).length;
     const symPct=cafRecs.length>0?Math.round(symRecords/cafRecs.length*100):0;
 
     // 수면 생활 분포
@@ -4184,6 +4194,7 @@ async function requestAIAnalysis(){
         name:s.이름,
         weight:info?info.몸무게:60,
         limit:lim,
+        caffeineThresholds:getCafThresholds(),
         startDate:dates[0],
         endDate:dates[dates.length-1],
         totalPeriodDays:dates.length,
@@ -4342,6 +4353,12 @@ function cancelAIEdit(){
 
 
 
+function hasLifestyleConcern(summary, ignored=[]){
+    return String(summary||'').split(',').some(v=>{
+        const label=v.replace(/\([^)]*\)/g,'').replace(/\s/g,'');
+        return label&&!['없음','데이터없음','기록없음',...ignored].includes(label);
+    });
+}
 function generateFallbackAnalysis(pd, avgCaf, avgSlp, lim){
     const s=studentsData.find(st=>st.학번===pd.studentId);
     const name=s?s.이름:'학생';
@@ -4356,12 +4373,10 @@ function generateFallbackAnalysis(pd, avgCaf, avgSlp, lim){
     const overDays=pd.caffeineData.overLimitDays||0;
 
     // ── 카페인 상태 표시 (상태 색 원만 유지, 나머지 이모지 제거) ──
-    let cafBadge='', cafStatus='', cafColor='#374151';
-    if(avgCaf===0){ cafBadge=''; cafStatus='카페인 섭취 기록이 없습니다.'; }
-    else if(cafRatio>=120){ cafBadge='🔴'; cafStatus=`매우 심각 — 평균 ${Math.round(avgCaf)}mg으로 목표 카페인 최대섭취량(${Math.round(lim)}mg)의 ${Math.round(cafRatio)}% 수준입니다.`; cafColor='#b91c1c'; }
-    else if(cafRatio>=100){ cafBadge='🔴'; cafStatus=`과다 — 평균 ${Math.round(avgCaf)}mg으로 목표 카페인 최대섭취량(${Math.round(lim)}mg)을 초과합니다.`; cafColor='#dc2626'; }
-    else if(cafRatio>=56){ cafBadge='🟡'; cafStatus=`주의 — 평균 ${Math.round(avgCaf)}mg으로 목표 카페인 최대섭취량의 ${Math.round(cafRatio)}%입니다.`; cafColor='#92400e'; }
-    else{ cafBadge='🟢'; cafStatus=`양호 — 평균 ${Math.round(avgCaf)}mg으로 목표 카페인 최대섭취량 내 수준입니다.`; cafColor='#065f46'; }
+    const cafThresholds=getCafThresholds();
+    const cafInfo=getCafStatusInfo(avgCaf,lim,cafDays>0);
+    const cafBadge='',cafColor=cafInfo.color;
+    const cafStatus=cafDays>0?`${cafInfo.text} — 평균 ${Math.round(avgCaf)}mg (교사 판정 기준 ${Math.round(lim)}mg 대비 ${Math.round(cafRatio)}%)`:'카페인 섭취 기록이 없습니다.';
 
     // ── 수면 상태 표시 ──
     const ageLabel=S.ageGroup==='adult'?'성인':'청소년';
@@ -4374,17 +4389,17 @@ function generateFallbackAnalysis(pd, avgCaf, avgSlp, lim){
     else{ slpBadge='🟣'; slpStatus=`수면 과다 — 평균 ${avgSlp.toFixed(1)}시간으로 권장 상한(${S.sleepGood}시간)을 초과합니다.`; slpColor='#5b21b6'; }
 
     // ── 카페인 종합 의견 ──
-    const hasSymptom=pd.caffeineData.topSymptoms&&pd.caffeineData.topSymptoms!=='없음';
+    const hasSymptom=hasLifestyleConcern(pd.caffeineData.topSymptoms);
     let cafSummary='';
-    if(avgCaf===0){ cafSummary='카페인 섭취 데이터가 없어 분석이 어렵습니다. 기록을 꾸준히 남기도록 지도해 주세요.'; }
-    else if(cafRatio>=100){ cafSummary=`목표 카페인 최대섭취량을 초과하는 섭취가 지속되고 있습니다. 고카페인 음료를 무카페인 음료로 단계적으로 대체하고, 오후 2시 이후 카페인 섭취를 줄이도록 지도합니다.${hasSymptom?` 부작용(${pd.caffeineData.topSymptoms})도 기록되어 있어 신체 반응과의 연관성 상담이 필요합니다.`:''}`; }
-    else if(cafRatio>=56){ cafSummary=`목표 카페인 최대섭취량의 절반 이상을 섭취 중입니다. 추가 음료 섭취는 자제하고 물·보리차 등으로 대체하도록 안내합니다.${hasSymptom?` 부작용(${pd.caffeineData.topSymptoms})이 기록되어 있으므로 섭취 습관 점검이 권장됩니다.`:''}`; }
-    else{ cafSummary=`카페인 섭취량은 목표 카페인 최대섭취량 내로 양호합니다. 현재 습관을 유지하고 음료 구매 시 성분표 확인 습관을 지속하도록 권장합니다.${hasSymptom?` 다만 부작용(${pd.caffeineData.topSymptoms})이 기록되어 있어 개인 민감도를 고려한 지도가 필요합니다.`:''}`; }
+    if(avgCaf===0){ cafSummary=cafDays>0?'기록한 날은 카페인 섭취 안 함(0mg)입니다.':'카페인 섭취 데이터가 없어 분석이 어렵습니다. 기록을 꾸준히 남기도록 지도해 주세요.'; }
+    else if(cafRatio>=cafThresholds.over){ cafSummary=`설정한 초과 경계(${cafThresholds.over}%) 이상의 섭취가 확인됩니다. 고카페인 음료를 무카페인 음료로 단계적으로 대체하고, 오후 2시 이후 카페인 섭취를 줄이도록 지도합니다.${hasSymptom?` 부작용(${pd.caffeineData.topSymptoms})도 기록되어 있어 신체 반응과의 연관성 상담이 필요합니다.`:''}`; }
+    else if(cafRatio>=cafThresholds.warn){ cafSummary=`교사 판정 기준의 주의 비율 이상을 섭취 중입니다. 추가 음료 섭취는 자제하고 물·보리차 등으로 대체하도록 안내합니다.${hasSymptom?` 부작용(${pd.caffeineData.topSymptoms})이 기록되어 있으므로 섭취 습관 점검이 권장됩니다.`:''}`; }
+    else{ cafSummary=`카페인 섭취량은 교사 판정 기준 내로 양호합니다. 현재 습관을 유지하고 음료 구매 시 성분표 확인 습관을 지속하도록 권장합니다.${hasSymptom?` 다만 부작용(${pd.caffeineData.topSymptoms})이 기록되어 있어 개인 민감도를 고려한 지도가 필요합니다.`:''}`; }
 
     // ── 수면 종합 의견 ──
-    const hasLatePhone=pd.sleepData.topPhone&&!['없음','안 함','30분 미만'].includes(pd.sleepData.topPhone);
-    const hasLongLatency=pd.sleepData.topLatency&&!['없음','15분 이내','15~30분'].includes(pd.sleepData.topLatency);
-    const hasDrowsy=pd.sleepData.topDrowsy&&!['없음'].includes(pd.sleepData.topDrowsy);
+    const hasLatePhone=hasLifestyleConcern(pd.sleepData.topPhone,['안함','15분이내','30분미만']);
+    const hasLongLatency=hasLifestyleConcern(pd.sleepData.topLatency,['15분이내','15~30분']);
+    const hasDrowsy=hasLifestyleConcern(pd.sleepData.topDrowsy);
     let slpSummary='';
     if(avgSlp===0){ slpSummary='수면 데이터가 없어 분석이 어렵습니다. 기록을 꾸준히 남기도록 지도해 주세요.'; }
     else if(avgSlp<S.sleepSevere){ slpSummary=`심각한 수면 부족 상태입니다. 즉시 취침 시각을 1시간 이상 앞당기고, 취침 2시간 전 스마트폰 사용을 전면 중단하도록 강력히 권장합니다. 보호자 연계 지도를 검토하세요.`; }
@@ -4393,12 +4408,14 @@ function generateFallbackAnalysis(pd, avgCaf, avgSlp, lim){
     else{ slpSummary=`수면 시간이 권장 상한을 초과합니다. 일정한 기상 시각을 유지하고 낮잠을 20분 이내로 제한하여 야간 수면 리듬을 안정시키도록 권장합니다.`; }
 
     // ── 종합 분석 + 교사 권고 ──
-    const cafBad=avgCaf>0&&cafRatio>=56;
+    const cafBad=avgCaf>0&&cafRatio>=cafThresholds.warn;
     const slpBad=avgSlp>0&&(avgSlp<S.sleepSevere||avgSlp>=(S.sleepMax||11));
     const slpWatch=avgSlp>0&&!slpBad&&((avgSlp<S.sleepWarn)||(avgSlp>S.sleepGood));
     let overall='', recommendBg='#f0fdf4', recommendBorder='#10b981', recommendColor='#064e3b';
-    if(cafBad&&slpBad){
-        overall=`카페인 섭취 과다와 수면 부족이 동시에 관찰됩니다. 카페인이 수면 방해 요인이 될 수 있으므로 두 문제를 함께 개선해야 합니다. 오후 2시 이후 카페인 음료를 무카페인으로 대체하고, 취침 시각을 매일 30분씩 앞당기는 실천을 우선 목표로 삼도록 지도합니다.`;
+    if(!cafDays||!slpDays){
+        overall=`${!cafDays?'카페인':'수면'} 기록이 없어 해당 항목의 판정을 보류합니다. 기록된 항목의 상태를 참고하고, 빠진 기록을 추가하여 생활 패턴을 확인해 주세요.`;
+    } else if(cafBad&&slpBad){
+        overall=`카페인 상태는 ${cafInfo.text}이며, ${avgSlp<S.sleepSevere?'수면 부족':'수면 과다'}도 관찰됩니다. 카페인 섭취 습관과 취침·기상 시각을 함께 점검하고 일정한 생활 리듬을 유지하도록 지도합니다.`;
         recommendBg='#fef2f2'; recommendBorder='#ef4444'; recommendColor='#7f1d1d';
     } else if(cafBad){
         overall=`${slpWatch?'수면은 개인차 범위의 적당한 수준이나 권장 범위에서 벗어나는 방향이므로 리듬 관리가 필요합니다. ':''}카페인 섭취 습관에 주의가 필요합니다. 고카페인 음료 의존도를 낮추고 섭취 이유를 파악하여 대안 습관을 형성하도록 안내합니다.`;
@@ -4410,9 +4427,9 @@ function generateFallbackAnalysis(pd, avgCaf, avgSlp, lim){
         overall=`카페인 섭취는 적절하며, 수면은 부족 또는 과다로 단정할 수준은 아닙니다. 다만 권장 수면 범위에서 벗어나는 방향이므로 취침·기상 시각을 일정하게 유지해 수면 부족이나 수면 과다로 이어지지 않도록 관리가 필요합니다.`;
         recommendBg='#fff7ed'; recommendBorder='#f97316'; recommendColor='#7c2d12';
     } else{
-        overall=`카페인 섭취는 목표 최대섭취량 내에서, 수면은 권장 기준 범위 내에서 양호하게 유지되고 있습니다. 현재 건강 관리 습관을 꾸준히 유지하고, 기록을 지속하여 패턴 변화를 스스로 모니터링하도록 독려합니다.`;
+        overall=`카페인 섭취는 교사 판정 기준 내에서, 수면은 권장 기준 범위 내에서 양호하게 유지되고 있습니다. 현재 건강 관리 습관을 꾸준히 유지하고, 기록을 지속하여 패턴 변화를 스스로 모니터링하도록 독려합니다.`;
     }
-    const urgentRecommend=(cafRatio>=100&&avgCaf>0)||(avgSlp>0&&(avgSlp<S.sleepSevere||avgSlp>=(S.sleepMax||11)));
+    const urgentRecommend=(cafRatio>=cafThresholds.over&&avgCaf>0)||(avgSlp>0&&(avgSlp<S.sleepSevere||avgSlp>=(S.sleepMax||11)));
     const mildRecommend=!urgentRecommend&&(cafBad||slpBad||slpWatch);
     let recommendLine='';
     if(urgentRecommend) recommendLine=`<div style="margin-top:8px;font-weight:600;">교사 권고사항: 학생의 건강 상태가 우려됩니다. 개별 상담을 통해 생활 패턴을 점검하고 보호자와 연계하는 것을 권장합니다.</div>`;
@@ -4429,7 +4446,7 @@ function generateFallbackAnalysis(pd, avgCaf, avgSlp, lim){
 <div style="margin-left:4px;">
   <div style="margin-bottom:4px;">${cafBadge} <strong style="color:${cafColor};">${cafStatus}</strong></div>
   <div style="font-size:13px;color:#4b5563;margin-left:4px;">
-    ${li('기록일',`${cafDays}일 / ${totalPeriodDays}일 | 최대섭취량 초과일: ${overDays}일`)}
+    ${li('기록일',`${cafDays}일 / ${totalPeriodDays}일 | 교사 판정 초과일: ${overDays}일`)}
     ${li('주요 섭취 이유',pd.caffeineData.topReasons)}
     ${li('부작용 경험',pd.caffeineData.topSymptoms&&pd.caffeineData.topSymptoms!=='없음'?`${pd.caffeineData.topSymptoms}${pd.caffeineData.symptomRate?' ('+pd.caffeineData.symptomRate+')':''}`:'')}
   </div>
@@ -4719,6 +4736,7 @@ function exportPDF(options){
     document.getElementById('pdf_avgSleep').textContent=asl>0?asl.toFixed(1)+'h':'-';
     const stInfo=getCafStatusInfo(ac,lim,hasRecPDF);
     document.getElementById('pdf_cafStatus').textContent=stInfo.text;
+    document.getElementById('pdf_cafBasis').textContent=`카페인 상태 · 교사 기준 ${Math.round(lim)}mg`;
     const slpInfo=getSleepStatusInfo(asl);
     document.getElementById('pdf_sleepStatus').textContent=slpInfo.text;
 
@@ -4804,8 +4822,8 @@ function exportPDF(options){
     charts.pdfDual=new Chart(document.getElementById('pdfDualChart').getContext('2d'),{
         type:'bar',
         data:{labels:dates.map(d=>d.substring(5)),datasets:[
-            {label:'카페인(mg)',pointStyle:'rect',data:cafData,backgroundColor:cafData.map(v=>{const p=(v/lim)*100;return p>=S.cafOver?'rgba(239,68,68,0.8)':p>=S.cafWarn?'rgba(245,158,11,0.8)':'rgba(99,102,241,0.8)';}),borderWidth:0,borderRadius:4,yAxisID:'y'},
-            {label:targetCafLimit!==null?`최대섭취량(${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.5)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false,yAxisID:'y'},
+            {label:'카페인(mg)',pointStyle:'rect',data:cafData,assessmentLimit:lim,backgroundColor:cafData.map((v,i)=>getCafBarColor(v,lim,hasCafRecordOnDates(currentStudentId,[dates[i]]))),borderWidth:0,borderRadius:4,yAxisID:'y'},
+            {label:targetCafLimit!==null?`개인 목표(${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.5)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false,yAxisID:'y'},
             {label:'수면(h)',pointStyle:'circle',data:sleepArr,type:'line',borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.12)',borderWidth:2,pointRadius:4,fill:false,yAxisID:'y2',spanGaps:true},
             ...(targetSleepHours?[{label:`목표수면(${targetSleepHours}h)`,pointStyle:'circle',data:targetSleepLine,type:'line',borderColor:'rgba(59,130,246,0.65)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[])
         ]},
@@ -4871,12 +4889,9 @@ function buildStaticPdfDualChartHTML(){
     const sleepData = (datasets[2] && datasets[2].data) ? datasets[2].data.map(v => v == null ? null : Number(v)) : [];
     const targetSleep = (datasets[3] && datasets[3].data && datasets[3].data[0]) ? Number(datasets[3].data[0]) || null : null;
     const maxCaf = Math.max(400, limValue * 1.25, ...cafData.map(v => v * 1.15));
-    const barColor = v => {
-        const p = limValue ? (v / limValue) * 100 : 0;
-        if(p >= S.cafOver) return '#ef4444';
-        if(p >= S.cafWarn) return '#f59e0b';
-        return '#6366f1';
-    };
+    const assessmentLimit=Number(datasets[0]?.assessmentLimit)||getLimit(currentStudentId);
+    const barColors=Array.isArray(datasets[0]?.backgroundColor)?datasets[0].backgroundColor:[];
+    const barColor=(v,i)=>barColors[i]||getCafBarColor(v,assessmentLimit,true);
     const pointPos = sleepData.map((v, i) => {
         if(v == null || Number.isNaN(v)) return null;
         return {
@@ -4905,14 +4920,14 @@ function buildStaticPdfDualChartHTML(){
         const value = cafData[i] || 0;
         const h = Math.max(1, Math.min(100, (value / maxCaf) * 100));
         return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;position:relative;">
-            <div style="width:58%;height:${h}%;background:${barColor(value)};border-radius:3px 3px 0 0;opacity:.82;"></div>
+            <div style="width:58%;height:${h}%;background:${barColor(value,i)};border-radius:3px 3px 0 0;opacity:.82;"></div>
             <div style="position:absolute;bottom:-22px;font-size:9px;color:#6b7280;">${label}</div>
         </div>`;
     }).join('');
     return `<div style="height:200px;position:relative;padding:4px 8px 26px 26px;box-sizing:border-box;background:white;">
         <div style="height:18px;text-align:center;font-size:9px;color:#6b7280;">
             <span style="display:inline-block;width:7px;height:7px;background:#ef4444;margin-right:3px;"></span>카페인(mg)
-            ${limValue>0?`<span style="display:inline-block;width:14px;border-top:2px dashed rgba(239,68,68,.55);margin:0 3px 2px 12px;"></span>최대섭취량(${Math.round(limValue)}mg)`:''}
+            ${limValue>0?`<span style="display:inline-block;width:14px;border-top:2px dashed rgba(239,68,68,.55);margin:0 3px 2px 12px;"></span>개인 목표(${Math.round(limValue)}mg)`:''}
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;margin:0 3px 0 12px;"></span>수면(h)
             ${targetSleep ? `<span style="display:inline-block;width:14px;border-top:2px dashed rgba(59,130,246,.65);margin:0 3px 2px 12px;"></span>목표수면(${targetSleep}h)` : ''}
         </div>
