@@ -3934,13 +3934,15 @@
 
       if(editingType === 'caffeine') {
         const name = document.getElementById('editDrinkName').value.trim();
-        const amount = parseInt(document.getElementById('editAmount').value);
+        const amountRaw = document.getElementById('editAmount').value;
+        const amountValue = Number(amountRaw);
+        const amount = parseInt(amountRaw, 10);
         const time = document.getElementById('editTime').value;
         const checkedEditReasons = Array.from(document.querySelectorAll('input[name="editReason"]:checked')).map(cb => cb.value);
         const editEtcText = document.getElementById('editReasonEtc') ? document.getElementById('editReasonEtc').value.trim() : '';
         const reason = checkedEditReasons.map(v => v === '기타' && editEtcText ? `기타: ${editEtcText}` : v).join(', ');
         const symptom = Array.from(document.querySelectorAll('input[name="editSymptom"]:checked')).map(cb => cb.value).join(', ');
-        if(!name || !amount || !time) { showInfoModal('입력 확인', '모든 항목을 입력해주세요.'); return; }
+        if(!name || !Number.isFinite(amountValue) || amountValue < 0 || !Number.isFinite(amount) || !time) { showInfoModal('입력 확인', '음료명, 0 이상인 카페인 함량, 섭취 시간을 입력해주세요.'); return; }
         const oldLog = caffeineLogs.find(l => l.id === editingId);
         const oldAmount = oldLog ? oldLog.amount : 0;
         // 편집된 시간이 오늘인지 여부 (경고 모달 표시 결정용)
