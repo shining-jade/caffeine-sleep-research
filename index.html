@@ -5334,7 +5334,7 @@
           }).join('');
           container.querySelectorAll('.student-msg-reply').forEach(button => {
             const message = res.data[Number(button.dataset.messageIndex)];
-            button.addEventListener('click', () => openReplyModal(message.rowIndex, message.title, !!message.studentReply, message.messageKey));
+            button.addEventListener('click', () => openReplyModal(message.rowIndex, message.title, !!message.studentReply, message.messageKey, message.studentReply || ''));
           });
         })
         .withFailureHandler(() => {
@@ -5463,7 +5463,7 @@
     }
 
     // ── 학생→선생님 답장 기능 ──────────────────────────────────────────────────
-    function openReplyModal(rowIndex, title, isEdit, messageKey) {
+    function openReplyModal(rowIndex, title, isEdit, messageKey, existingReply = '') {
       if (document.getElementById('studentReplySendBtn')?.disabled) return;
       if (document.getElementById('studentReplyModal')) document.getElementById('studentReplyModal').remove();
       const overlay = document.createElement('div');
@@ -5486,6 +5486,7 @@
           </div>
         </div>`;
       document.body.appendChild(overlay);
+      document.getElementById('studentReplyText').value = isEdit ? String(existingReply ?? '') : '';
       document.getElementById('studentReplyCancelBtn').onclick = closeStudentReplyModal;
       document.getElementById('studentReplySendBtn').onclick = () => submitStudentReply(rowIndex);
     }
