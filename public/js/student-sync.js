@@ -135,7 +135,11 @@
       });
       return running;
     }
-    async function capture(action, value) {
+    function snapshotAction(action, params) {
+      // Older action-only filtered snapshots have no trustworthy period and are intentionally unused.
+      return action === 'getFilteredStats' ? action + ':' + String(params?.[1] || '') : action;
+    }
+    async function capture(action, value, params) {
       if (!subject) return value;
       const g = generation, key = ownerKey(subject);
       try {
@@ -144,7 +148,7 @@
           await store.snapshot(key + ':getCaffeineLogs', value.caffeineLogs);
           await store.snapshot(key + ':getSleepLogs', value.sleepLogs);
         }
-        await store.snapshot(key + ':' + action, value);
+        await store.snapshot(key + ':' + snapshotAction(action, params), value);
         const histories = action === 'getStudentBootstrap' ? [value.caffeineLogs, value.sleepLogs] : [value];
         for (const records of histories) if (Array.isArray(records)) {
           for (const row of await store.list(key)) if (row.state === 'synced' && records.some(r => String(r.id) === String(row.receipt?.recordId))) {
@@ -153,16 +157,16 @@
         }
       } catch (_) {}
       if (g !== generation) return value;
-      const merged = await read(action, value);
+      const merged = await read(action, value, params);
       if (action === 'getWeightData') window.studentSyncProfile = merged;
       if (action === 'getStudentBootstrap') window.studentSyncProfile = merged.weight;
       await changed();
       return merged;
     }
-    async function read(action, supplied) {
+    async function read(action, supplied, params) {
       if (!subject) throw error('SESSION_REQUIRED');
       const g = generation, owner = ownerKey(subject);
-      const value = supplied === undefined ? await store.snapshot(owner + ':' + action) : supplied;
+      const value = supplied === undefined ? await store.snapshot(owner + ':' + snapshotAction(action, params)) : supplied;
       if (g !== generation) throw error('SESSION_CHANGED');
       const rows = (await store.list(owner)).filter(r => r.state !== 'cancelled');
       if (g !== generation) throw error('SESSION_CHANGED');

@@ -240,6 +240,22 @@ test('API bridge invokes session expiry callback on 401', async () => {
   assert.equal(expired, 1);
 });
 
+test('filtered statistics bridge uses date-specific offline snapshots',async()=>{
+  const subject={studentId:'fictional',name:'가상'}; let offline=false;
+  const {window}=loadBridge({withStudentSync:true,fetchImpl:async(url,options)=>{
+    if(url.endsWith('/login'))return response({success:true,...subject});
+    if(offline)return response({success:false,error:'NETWORK_ERROR'},503);
+    const {params}=JSON.parse(options.body);
+    return response({success:true,data:{todayTotal:params[1]==='2000-01-07'?150:50},subject});
+  }});
+  await window.appAuth.loginStudent(subject.studentId,subject.name);
+  const invoke=date=>new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).getFilteredStats(subject.studentId,date));
+  await invoke('2000-01-07');await invoke('2026-10-09');offline=true;
+  assert.equal((await invoke('2000-01-07')).todayTotal,150);
+  assert.equal((await invoke('2026-10-09')).todayTotal,50);
+  await assert.rejects(invoke('2026-10-10'),{code:'OFFLINE_CACHE_MISSING'});
+});
+
 test('first visit without a session shows ordinary login without an expiry notification', async () => {
   for (const role of ['student', 'teacher']) {
     const { window } = loadBridge({ role, fetchImpl: async () => response({ authenticated:false },401) });
