@@ -3656,6 +3656,11 @@ function closeModal(){document.getElementById('studentModal').classList.remove('
 window.onclick=e=>{if(e.target===document.getElementById('studentModal'))closeModal();};
 function setModalDateToday(){document.getElementById('modalEndDate').value=today;refreshModalData();}
 
+function getSleepChartMax(values, targetHours){
+    const hours=[...(values||[]),targetHours].map(Number).filter(v=>Number.isFinite(v)&&v>0);
+    return Math.max(14, Math.ceil(Math.max(0,...hours)/2)*2+2);
+}
+
 function refreshModalData(){
     const endDate=document.getElementById('modalEndDate').value||today;
     const dates=getModalDates();
@@ -3701,7 +3706,7 @@ function refreshModalData(){
         ]},
         options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
             plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12,filter:item=>item.text!=='목표 미설정'}},tooltip:{callbacks:{label:ctx=>{if(ctx.dataset.label.includes('목표 섭취량'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0)return `카페인: ${ctx.raw}mg`;return ctx.raw!==null?`수면: ${ctx.raw}h`:'수면: 미기록';}}}},
-            scales:{y:{beginAtZero:true,position:'left',title:{display:true,text:'카페인 (mg)',color:'#6366f1'}},y2:{beginAtZero:true,position:'right',max:14,title:{display:true,text:'수면 (h)',color:'#10b981'},grid:{drawOnChartArea:false}}}}
+            scales:{y:{beginAtZero:true,position:'left',title:{display:true,text:'카페인 (mg)',color:'#6366f1'}},y2:{beginAtZero:true,position:'right',max:getSleepChartMax(sleepD,targetSleepHours),title:{display:true,text:'수면 (h)',color:'#10b981'},grid:{drawOnChartArea:false}}}}
     });
 
     const dailyTotals={};
@@ -4827,7 +4832,7 @@ function exportPDF(options){
             {label:'수면(h)',pointStyle:'circle',data:sleepArr,type:'line',borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.12)',borderWidth:2,pointRadius:4,fill:false,yAxisID:'y2',spanGaps:true},
             ...(targetSleepHours?[{label:`목표수면(${targetSleepHours}h)`,pointStyle:'circle',data:targetSleepLine,type:'line',borderColor:'rgba(59,130,246,0.65)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[])
         ]},
-        options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:10,boxHeight:10,filter:item=>item.text!=='목표 미설정'}}},scales:{y:{beginAtZero:true,position:'left'},y2:{beginAtZero:true,position:'right',max:14,grid:{drawOnChartArea:false}}}}
+        options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:10,boxHeight:10,filter:item=>item.text!=='목표 미설정'}}},scales:{y:{beginAtZero:true,position:'left'},y2:{beginAtZero:true,position:'right',max:getSleepChartMax(sleepArr,targetSleepHours),grid:{drawOnChartArea:false}}}}
     });
 
     // 생활 패턴 차트 → 이미지 캡처 후 PDF 영역에 삽입
@@ -4888,6 +4893,7 @@ function buildStaticPdfDualChartHTML(){
     const limValue = (datasets[1] && datasets[1].data && datasets[1].data[0]) ? Number(datasets[1].data[0]) || 0 : 0;
     const sleepData = (datasets[2] && datasets[2].data) ? datasets[2].data.map(v => v == null ? null : Number(v)) : [];
     const targetSleep = (datasets[3] && datasets[3].data && datasets[3].data[0]) ? Number(datasets[3].data[0]) || null : null;
+    const maxSleep = getSleepChartMax(sleepData,targetSleep);
     const maxCaf = Math.max(400, limValue * 1.25, ...cafData.map(v => v * 1.15));
     const assessmentLimit=Number(datasets[0]?.assessmentLimit)||getLimit(currentStudentId);
     const barColors=Array.isArray(datasets[0]?.backgroundColor)?datasets[0].backgroundColor:[];
@@ -4896,7 +4902,7 @@ function buildStaticPdfDualChartHTML(){
         if(v == null || Number.isNaN(v)) return null;
         return {
             x: labels.length <= 1 ? 50 : (i / (labels.length - 1)) * 100,
-            y: Math.max(0, Math.min(100, 100 - (v / 14) * 100))
+            y: Math.max(0, Math.min(100, 100 - (v / maxSleep) * 100))
         };
     });
     const sleepSvgParts = [];
@@ -4915,7 +4921,7 @@ function buildStaticPdfDualChartHTML(){
     }).join('');
     const sleepPointsSvg = pointPos.map(p => p ? `<circle cx="${p.x.toFixed(2)}" cy="${p.y.toFixed(2)}" r="1.65" fill="#10b981" stroke="#ffffff" stroke-width=".7"/>` : '').join('');
     const cafLimitTop = Math.max(0, Math.min(100, 100 - (limValue / maxCaf) * 100));
-    const targetSleepTop = targetSleep ? Math.max(0, Math.min(100, 100 - (targetSleep / 14) * 100)) : null;
+    const targetSleepTop = targetSleep ? Math.max(0, Math.min(100, 100 - (targetSleep / maxSleep) * 100)) : null;
     const bars = labels.map((label, i) => {
         const value = cafData[i] || 0;
         const h = Math.max(1, Math.min(100, (value / maxCaf) * 100));

@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import test from 'node:test';
 const html=fs.readFileSync('teacher/index.html','utf8');
 function extract(name){const match=new RegExp(`(?:async )?function ${name}\\(`).exec(html);if(!match)return '';const tail=html.slice(match.index+match[0].length),next=/\n(?:async )?function /.exec(tail);return html.slice(match.index,next?match.index+match[0].length+next.index:undefined);}
-const helpers=['getCafThresholds','readCafSettings','getCafStageKey','getCafStatusInfo','getCafBarColor','updateCafPreview','hasLifestyleConcern'];
+const helpers=['getCafThresholds','readCafSettings','getCafStageKey','getCafStatusInfo','getCafBarColor','updateCafPreview','hasLifestyleConcern','getSleepChartMax'];
 function setup(settings={cafWarn:80,cafOver:110},extra={}){const fields={};for(const id of ['lvl_ok','lvl_warn','lvl_over','lvl_danger','lvl_critical'])fields[id]={};Object.assign(fields,{setting_cafWarn:{value:'80'},setting_cafOver:{value:'110'},setting_cafMax:{value:'0'}});const c=vm.createContext({S:settings,document:{getElementById:id=>fields[id]},...extra});vm.runInContext(helpers.map(extract).join('\n'),c);return{c,fields};}
 test('custom warning and excess thresholds apply to every stage while 120 and 200 stay fixed',()=>{const {c}=setup();for(const [mg,key] of [[60,'caf1'],[80,'caf2'],[105,'caf2'],[110,'caf3'],[120,'caf4'],[200,'caf5']])assert.equal(c.getCafStageKey(mg,100,true),key);assert.equal(c.getCafStageKey(0,100,true),'caf0');assert.equal(c.getCafStageKey(0,100,false),'cafNone');});
 test('default boundaries remain 56/100/120/200',()=>{const {c}=setup({});for(const [mg,stage] of [[55,1],[56,2],[100,3],[120,4],[200,5]])assert.match(c.getCafStatusInfo(mg,100,true).text,new RegExp(`${stage}단계`));});
