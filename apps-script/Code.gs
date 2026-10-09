@@ -4492,6 +4492,35 @@ function submitInquiry(data) {
 /**
  * 교사용: 전체 문의 목록 조회 (새 헤더: A타임스탬프, B학년, C반, D번호, E학번, F이름, G제목, H내용, I상태, J응답내용, K응답시간)
  */
+// A read-only fingerprint avoids migrating existing inquiry rows. Reply/notification
+// columns are excluded so acknowledgments do not invalidate an open reply draft.
+function inquiryKey_(row) {
+  const original = row.slice(0, 8).map(value => value instanceof Date
+    ? value.toISOString() : String(value === null || value === undefined ? '' : value));
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, JSON.stringify(original), Utilities.Charset.UTF_8)
+    .map(byte => ('0' + ((byte + 256) % 256).toString(16)).slice(-2)).join('');
+}
+
+// Gateway inquiry mutations already run inside the same script lock. Resolve
+// again under that lock: a row number from an older screen is only a hint.
+function resolveInquiryRow_(sheet, rowIndex, expectedKey) {
+  if (!Number.isInteger(rowIndex) || rowIndex < 2 || typeof expectedKey !== 'string'
+      || !/^[a-f0-9]{64}$/.test(expectedKey)) return 0;
+  const rows = sheet.getDataRange().getValues();
+  let found = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (inquiryKey_(rows[i]) !== expectedKey) continue;
+    if (found) return 0; // Identical legacy rows cannot be safely distinguished.
+    found = i + 1;
+  }
+  return found;
+}
+
+function inquiryTargetChanged_() {
+  return { success: false, code: 'INQUIRY_TARGET_CHANGED',
+    error: '문의가 삭제 또는 변경되었거나 동일한 문의가 여러 건 있습니다. 목록을 확인한 뒤 다시 선택하세요. 작성한 응답은 유지됩니다.' };
+}
+
 function getInquiries() {
   try {
     const ss = getSpreadsheet_();
@@ -4506,11 +4535,12 @@ function getInquiries() {
     for (let i = 1; i < data.length; i++) {
       inquiries.push({
         rowIndex:  i + 1,
+        inquiryKey: inquiryKey_(data[i]),
         timestamp: data[i][0] ? String(data[i][0]) : '',
         grade:     String(data[i][1] || ''),
         classNum:  String(data[i][2] || ''),
         number:    String(data[i][3] || ''),
-        studentId: String(data[i][4] || ''),
+        studentId: String(data[i][4] === null || data[i][4] === undefined ? '' : data[i][4]),
         name:      String(data[i][5] || ''),
         title:     String(data[i][6] || ''),
         content:   String(data[i][7] || ''),
@@ -4531,17 +4561,18 @@ function getInquiries() {
 /**
  * 교사용: 문의에 응답 (상태: I=9, 응답내용: J=10, 응답시간: K=11)
  */
-function replyToInquiry(rowIndex, replyContent) {
+function replyToInquiry(rowIndex, replyContent, expectedKey) {
   try {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("inquiries");
 
     if (!sheet) return { success: false, error: "inquiries 시트 없음" };
 
+    const targetRow = resolveInquiryRow_(sheet, rowIndex, expectedKey);
+    if (!targetRow) return inquiryTargetChanged_();
+    if (typeof replyContent !== 'string' || !replyContent.trim()) return { success: false, error: '응답 내용을 입력하세요.' };
     const replyTime = getKSTTimestamp();
-    sheet.getRange(rowIndex, 9).setValue("응답완료");   // I열
-    sheet.getRange(rowIndex, 10).setValue(replyContent); // J열
-    sheet.getRange(rowIndex, 11).setValue(replyTime);    // K열
+    sheet.getRange(targetRow, 9, 1, 3).setValues([["응답완료", replyContent, replyTime]]);
 
     safeLog_(`✅ 문의 응답 완료: 행 ${rowIndex}`);
     return { success: true };
@@ -4555,15 +4586,14 @@ function replyToInquiry(rowIndex, replyContent) {
  * 교사용: 문의 행 삭제
  * @param {number} rowIndex - 삭제할 시트 행 번호 (1-based)
  */
-function deleteInquiry(rowIndex) {
+function deleteInquiry(rowIndex, expectedKey) {
   try {
     const ss    = getSpreadsheet_();
     const sheet = ss.getSheetByName('inquiries');
     if (!sheet) return { success: false, error: 'inquiries 시트 없음' };
-    if (rowIndex < 2 || rowIndex > sheet.getLastRow()) {
-      return { success: false, error: '유효하지 않은 행 번호: ' + rowIndex };
-    }
-    sheet.deleteRow(rowIndex);
+    const targetRow = resolveInquiryRow_(sheet, rowIndex, expectedKey);
+    if (!targetRow) return inquiryTargetChanged_();
+    sheet.deleteRow(targetRow);
     safeLog_('✅ 문의 삭제 완료: 행 ' + rowIndex);
     return { success: true };
   } catch (err) {
@@ -4589,6 +4619,7 @@ function getUnreadInquiries() {
       if (notified === '확인') continue;
       result.push({
         rowIndex:  i + 1,
+        inquiryKey: inquiryKey_(data[i]),
         timestamp: data[i][0] ? String(data[i][0]) : '',
         studentId: String(data[i][4] || ''),
         name:      String(data[i][5] || ''),
@@ -4607,12 +4638,14 @@ function getUnreadInquiries() {
 /**
  * 교사용: 문의 팝업 확인 처리 (L열 = '확인')
  */
-function markInquiryNotified(rowIndex) {
+function markInquiryNotified(rowIndex, expectedKey) {
   try {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName('inquiries');
     if (!sheet) return { success: false, error: '시트 없음' };
-    sheet.getRange(rowIndex, 12).setValue('확인');
+    const targetRow = resolveInquiryRow_(sheet, rowIndex, expectedKey);
+    if (!targetRow) return inquiryTargetChanged_();
+    sheet.getRange(targetRow, 12).setValue('확인');
     return { success: true };
   } catch (err) {
     safeLog_('❌ markInquiryNotified 오류: ' + err.message);

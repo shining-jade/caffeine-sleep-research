@@ -17,9 +17,9 @@ function extract(html,name,indent='    '){
 }
 function form(html,name,action,indent='    '){
   const ids=['inquiryTitle','inquiryContent','submitInquiryBtn','studentReplyText','studentReplySendBtn',
-    'studentReplyModal','replyRowIndex','replyContent','replyModal','msgTitle','msgContent','msgTargetId','msgTargetName','msgSendModal'];
+    'studentReplyModal','replyRowIndex','replyInquiryKey','replyContent','replyModal','msgTitle','msgContent','msgTargetId','msgTargetName','msgSendModal'];
   const fields=Object.fromEntries(ids.map(id=>[id,{value:'valid text',disabled:false,textContent:'전송',innerText:'전송',style:{display:'block'},remove(){this.removed=true;}}]));
-  fields.replyRowIndex.value='2';fields.msgTargetId.value='0';fields.msgTargetName.value='테스트';fields.studentReplySendBtn.textContent='수정하기';
+  fields.replyRowIndex.value='2';fields.replyInquiryKey.value='a'.repeat(64);fields.msgTargetId.value='0';fields.msgTargetName.value='테스트';fields.studentReplySendBtn.textContent='수정하기';
   const replyBtn={disabled:false,textContent:'응답 제출'},messageBtn={disabled:false,textContent:'전송'};
   let success,failure;const requests=[],notices=[];
   const runner={withSuccessHandler(fn){success=fn;return this;},withFailureHandler(fn){failure=fn;return this;},[action](...args){requests.push(args);}};
@@ -103,7 +103,7 @@ test('reply policies reject invalid and header row indices but preserve valid ro
     assert.throws(()=>normalizeStudentRequest('replyToTeacherMessage',[row,'reply'],session));
     assert.throws(()=>normalizeTeacherRequest('replyToInquiry',[row,'reply']));
   }
-  assert.deepEqual(normalizeTeacherRequest('replyToInquiry',[2,' reply ']).params,[2,' reply ']);
+  assert.deepEqual(normalizeTeacherRequest('replyToInquiry',[2,' reply ','a'.repeat(64)]).params,[2,' reply ','a'.repeat(64)]);
   assert.deepEqual(normalizeStudentRequest('replyToTeacherMessage',[2,'reply'],session).params,[2,'reply']);
 });
 test('teacher message recipient must be present while test student zero remains valid',()=>{
@@ -155,4 +155,34 @@ test('pending message and reply forms cannot be closed or replaced before acknow
     const context=vm.createContext({document:{getElementById:id=>id==='studentReplySendBtn'?btn:null,querySelector:()=>btn}});
     vm.runInContext(extract(html,name,indent),context);context[name](2,'title','content');
   }
+});
+
+test('teacher reply sends the identity captured when the draft was opened',()=>{
+  const f=form(teacher,'submitReply','replyToInquiry','');f.invoke();
+  assert.deepEqual(f.requests[0],[2,'valid text','a'.repeat(64)]);
+});
+test('changed inquiry target keeps the draft and refreshes the list',()=>{
+  const f=form(teacher,'submitReply','replyToInquiry','');let reads=0;f.context.loadInquiries=()=>reads++;
+  f.invoke();f.success({success:false,code:'INQUIRY_TARGET_CHANGED',error:'문의가 변경되었습니다.'});
+  assert.equal(f.fields.replyContent.value,'valid text');assert.equal(f.fields.replyModal.style.display,'block');
+  assert.equal(f.replyBtn.disabled,false);assert.equal(reads,1);
+});
+test('teacher reply and delete policies require a verified inquiry key',()=>{
+  for(const value of [undefined,'',12,'a'.repeat(63),'z'.repeat(64)]) {
+    assert.throws(()=>normalizeTeacherRequest('replyToInquiry',[2,'reply',value]));
+    assert.throws(()=>normalizeTeacherRequest('deleteInquiry',[2,value]));
+  }
+  assert.deepEqual(normalizeTeacherRequest('deleteInquiry',[2,'a'.repeat(64)]).params,[2,'a'.repeat(64)]);
+});
+test('popup acknowledgment rejection refreshes the inquiry list and alerts once without changing the reply draft',()=>{
+  const fields={inquiryPopupClose:{},inquiryPopupGoBtn:{},replyContent:{value:'보존할 응답'}};
+  const overlay={style:{},querySelectorAll:()=>[],remove(){}};let reads=0;const notices=[],callbacks=[];
+  const runner={withSuccessHandler(fn){this.success=fn;return this;},withFailureHandler(fn){this.failure=fn;return this;},
+    markInquiryNotified(row,key){assert.equal(key,'a'.repeat(64));callbacks.push({success:this.success,failure:this.failure});}};
+  const context=vm.createContext({document:{getElementById:id=>fields[id]||null,createElement:()=>overlay,body:{appendChild(){}}},
+    google:{script:{run:runner}},escapeHtml:x=>x,formatTimestamp:x=>x,loadInquiries(){reads++;},showTeacherModal:(...x)=>notices.push(x)});
+  vm.runInContext(extract(teacher,'showInquiryPopup',''),context);
+  context.showInquiryPopup([{rowIndex:2,inquiryKey:'a'.repeat(64)},{rowIndex:3,inquiryKey:'a'.repeat(64)}]);fields.inquiryPopupClose.onclick();
+  assert.equal(typeof callbacks[0].success,'function');callbacks[0].success({success:false,code:'INQUIRY_TARGET_CHANGED'});
+  callbacks[1].failure(new Error('offline'));assert.equal(reads,1);assert.equal(notices.length,1);assert.equal(fields.replyContent.value,'보존할 응답');
 });

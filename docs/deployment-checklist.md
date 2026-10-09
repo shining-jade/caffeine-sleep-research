@@ -13,6 +13,11 @@
 - Add Script Properties `SPREADSHEET_ID` and `GAS_SHARED_SECRET` without copying either value into Git.
 - Save and create a new web-app version. Execute as the owner and allow access to anyone; the gateway secret still blocks direct data actions.
 - Verify a GET request returns only the service health JSON.
+- For inquiry identity validation, update the existing Apps Script deployment before
+  deploying its matching Vercel UI. Replies, deletes and popup acknowledgments must
+  include the inquiry key returned by a fresh list read. Older open screens fail
+  safely; reload the teacher page before continuing. Missing or duplicate inquiry
+  identities reject the operation rather than targeting another row.
 
 ## 3. Vercel private configuration
 
