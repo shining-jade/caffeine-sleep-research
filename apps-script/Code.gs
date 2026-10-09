@@ -1285,6 +1285,8 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
     let caffeineRecordedDays = 0;
     let sleepRecordedDays = 0;
     let overCaffeineDays = [];
+    let caffeineTotal = 0;
+    let sleepTotal = 0;
 
     safeLog_(`\n📊 일별 데이터 수집:`);
 
@@ -1310,7 +1312,7 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
             if (intakeTime instanceof Date) {
               dateStr = Utilities.formatDate(intakeTime, "Asia/Seoul", "yyyy-MM-dd");
             } else if (typeof intakeTime === 'string') {
-              dateStr = intakeTime.split(' ')[0];
+              dateStr = intakeTime.trim().split(/[T ]/)[0];
             } else if (intakeTime) {
               try {
                 const tempDate = new Date(intakeTime);
@@ -1345,7 +1347,7 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
             if (sleepDate instanceof Date) {
               dateStr = Utilities.formatDate(sleepDate, "Asia/Seoul", "yyyy-MM-dd");
             } else if (typeof sleepDate === 'string') {
-              dateStr = sleepDate.trim().split(' ')[0];
+              dateStr = sleepDate.trim().split(/[T ]/)[0];
             } else if (sleepDate) {
               try {
                 const tempDate = new Date(sleepDate);
@@ -1368,6 +1370,8 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
 
       if (hasCaffeineRecord) caffeineRecordedDays++;
       if (hasSleepRecord) sleepRecordedDays++;
+      if (hasCaffeineRecord) caffeineTotal += caffeine;
+      if (hasSleepRecord) sleepTotal += sleep;
       if (hasCaffeineRecord || hasSleepRecord) recordedDays++;
 
       const dayName = ['일','월','화','수','목','금','토'][new Date(date).getDay()];
@@ -1394,9 +1398,9 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
 
     safeLog_(`\n========================================`);
     safeLog_(`📈 최종 결과:`);
-    safeLog_(`   - 전체 기록: ${recordedDays}/7일`);
-    safeLog_(`   - ☕ 카페인 기록: ${caffeineRecordedDays}/7일`);
-    safeLog_(`   - 😴 수면 기록: ${sleepRecordedDays}/7일`);
+    safeLog_(`   - 전체 기록: ${recordedDays}/${dates.length}일`);
+    safeLog_(`   - ☕ 카페인 기록: ${caffeineRecordedDays}/${dates.length}일`);
+    safeLog_(`   - 😴 수면 기록: ${sleepRecordedDays}/${dates.length}일`);
     safeLog_(`========================================\n`);
 
     return {
@@ -1404,7 +1408,9 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
       recordedDays: recordedDays,
       caffeineRecordedDays: caffeineRecordedDays,
       sleepRecordedDays: sleepRecordedDays,
-      totalDays: 7,
+      totalDays: dates.length,
+      caffeineTotal: caffeineTotal,
+      sleepTotal: sleepTotal,
       overCaffeineDays: overCaffeineDays
     };
   } catch (error) {
@@ -3598,6 +3604,40 @@ function getTeacherData() {
  * 교사용 AI 건강분석 요청 처리
  * ⭐ 학생용과 별도로 생활기록부 소견 스타일 전용 프롬프트 사용
  */
+function getTeacherCaffeineThresholds_(values) {
+  values = values || {};
+  const warn = Number(values.warn == null ? 56 : values.warn);
+  const over = Number(values.over == null ? 100 : values.over);
+  return isFinite(warn) && isFinite(over) && warn >= 10 && over >= 50 && warn < over && over < 120
+    ? {warn: warn, over: over} : {warn: 56, over: 100};
+}
+
+// Teacher lists, charts and reports classify against the teacher basis, independently of the personal goal.
+function getTeacherCaffeineSummary_(average, limit, recordedDays, dailyRecords, values) {
+  const thresholds = getTeacherCaffeineThresholds_(values);
+  const pct = average / limit * 100;
+  const stage = !recordedDays ? -1 : average === 0 ? 0 : pct >= 200 ? 5 : pct >= 120 ? 4 : pct >= thresholds.over ? 3 : pct >= thresholds.warn ? 2 : 1;
+  const labels = ['카페인 섭취 안 함', '1단계: 안전', '2단계: 적정/제한', '3단계: 과다', '4단계: 고위험', '5단계: 위험/중독'];
+  const status = stage < 0 ? '카페인 미기록' : labels[stage];
+  const overLimit = limit * thresholds.over / 100;
+  const overDays = (dailyRecords || []).filter(d => d.mg > 0 && d.mg >= overLimit);
+  let section = !recordedDays ? '카페인 미기록으로 섭취 상태를 판정할 수 없습니다.'
+    : average === 0 ? '카페인 기록 ' + recordedDays + '일 모두 카페인 섭취 안 함(0mg)으로 기록되었습니다.'
+    : '기록일 기준 일평균 ' + Math.round(average) + 'mg이며, 교사 판정 기준(' + limit + 'mg)의 ' + Math.round(pct) + '%로 ' + status + '입니다.';
+  if (overDays.length) {
+    section += '\n카페인 기록 ' + recordedDays + '일 중 ' + overDays.length + '일에 교사 판정 초과 경계(' + Math.round(overLimit * 10) / 10 + 'mg, ' + thresholds.over + '%) 이상을 섭취했습니다.\n초과 기록:\n'
+      + overDays.map(d => '  - ' + d.date.substr(5) + ': ' + d.mg + 'mg').join('\n');
+  }
+  return {stage: stage, status: status, overDays: overDays, section: section};
+}
+
+function getTeacherLifestyleValues_(summary, ignored) {
+  return String(summary || '').split(',').map(v => v.trim()).filter(v => {
+    const label = v.replace(/\([^)]*\)/g, '').replace(/\s/g, '');
+    return label && ['없음', '데이터없음', '기록없음'].concat(ignored || []).indexOf(label) < 0;
+  });
+}
+
 function handleAIReportForTeacher(payload) {
   try {
     const studentId  = payload.studentId;
@@ -3628,28 +3668,8 @@ function handleAIReportForTeacher(payload) {
     safeLog_(`학생: ${name}(${studentId}), 조회기간: ${periodLabel}`);
     safeLog_(`평균카페인: ${cafData.avgPerDay}mg, 평균수면: ${sleepDataP.avgHours}h`);
 
-    // ── API 키 확인 ──────────────────────────────────
     const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
-    if (!apiKey) {
-      safeLog_("❌ API 키 없음 → 교사용 대체 분석");
-      // API 키 없음 단계에서는 weeklyData가 아직 수집되지 않아 overDays=[] 로 처리
-      return {
-        success:   true,
-        analysis:  getTeacherFallbackAnalysis(
-          cafData.avgPerDay    || 0,
-          sleepDataP.avgHours  || 0,
-          limit,
-          cafData.totalDays    || 0,
-          sleepDataP.totalDays || 0,
-          periodLabel,
-          [],          // overDays: 아직 미수집
-          periodLabel, // periodForHeader
-          lifeAdvice
-        ),
-        source:    'Fallback (API 키 없음)',
-        errorCode: 'NO_API_KEY'
-      };
-    }
+    const caffeineThresholds = getTeacherCaffeineThresholds_(payload.caffeineThresholds);
 
     // ── ⭐ 교사 지정 기간 기준으로 실데이터 수집 ──────────
     const weeklyData           = getWeeklyDetailedData(studentId, startDate, endDate);
@@ -3673,60 +3693,9 @@ function handleAIReportForTeacher(payload) {
       };
     }
 
-    // ── ⭐ 서버 통계 재계산 (교사 지정 기간 기준) ─────────
-    const ss            = getSpreadsheet_();
-    const caffeineSheet = ss.getSheetByName("caffeine");
-    const sleepSheet    = ss.getSheetByName("sleep");
-
-    // 기간 경계값 계산
-    const rangeStart = startDate
-      ? new Date(startDate + 'T00:00:00+09:00')
-      : (() => { const d = new Date(); d.setDate(d.getDate() - 6); d.setHours(0,0,0,0); return d; })();
-    const rangeEnd = endDate
-      ? new Date(endDate + 'T23:59:59+09:00')
-      : new Date();
-
-    let realCafTotal   = 0;
-    let realSleepTotal = 0;
-    let realSleepDays  = 0;
-
-    if (caffeineSheet) {
-      const cafData2 = caffeineSheet.getDataRange().getValues();
-      for (let i = 1; i < cafData2.length; i++) {
-        if (normalizeId(cafData2[i][4]) === normalizeId(studentId)) {
-          const t = cafData2[i][8]; // I열: 섭취시간
-          if (t instanceof Date && t >= rangeStart && t <= rangeEnd) {
-            realCafTotal += parseFloat(cafData2[i][7]) || 0;
-          }
-        }
-      }
-    }
-    if (sleepSheet) {
-      const sData = sleepSheet.getDataRange().getValues();
-      for (let i = 1; i < sData.length; i++) {
-        if (normalizeId(sData[i][4]) === normalizeId(studentId)) {
-          const d = sData[i][6]; // G열: 날짜
-          let dateStr = '';
-          if (d instanceof Date) {
-            dateStr = Utilities.formatDate(d, "Asia/Seoul", "yyyy-MM-dd");
-          } else {
-            dateStr = String(d).trim().split(' ')[0];
-          }
-          const sStart = startDate || '0000-01-01';
-          const sEnd   = endDate   || '9999-12-31';
-          if (dateStr >= sStart && dateStr <= sEnd) {
-            realSleepTotal += parseFloat(sData[i][10]) || 0;
-            realSleepDays++;
-          }
-        }
-      }
-    }
-
-    const realAvgCaffeine = totalDays > 0 ? realCafTotal / totalDays : 0;
-    const realAvgSleep    = realSleepDays > 0 ? realSleepTotal / realSleepDays : 0;
-
-    safeLog_(`📊 통계 재계산: 카페인 총량=${realCafTotal}mg, 일평균=${Math.round(realAvgCaffeine)}mg`);
-    safeLog_(`📊 수면: 총량=${realSleepTotal.toFixed(1)}h, 평균=${realAvgSleep.toFixed(1)}h (${realSleepDays}일)`);
+    // 미기록일은 제외하고, 명시적으로 저장한 0mg 기록일은 포함한다.
+    const realAvgCaffeine = caffeineRecordedDays > 0 ? weeklyData.caffeineTotal / caffeineRecordedDays : 0;
+    const realAvgSleep = sleepRecordedDays > 0 ? weeklyData.sleepTotal / sleepRecordedDays : 0;
 
     // ── 교사용 전용 Gemini 프롬프트 ─────────────────────
     const modelName = "gemini-2.0-flash";
@@ -3737,32 +3706,10 @@ function handleAIReportForTeacher(payload) {
       ? `${startDate} ~ ${endDate}`
       : Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd") + ' 기준 최근 7일';
 
-    const overDays      = overCaffeineDays.filter(d => d.mg > limit);
+    const caffeineSummary = getTeacherCaffeineSummary_(realAvgCaffeine, limit, caffeineRecordedDays, overCaffeineDays, caffeineThresholds);
+    const overDays = caffeineSummary.overDays;
     const overDaysCount = overDays.length;
-
-    // ── 프롬프트에 삽입할 섹션을 JS에서 미리 완성 ──────────────
-    // 카페인 경고 블록
-    const cafOverList = overDays
-      .map(d => '  - ' + d.date.substr(5) + ': ' + d.mg + 'mg (초과량 ' + (d.mg - limit) + 'mg)')
-      .join('\n');
-
-    let cafSection;
-    if (overDaysCount > 0) {
-      const maxOverDay = overDays.reduce((a, b) => a.mg > b.mg ? a : b);
-      const overRate = Math.round(overDaysCount / Math.max(caffeineRecordedDays, 1) * 100);
-      cafSection = '일평균 ' + Math.round(realAvgCaffeine) + 'mg으로 권장량(' + limit + 'mg) 이내이나, '
-        + '카페인 기록 ' + caffeineRecordedDays + '일 중 ' + overDaysCount + '일(' + overRate + '%)에 권장량을 초과하는 섭취가 확인되었습니다. '
-        + '최고 섭취량은 ' + maxOverDay.date.substr(5) + '의 ' + maxOverDay.mg + 'mg(권장량 초과 ' + (maxOverDay.mg - limit) + 'mg)이며, '
-        + '일시적 과다 섭취도 두통·불안·수면 방해 등을 유발할 수 있으므로 지속적인 주의가 요구됩니다.\n초과 기록:\n' + cafOverList;
-    } else if (realAvgCaffeine > limit) {
-      const overAmt = Math.round(realAvgCaffeine - limit);
-      cafSection = '일평균 ' + Math.round(realAvgCaffeine) + 'mg으로 권장량(' + limit + 'mg)을 평균 ' + overAmt + 'mg 초과하고 있습니다. '
-        + '카페인 과다 섭취는 심박수 증가, 불안감, 수면 장애 등을 유발할 수 있으므로 즉각적인 섭취량 감소 지도가 필요합니다.';
-    } else {
-      const pct = Math.round(realAvgCaffeine / limit * 100);
-      cafSection = '일평균 ' + Math.round(realAvgCaffeine) + 'mg으로 권장량(' + limit + 'mg)의 ' + pct + '% 수준이며, '
-        + '전 기간 권장 기준 이내로 양호하게 관리되고 있습니다.';
-    }
+    const cafSection = caffeineSummary.section;
 
     // 수면 기준 설정 로드 (연령대 반영)
     const _tSlpCfg = getSleepSettings();
@@ -3778,10 +3725,12 @@ function handleAIReportForTeacher(payload) {
     let sleepJudge;
     const sleepShort = parseFloat((tSlpWarn - realAvgSleep).toFixed(1));
     const sleepOver  = parseFloat((realAvgSleep - tSlpGood).toFixed(1));
-    if (realAvgSleep < tSlpSevere) {
+    if (!sleepRecordedDays) {
+      sleepJudge = '수면 미기록으로 수면 상태를 판정할 수 없습니다.';
+    } else if (sleepRecordedDays > 0 && realAvgSleep < tSlpSevere) {
       sleepJudge = '수면 부족 🔴 (평균 ' + realAvgSleep.toFixed(1) + '시간 — ' + tAgeLabel + ' 권장 ' + tSlpWarn + '시간 대비 ' + (tSlpWarn - realAvgSleep).toFixed(1) + '시간 부족). '
         + tSlpSevere + '시간 미만의 만성 수면 부족은 인지 기능 저하, 면역력 급감, 정서 불안정 및 우울감 증가 등 고위험 건강 문제를 유발합니다. 즉각적인 수면 환경 개선 및 보호자 연계 지도가 강력히 요구됩니다.';
-    } else if (realAvgSleep < tSlpWarn) {
+    } else if (sleepRecordedDays > 0 && realAvgSleep < tSlpWarn) {
       sleepJudge = '적당한 수면 🟠 - 개인차 범위, 부족 방향 (평균 ' + realAvgSleep.toFixed(1) + '시간 — ' + tAgeLabel + ' 권장 ' + tSlpWarn + '시간 대비 ' + sleepShort + '시간 적음). '
         + '개인차 범위이나 수면 부족으로 이어지지 않도록 취침 시각을 조금 앞당기는 등 수면 시간 확보를 위한 환경 조성이 권장됩니다.';
     } else if (realAvgSleep <= tSlpGood) {
@@ -3798,8 +3747,8 @@ function handleAIReportForTeacher(payload) {
     // 개선 방법 1 — 카페인
     let improveCaf;
     if (overDaysCount > 0) {
-      improveCaf = '권장량 초과일(' + overDaysCount + '일) 재발 방지를 위해 음료 선택 전 카페인 함량 라벨을 반드시 확인하고, 오후 2시 이후에는 무카페인 음료로 대체하는 습관을 형성하도록 권장합니다.';
-    } else if (realAvgCaffeine > limit) {
+      improveCaf = '교사 판정 초과일(' + overDaysCount + '일) 재발 방지를 위해 음료 선택 전 카페인 함량 라벨을 반드시 확인하고, 오후 2시 이후에는 무카페인 음료로 대체하는 습관을 형성하도록 권장합니다.';
+    } else if (caffeineSummary.stage >= 3) {
       improveCaf = '카페인 과다 섭취 개선을 위해 하루 섭취 음료 수를 1잔 줄이고, 카페인 음료를 물·보리차 등으로 단계적으로 대체하도록 지도합니다.';
     } else {
       improveCaf = '현재 카페인 섭취 수준을 유지하고, 음료 구매 시 카페인 함량 라벨 확인 습관을 지속하도록 권장합니다.';
@@ -3807,9 +3756,11 @@ function handleAIReportForTeacher(payload) {
 
     // 개선 방법 2 — 수면
     let improveSleep;
-    if (realAvgSleep < tSlpSevere) {
+    if (!sleepRecordedDays) {
+      improveSleep = '수면 기록을 시작하여 취침·기상 시각을 확인하도록 안내합니다.';
+    } else if (sleepRecordedDays > 0 && realAvgSleep < tSlpSevere) {
       improveSleep = '수면 부족 해소를 위해 즉시 취침 시각을 최소 1시간 이상 앞당기고, 취침 2시간 전부터 스마트폰·게임 등 자극적 활동을 전면 중단하며, 주말에도 동일한 수면 루틴을 유지하도록 강력히 권장합니다.';
-    } else if (realAvgSleep < tSlpWarn) {
+    } else if (sleepRecordedDays > 0 && realAvgSleep < tSlpWarn) {
       improveSleep = '취침 시각을 20~30분 앞당기고 매일 동일한 취침·기상 시각을 유지하며, 취침 1시간 전 스마트폰 사용을 줄여 수면의 질을 높이도록 권장합니다.';
     } else if (realAvgSleep >= tSlpMax) {
       improveSleep = '수면 과다 개선을 위해 알람을 활용하여 일정한 기상 시각을 유지하고, 낮잠은 20분 이내로 제한하도록 권장합니다. 피로감이 지속된다면 보건 교사 또는 전문의와 상담하도록 안내합니다.';
@@ -3821,13 +3772,13 @@ function handleAIReportForTeacher(payload) {
 
     // 개선 방법 3 — 우선 실천 목표
     let priorityAction;
-    if (overDaysCount > 0 && realAvgSleep < tSlpWarn) {
+    if (overDaysCount > 0 && sleepRecordedDays > 0 && realAvgSleep < tSlpWarn) {
       priorityAction = '카페인 초과 섭취(' + overDaysCount + '일)와 수면 부족이 동시에 관찰되므로, 오후 2시 이후 카페인 음료를 무카페인으로 대체하고 매일 취침 시각을 30분 앞당기는 두 가지 목표를 동시에 실천하도록 권고합니다.';
     } else if (overDaysCount > 0) {
       priorityAction = '카페인 음료 구매 전 반드시 라벨의 카페인 함량을 확인하는 습관을 최우선 실천 목표로 삼고, 특히 오후 시간대 고카페인 음료 섭취를 자제하도록 권고합니다.';
-    } else if (realAvgSleep < tSlpSevere) {
+    } else if (sleepRecordedDays > 0 && realAvgSleep < tSlpSevere) {
       priorityAction = '수면이 매우 부족한 위험 수준이므로, 오늘부터 취침 시각을 1시간 앞당기는 것을 최우선 실천 목표로 삼고 수면 일지를 작성하여 생활 패턴을 점검하도록 강력히 권고합니다.';
-    } else if (realAvgSleep < tSlpWarn) {
+    } else if (sleepRecordedDays > 0 && realAvgSleep < tSlpWarn) {
       priorityAction = '평소 취침 시각보다 20~30분 일찍 잠자리에 드는 것을 첫 번째 실천 목표로 삼고, 취침 전 전자기기 사용 시간을 단계적으로 줄여나가도록 권고합니다.';
     } else if (realAvgSleep >= tSlpMax) {
       priorityAction = '목표 기상 시각을 정하여 알람을 설정하고, 일정한 시각에 기상하는 것을 첫 번째 실천 목표로 삼으며, 낮잠을 줄여 야간 수면의 질을 높이도록 권고합니다.';
@@ -3838,18 +3789,16 @@ function handleAIReportForTeacher(payload) {
     }
 
     // 종합 소견 힌트 (Gemini에게 전달)
-    const cafStatusHint = overDaysCount > 0
-      ? '카페인 초과 ' + overDaysCount + '일 발생'
-      : (realAvgCaffeine > limit ? '카페인 평균 초과' : '카페인 양호');
-    const sleepStatusHint = realAvgSleep < tSlpSevere ? '심각한 수면 부족'
-      : realAvgSleep < tSlpWarn  ? '수면 부족'
-      : realAvgSleep > 12        ? '과도한 수면'
-      : realAvgSleep > tSlpGood  ? '수면 과다'
-      : '수면 정상';
+    const cafStatusHint = caffeineSummary.status;
+    const sleepStatusHint = !sleepRecordedDays ? '수면 미기록'
+      : realAvgSleep < tSlpSevere ? '수면 부족 🔴'
+      : realAvgSleep < tSlpWarn ? '적당한 수면 🟠'
+      : realAvgSleep <= tSlpGood ? '권장 수면 🟢'
+      : realAvgSleep < tSlpMax ? '적당한 수면 🟡' : '수면 과다 🟣';
 
     // ⭐ 생활 패턴 추가 데이터 힌트 문자열 조합
     const symptomRateStr = symptomRate != null
-      ? `(부작용 경험 비율: 전체 기록의 ${symptomRate}%)`
+      ? `(부작용 경험 비율: 전체 기록의 ${String(symptomRate).includes('%') ? symptomRate : symptomRate + '%'})`
       : '';
     const lifestyleSection = `- 카페인 섭취 주요 이유: ${topReasons}
 - 부작용 경험: ${topSymptoms} ${symptomRateStr}
@@ -3864,16 +3813,27 @@ function handleAIReportForTeacher(payload) {
     if (topSymptoms !== '없음' && topSymptoms !== '데이터 없음') {
       lifeAdvice += `학생이 카페인 섭취 후 ${topSymptoms} 등의 부작용을 경험한 것으로 기록되어 있어 신체 반응에 민감하게 대응할 필요가 있습니다. `;
     }
-    if (topPhone !== '데이터 없음' && topPhone !== '없음' && topPhone !== '15분 이내') {
-      lifeAdvice += `취침 전 스마트폰 사용 시간이 ${topPhone}로 기록되어 수면 유도를 방해하는 요인이 될 수 있으므로 사용 시간 단축을 권고합니다. `;
+    const phoneConcerns = getTeacherLifestyleValues_(topPhone, ['안함', '15분이내', '30분미만']);
+    const latencyConcerns = getTeacherLifestyleValues_(topLatency, ['15분이내', '15~30분']);
+    const drowsyConcerns = getTeacherLifestyleValues_(topDrowsy);
+    if (phoneConcerns.length) {
+      lifeAdvice += `취침 전 스마트폰 사용 시간이 ${phoneConcerns.join(', ')}로 기록되어 수면 유도를 방해하는 요인이 될 수 있으므로 사용 시간 단축을 권고합니다. `;
     }
-    if (topLatency !== '데이터 없음' && topLatency !== '15분 이내') {
-      lifeAdvice += `잠드는 데 걸리는 시간이 평균적으로 ${topLatency}로 수면 잠복기가 길어 수면의 질 개선이 필요합니다. `;
+    if (latencyConcerns.length) {
+      lifeAdvice += `잠드는 데 걸리는 시간은 ${latencyConcerns.join(', ')}로 기록되어 수면 잠복기가 길어 수면의 질 개선이 필요합니다. `;
     }
-    if (topDrowsy !== '데이터 없음' && topDrowsy !== '없음') {
-      lifeAdvice += `낮에 ${topDrowsy} 정도의 졸음을 경험하는 것으로 나타나 야간 수면의 질과 충분한 수면 시간 확보가 중요합니다. `;
+    if (drowsyConcerns.length) {
+      lifeAdvice += `낮에 ${drowsyConcerns.join(', ')} 정도의 졸음을 경험하는 것으로 나타나 야간 수면의 질과 충분한 수면 시간 확보가 중요합니다. `;
     }
-    if (!lifeAdvice) lifeAdvice = '기록된 생활 패턴 데이터는 전반적으로 양호한 수준입니다.';
+    if (!lifeAdvice) lifeAdvice = '생활 패턴은 입력된 항목만 참고하며 미기록 항목은 판정하지 않습니다.';
+
+    if (!apiKey) {
+      return {
+        success: true,
+        analysis: getTeacherFallbackAnalysis(realAvgCaffeine, realAvgSleep, limit, caffeineRecordedDays, sleepRecordedDays, periodLabel, overDays, periodForHeader, lifeAdvice, caffeineThresholds),
+        source: 'Fallback (API 키 없음)', errorCode: 'NO_API_KEY', recordedDays: recordedDays
+      };
+    }
 
     // ⭐⭐⭐ 생활기록부 소견 스타일 전용 프롬프트 ⭐⭐⭐
     const teacherPrompt = `너는 학교 보건교사야. 아래 데이터를 바탕으로 학교생활기록부 건강 관찰 소견을 작성해.
@@ -3882,7 +3842,8 @@ function handleAIReportForTeacher(payload) {
 [학생 정보]
 - 이름: ${name}
 - 조회 기간: ${periodForHeader} (총 ${totalDays}일)
-- 체중: ${weight}kg / 일일 카페인 권장량: ${limit}mg
+- 체중: ${weight}kg / 교사 판정 기준: ${limit}mg
+- 평균은 각 항목의 기록일 기준이며 0mg 기록일은 포함하고 미기록일은 제외함
 - 카페인 기록: ${caffeineRecordedDays}/${totalDays}일 / 수면 기록: ${sleepRecordedDays}/${totalDays}일
 - 현재 상태: ${cafStatusHint} / ${sleepStatusHint}
 
@@ -3991,7 +3952,7 @@ ${priorityAction}
         safeLog_('⚠️ 교사용 AI 분석 미완성 → 교사용 대체 분석');
         return {
           success:      true,
-          analysis:     getTeacherFallbackAnalysis(realAvgCaffeine, realAvgSleep, limit, caffeineRecordedDays, sleepRecordedDays, periodLabel, overDays, periodForHeader, lifeAdvice),
+          analysis:     getTeacherFallbackAnalysis(realAvgCaffeine, realAvgSleep, limit, caffeineRecordedDays, sleepRecordedDays, periodLabel, overDays, periodForHeader, lifeAdvice, caffeineThresholds),
           source:       'Fallback (AI 미완성)',
           errorCode:    'INCOMPLETE',
           recordedDays: recordedDays
@@ -4014,7 +3975,7 @@ ${priorityAction}
       const ec      = ecMatch ? ecMatch[1] : 'UNKNOWN_ERROR';
       return {
         success:      true,
-        analysis:     getTeacherFallbackAnalysis(realAvgCaffeine, realAvgSleep, limit, caffeineRecordedDays, sleepRecordedDays, periodLabel, overDays, periodForHeader),
+        analysis:     getTeacherFallbackAnalysis(realAvgCaffeine, realAvgSleep, limit, caffeineRecordedDays, sleepRecordedDays, periodLabel, overDays, periodForHeader, lifeAdvice, caffeineThresholds),
         source:       'Fallback (API 오류)',
         errorCode:    ec,
         error:        apiError.message,
@@ -4033,7 +3994,7 @@ ${priorityAction}
 // ============================================
 // 교사용 전용 대체 분석 (데이터 충분하나 API 실패 시)
 // ============================================
-function getTeacherFallbackAnalysis(avgCaffeine, avgSleep, limit, cafDays, sleepDays, periodLabel, overDays, periodForHeader, lifeAdvice) {
+function getTeacherFallbackAnalysis(avgCaffeine, avgSleep, limit, cafDays, sleepDays, periodLabel, overDays, periodForHeader, lifeAdvice, caffeineThresholds) {
   avgCaffeine   = parseFloat(avgCaffeine) || 0;
   avgSleep      = parseFloat(avgSleep)    || 0;
   limit         = parseFloat(limit)       || 150;
@@ -4043,27 +4004,10 @@ function getTeacherFallbackAnalysis(avgCaffeine, avgSleep, limit, cafDays, sleep
   const header  = periodForHeader || periodLabel
                   || Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd") + ' 기준 최근 7일';
 
+  const caffeineSummary = getTeacherCaffeineSummary_(avgCaffeine, limit, cafDays, overDays, caffeineThresholds);
+  overDays = caffeineSummary.overDays;
   const overDaysCount = overDays.length;
-
-  // ── 카페인 섹션 (3단계: 초과일 존재 / 평균 초과 / 정상) ──
-  let cafSection;
-  if (overDaysCount > 0) {
-    const maxOverDay  = overDays.reduce((a, b) => a.mg > b.mg ? a : b);
-    const overRate    = Math.round(overDaysCount / Math.max(cafDays, 1) * 100);
-    const overList    = overDays.map(d => '  - ' + d.date.substr(5) + ': ' + d.mg + 'mg (초과량 ' + (d.mg - limit) + 'mg)').join('\n');
-    cafSection = '일평균 ' + Math.round(avgCaffeine) + 'mg으로 권장량(' + limit + 'mg) 이내이나, '
-      + '카페인 기록 ' + cafDays + '일 중 ' + overDaysCount + '일(' + overRate + '%)에 권장량을 초과하는 섭취가 확인되었습니다. '
-      + '최고 섭취량은 ' + maxOverDay.date.substr(5) + '의 ' + maxOverDay.mg + 'mg(권장량 초과 ' + (maxOverDay.mg - limit) + 'mg)이며, '
-      + '일시적 과다 섭취도 두통·불안·수면 방해 등을 유발할 수 있으므로 지속적인 주의가 요구됩니다.\n초과 기록:\n' + overList;
-  } else if (avgCaffeine > limit) {
-    const overAmt = Math.round(avgCaffeine - limit);
-    cafSection = '일평균 ' + Math.round(avgCaffeine) + 'mg으로 권장량(' + limit + 'mg)을 평균 ' + overAmt + 'mg 초과하고 있습니다. '
-      + '카페인 과다 섭취는 심박수 증가, 불안감, 수면 장애 등을 유발할 수 있으므로 즉각적인 섭취량 감소 지도가 필요합니다.';
-  } else {
-    const pct = Math.round(avgCaffeine / limit * 100);
-    cafSection = '일평균 ' + Math.round(avgCaffeine) + 'mg으로 권장량(' + limit + 'mg)의 ' + pct + '% 수준이며, '
-      + '전 기간 권장 기준 이내로 양호하게 관리되고 있습니다.';
-  }
+  const cafSection = caffeineSummary.section;
 
   // 수면 기준 설정 로드 (연령대 반영)
   const _fbSlpCfg = getSleepSettings();
@@ -4077,10 +4021,12 @@ function getTeacherFallbackAnalysis(avgCaffeine, avgSleep, limit, cafDays, sleep
 
   // ── 수면 섹션 (5단계: 수면 부족 🔴 / 적당한 수면 🟠 / 권장 수면 🟢 / 적당한 수면 🟡 / 수면 과다 🟣)
   let sleepSection;
-  if (avgSleep < fbSlpSevere) {
+  if (!sleepDays) {
+    sleepSection = '수면 미기록으로 수면 상태를 판정할 수 없습니다.';
+  } else if (sleepDays > 0 && avgSleep < fbSlpSevere) {
     sleepSection = '평균 ' + avgSleep.toFixed(1) + '시간으로 수면 부족 🔴 상태입니다(' + fbAgeLabel + ' 권장 최소 ' + fbSlpWarn + '시간 대비 ' + (fbSlpWarn - avgSleep).toFixed(1) + '시간 부족). '
       + fbSlpSevere + '시간 미만의 만성 수면 부족은 인지 기능 저하, 면역력 급감, 정서 불안정 및 우울감 증가 등 고위험 건강 문제를 유발하므로 즉각적인 수면 환경 개선 및 보호자 연계 지도가 강력히 요구됩니다.';
-  } else if (avgSleep < fbSlpWarn) {
+  } else if (sleepDays > 0 && avgSleep < fbSlpWarn) {
     const shortH = (fbSlpWarn - avgSleep).toFixed(1);
     sleepSection = '평균 ' + avgSleep.toFixed(1) + '시간으로 적당한 수면 🟠 (개인차 범위, 부족 방향) 상태입니다. '
       + fbAgeLabel + ' 권장 수면시간(' + fbRecRange + ')에 ' + shortH + '시간 미달하나 개인차 범위이며, 취침 시각을 20~30분 앞당겨 수면 시간을 확보하도록 권장합니다.';
@@ -4100,17 +4046,19 @@ function getTeacherFallbackAnalysis(avgCaffeine, avgSleep, limit, cafDays, sleep
   // ── 개선 방법 ───────────────────────────────────────────
   let improve1;
   if (overDaysCount > 0) {
-    improve1 = '권장량 초과일(' + overDaysCount + '일) 재발 방지를 위해 음료 선택 전 카페인 함량 라벨을 반드시 확인하고, 오후 2시 이후에는 무카페인 음료로 대체하는 습관을 형성하도록 권장합니다.';
-  } else if (avgCaffeine > limit) {
+    improve1 = '교사 판정 초과일(' + overDaysCount + '일) 재발 방지를 위해 음료 선택 전 카페인 함량 라벨을 반드시 확인하고, 오후 2시 이후에는 무카페인 음료로 대체하는 습관을 형성하도록 권장합니다.';
+  } else if (caffeineSummary.stage >= 3) {
     improve1 = '카페인 과다 섭취 개선을 위해 하루 섭취 음료 수를 1잔 줄이고, 카페인 음료를 물·보리차 등으로 단계적으로 대체하도록 지도합니다.';
   } else {
     improve1 = '현재 카페인 섭취 수준을 유지하고, 음료 구매 시 카페인 함량 라벨 확인 습관을 지속하도록 권장합니다.';
   }
 
   let improve2;
-  if (avgSleep < fbSlpSevere) {
+  if (!sleepDays) {
+    improve2 = '수면 기록을 시작하여 취침·기상 시각을 확인하도록 안내합니다.';
+  } else if (sleepDays > 0 && avgSleep < fbSlpSevere) {
     improve2 = '수면 부족 해소를 위해 즉시 취침 시각을 최소 1시간 이상 앞당기고, 취침 2시간 전부터 스마트폰·게임 등 자극적 활동을 전면 중단하며, 주말에도 동일한 수면 루틴을 유지하도록 강력히 권장합니다.';
-  } else if (avgSleep < fbSlpWarn) {
+  } else if (sleepDays > 0 && avgSleep < fbSlpWarn) {
     improve2 = '취침 시각을 20~30분 앞당기고 매일 동일한 취침·기상 시각을 유지하며, 취침 1시간 전 스마트폰 사용을 줄여 수면의 질을 높이도록 권장합니다.';
   } else if (avgSleep >= fbSlpMax) {
     improve2 = '수면 과다 개선을 위해 알람을 활용하여 일정한 기상 시각을 유지하고, 낮잠은 20분 이내로 제한하도록 권장합니다. 피로감이 지속된다면 전문의와 상담하도록 안내합니다.';
@@ -4121,13 +4069,13 @@ function getTeacherFallbackAnalysis(avgCaffeine, avgSleep, limit, cafDays, sleep
   }
 
   let improve3;
-  if (overDaysCount > 0 && avgSleep < fbSlpWarn) {
+  if (overDaysCount > 0 && sleepDays > 0 && avgSleep < fbSlpWarn) {
     improve3 = '카페인 초과 섭취(' + overDaysCount + '일)와 수면 부족이 동시에 관찰되므로, 오후 2시 이후 카페인 음료를 무카페인으로 대체하고 매일 취침 시각을 30분 앞당기는 두 가지 목표를 동시에 실천하도록 권고합니다.';
   } else if (overDaysCount > 0) {
     improve3 = '카페인 음료 구매 전 반드시 라벨의 카페인 함량을 확인하는 습관을 최우선 실천 목표로 삼고, 특히 오후 시간대 고카페인 음료 섭취를 자제하도록 권고합니다.';
-  } else if (avgSleep < fbSlpSevere) {
+  } else if (sleepDays > 0 && avgSleep < fbSlpSevere) {
     improve3 = '수면이 매우 부족한 위험 수준이므로, 오늘부터 취침 시각을 1시간 앞당기는 것을 최우선 실천 목표로 삼고 수면 일지를 작성하여 생활 패턴을 점검하도록 강력히 권고합니다.';
-  } else if (avgSleep < fbSlpWarn) {
+  } else if (sleepDays > 0 && avgSleep < fbSlpWarn) {
     improve3 = '평소 취침 시각보다 20~30분 일찍 잠자리에 드는 것을 첫 번째 실천 목표로 삼고, 취침 전 전자기기 사용 시간을 단계적으로 줄여나가도록 권고합니다.';
   } else if (avgSleep >= fbSlpMax) {
     improve3 = '목표 기상 시각을 정하여 알람을 설정하고 일정한 시각에 기상하는 것을 첫 번째 실천 목표로 삼으며, 낮잠을 줄여 야간 수면의 질을 높이도록 권고합니다.';
@@ -4140,34 +4088,8 @@ function getTeacherFallbackAnalysis(avgCaffeine, avgSleep, limit, cafDays, sleep
   // ── 종합 소견 (상태별 맞춤 메시지) ─────────────────────
   let summary = '조회 기간(' + header + ') 동안 카페인 ' + cafDays + '일, 수면 ' + sleepDays + '일의 건강 데이터가 기록되었습니다. ';
 
-  const cafBad   = overDaysCount > 0 || avgCaffeine > limit;
-  const sleepBad = avgSleep < fbSlpWarn || avgSleep > fbSlpGood;
-
-  if (cafBad && sleepBad) {
-    const cafDesc = overDaysCount > 0
-      ? '카페인 권장량 초과가 ' + overDaysCount + '일 관찰'
-      : '카페인 일평균이 권장량(' + limit + 'mg) 초과';
-    const sleepDesc = avgSleep < fbSlpSevere ? '심각한 수면 부족(평균 ' + avgSleep.toFixed(1) + '시간)'
-      : avgSleep < fbSlpWarn ? '수면 부족(평균 ' + avgSleep.toFixed(1) + '시간)'
-      : avgSleep > 12        ? '과도한 수면(평균 ' + avgSleep.toFixed(1) + '시간)'
-      : '수면 과다(평균 ' + avgSleep.toFixed(1) + '시간)';
-    summary += cafDesc + ' 및 ' + sleepDesc + '가 동시에 확인되어 복합적인 건강 관리 지도가 필요합니다.';
-  } else if (cafBad) {
-    if (overDaysCount > 0) {
-      summary += '카페인 일평균은 권장 기준 이내이나, ' + overDaysCount + '일에 걸쳐 일일 권장량(' + limit + 'mg)을 초과하는 섭취가 관찰되었으므로 지속적인 주의 및 관리가 요구됩니다.';
-    } else {
-      summary += '카페인 일평균이 권장량(' + limit + 'mg)을 초과하여 섭취량 조절 지도가 필요합니다. 수면은 권장 범위 내에서 유지되고 있습니다.';
-    }
-  } else if (sleepBad) {
-    const sleepDesc = avgSleep < fbSlpSevere ? '심각한 수면 부족(평균 ' + avgSleep.toFixed(1) + '시간, ' + fbAgeLabel + ' 권장 최소 ' + fbSlpWarn + '시간 대비 ' + (fbSlpWarn-avgSleep).toFixed(1) + '시간 부족)'
-      : avgSleep < fbSlpWarn ? '수면 부족(평균 ' + avgSleep.toFixed(1) + '시간, 권장 ' + fbSlpWarn + '시간 미달)'
-      : avgSleep > 12        ? '과도한 수면(평균 ' + avgSleep.toFixed(1) + '시간, 권장 상한 ' + fbSlpGood + '시간 초과)'
-      : '수면 과다(평균 ' + avgSleep.toFixed(1) + '시간, 권장 ' + fbSlpGood + '시간 초과)';
-    summary += sleepDesc + '가 확인됩니다. 카페인 섭취는 권장 기준 이내로 양호하게 유지되고 있으나 수면 패턴 개선이 필요합니다.';
-  } else {
-    const cafPct = Math.round(avgCaffeine / limit * 100);
-    summary += '카페인 일평균 ' + Math.round(avgCaffeine) + 'mg(권장량의 ' + cafPct + '%)과 수면 평균 ' + avgSleep.toFixed(1) + '시간이 모두 ' + fbAgeLabel + ' 권장 기준 내에서 양호하게 유지되고 있습니다.';
-  }
+  summary += '카페인 상태는 ' + caffeineSummary.status + '입니다. ';
+  summary += sleepDays ? '수면 평균은 ' + avgSleep.toFixed(1) + '시간입니다.' : '수면은 미기록으로 판정을 보류합니다.';
 
   const lifeStr = lifeAdvice || '생활 패턴 데이터가 충분히 기록되지 않아 상세 분석이 어렵습니다.';
 
