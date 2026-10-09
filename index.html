@@ -2265,7 +2265,7 @@
           .withSuccessHandler(res => {
             if (!isCurrent()) { resolve(false); return; }
             updateDashboard(res, endDateStr);
-            if (rangeText) rangeText.textContent = `${period} 데이터 표시 중`;
+            if (rangeText) rangeText.textContent = `${period} ${res?.localStats ? '기기 저장본 표시 중' : '데이터 표시 중'}`;
             resolve(true);
           })
           .withFailureHandler(() => {

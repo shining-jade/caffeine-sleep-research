@@ -1,7 +1,48 @@
-import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import test from 'node:test';
+import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import test from 'node:test';import {webcrypto,createHash} from 'node:crypto';
 const code=fs.readFileSync('public/js/student-sync.js','utf8');
-function setup(send){const c=vm.createContext({window:{},crypto:{randomUUID:()=>String(++seq)},structuredClone,Date,JSON,setTimeout:()=>0,clearTimeout(){}});let seq=0;vm.runInContext(code,c);const rows=new Map();const store={put:async r=>rows.set(r.mutationId,structuredClone(r)),list:async owner=>[...rows.values()].filter(r=>r.owner===owner),lease:async()=>true,release:async()=>{},snapshot:async()=>null};const sync=c.window.StudentSync.create({store,send});sync.setSubject({studentId:'2101',name:'합성'});return {sync,rows};}
+function setup(send){const c=vm.createContext({window:{},crypto:{randomUUID:()=>String(++seq),subtle:webcrypto.subtle},TextEncoder,structuredClone,Date,JSON,setTimeout:()=>0,clearTimeout(){}});let seq=0;vm.runInContext(code,c);const rows=new Map();const store={put:async r=>rows.set(r.mutationId,structuredClone(r)),list:async owner=>[...rows.values()].filter(r=>r.owner===owner),lease:async()=>true,release:async()=>{},snapshot:async()=>null};const sync=c.window.StudentSync.create({store,send});sync.setSubject({studentId:'2101',name:'합성'});return {sync,rows};}
 const payload={drink:'합성',mg:0,time:'2026-10-08 12:00:00'};
+
+test('lost save acknowledgment does not duplicate a matching mutation in refreshed history or offline totals',async()=>{
+ const x=setup(async()=>{throw Object.assign(new Error('lost acknowledgment'),{code:'NETWORK_ERROR'});}),snapshots=new Map();
+ x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};
+ await x.sync.capture('getCaffeineLogs',[]);await x.sync.capture('getFilteredStats',{todayTotal:0},['2101','2026-10-09']);
+ const pending=await x.sync.enqueue('saveCaffeineData',{...payload,mg:25,time:'2026-10-09T13:00'});await x.sync.flush();
+ const gas=vm.createContext({Utilities:{DigestAlgorithm:{SHA_256:'sha'},Charset:{UTF_8:'utf8'},computeDigest:(_,value)=>Array.from(createHash('sha256').update(value).digest())}});
+ vm.runInContext(fs.readFileSync('apps-script/Sync.gs','utf8'),gas);
+ const expectedId='sync_'+gas.syncHash_(['2101','합성','saveCaffeineData',pending.mutationId]);
+ // A separate, identical drink remains a distinct entry; only the mutation ID identifies the retry.
+ await x.sync.capture('getCaffeineLogs',[{id:expectedId,name:'합성',amount:25,time:'2026-10-09T13:00'},{id:'another',name:'합성',amount:25,time:'2026-10-09T13:00'}]);
+ assert.equal((await x.sync.read('getCaffeineLogs')).length,2);
+ assert.equal((await x.sync.read('getFilteredStats',undefined,['2101','2026-10-09'])).todayTotal,50);
+ assert.equal([...x.rows.values()][0].state,'pending');
+});
+
+test('offline statistics follow pending and confirmed record changes instead of older totals',async()=>{
+ const x=setup(async()=>{throw Object.assign(new Error('offline'),{code:'NETWORK_ERROR'});}),snapshots=new Map();
+ x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};
+ await x.sync.capture('getCaffeineLogs',[{id:'a',amount:50,time:'2026-10-09T12:00'}]);
+ await x.sync.capture('getSleepLogs',[{id:'s',date:'2026-10-09',hours:8}]);
+ const params=['2101','2026-10-09'];
+ await x.sync.capture('getFilteredStats',{todayTotal:50,labels:['10/03','10/04','10/05','10/06','10/07','10/08','10/09'],caffeineData:[0,0,0,0,0,0,50],sleepData:[0,0,0,0,0,0,8]},params);
+ await x.sync.enqueue('saveCaffeineData',{...payload,mg:25,time:'2026-10-09T13:00'});await x.sync.flush();
+ let stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,75);assert.equal(stats.caffeineData.at(-1),75);
+ await x.sync.confirmRecordMutation('deleteCaffeineData',['a']);await x.sync.confirmRecordMutation('deleteSleepData',['s']);
+ stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,25);assert.equal(stats.sleepData.at(-1),0);
+ const pending=[...x.rows.values()][0];pending.attempts=0;pending.state='pending';await x.sync.store.put(pending);await x.sync.cancelPending(pending.mutationId);
+ stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,0);assert.equal(stats.caffeineHasData.at(-1),false);
+});
+
+test('fresh server statistics are not replaced with older local histories while a record is pending',async()=>{
+ const x=setup(async()=>{throw Object.assign(new Error('offline'),{code:'NETWORK_ERROR'});}),snapshots=new Map();
+ x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};
+ await x.sync.capture('getCaffeineLogs',[{id:'zero',amount:0,time:'2025-12-31T12:00'}]);await x.sync.capture('getSleepLogs',[]);
+ const params=['2101','2026-01-01'],server={todayTotal:0,labels:['12/26','12/27','12/28','12/29','12/30','12/31','01/01'],caffeineData:[0,0,0,0,0,0,0]};
+ await x.sync.enqueue('saveCaffeineData',{...payload,mg:25,time:'2026-01-01T12:00'});await x.sync.flush();
+ const fresh=await x.sync.capture('getFilteredStats',{...server,todayTotal:100},params);assert.equal(fresh.todayTotal,100);
+ const stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,25);assert.equal(stats.caffeineHasData[5],true);assert.equal(stats.caffeineData[5],0);
+ x.rows.clear();assert.equal((await x.sync.capture('getFilteredStats',{...server,todayTotal:123},params)).todayTotal,123);
+});
 
 test('concurrent confirmations cannot resurrect records through stale snapshot writes',async()=>{
  const x=setup(async()=>{}),snapshots=new Map();
