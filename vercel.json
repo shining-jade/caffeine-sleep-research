@@ -13,7 +13,6 @@
     }
   },
   "crons": [
-    { "path": "/api/reminders/run?scheduledTest=20261010-sleep-06", "schedule": "0 21 * * *" },
     { "path": "/api/reminders/run?slot=00", "schedule": "0 0 * * *" },
     { "path": "/api/reminders/run?slot=01", "schedule": "0 1 * * *" },
     { "path": "/api/reminders/run?slot=02", "schedule": "0 2 * * *" },

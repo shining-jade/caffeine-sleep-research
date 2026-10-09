@@ -336,3 +336,54 @@ test('teacher primary read retries transient upstream failure once without retry
  const result=await callGas({role:'teacher',action:'getTeacherData',params:[],fetchImpl});assert.equal(result.success,true);assert.equal(calls,2);
  calls=0;await assert.rejects(callGas({role:'teacher',action:'updateTeacherHiddenStudents',params:[['2410'],true],fetchImpl:async()=>{calls++;return new Response('temporary',{status:502})}}));assert.equal(calls,1);
 });
+
+test('scheduler snapshot gets a fresh response once after persistent generated output 404', async () => {
+  let executions = 0, reads = 0;
+  const result = await callGas({ role: 'scheduler', action: 'getReminderDispatchSnapshot',
+    params: ['sleep', '2026-10-09T21:36:13Z'], onDiagnostic() {},
+    fetchImpl: async (_url, options) => {
+      if (options.method === 'POST') {
+        executions++;
+        return new Response(null, { status: 302, headers: { Location: `https://script.googleusercontent.com/macros/echo?key=output-${executions}` } });
+      }
+      reads++;
+      return executions === 1 ? new Response('missing', { status: 404 })
+        : new Response(JSON.stringify({ success: true, data: { completedStudentIds: ['0'] } }));
+    },
+  });
+  assert.deepEqual(result.completedStudentIds, ['0']);
+  assert.equal(executions, 2); assert.equal(reads, 3);
+});
+
+test('scheduler snapshot retries are bounded and never replay claim or delivery writes or a wrong role', async () => {
+  for (const [role, action, expected] of [
+    ['scheduler', 'getReminderDispatchSnapshot', 2],
+    ['student', 'getReminderDispatchSnapshot', 1],
+    ['scheduler', 'claimReminderDeliveries', 1],
+    ['scheduler', 'recordReminderDeliveryResults', 1],
+  ]) {
+    let executions = 0;
+    await assert.rejects(callGas({ role, action, params: [], onDiagnostic() {},
+      fetchImpl: async (_url, options) => {
+        if (options.method === 'POST') executions++;
+        return new Response('unavailable', { status: 503 });
+      },
+    }), e => e.code === 'GAS_UNAVAILABLE');
+    assert.equal(executions, expected);
+  }
+});
+
+test('scheduler snapshot timeout recovery remains inside one total deadline', async () => {
+  let executions = 0;
+  const started = Date.now();
+  await assert.rejects(callGas({ role: 'scheduler', action: 'getReminderDispatchSnapshot', params: [],
+    timeoutMs: 30, onDiagnostic() {}, fetchImpl: async (_url, { signal }) => {
+      executions++;
+      if (executions === 1) throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+      return new Promise((_resolve, reject) => signal.addEventListener('abort', () =>
+        reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true }));
+    },
+  }), e => e.code === 'GAS_TIMEOUT');
+  assert.equal(executions, 2);
+  assert.ok(Date.now() - started < 500);
+});
