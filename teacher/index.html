@@ -5306,6 +5306,7 @@ function loadSentMessages() {
             }
             // 선택 상태 초기화
             window._sentMsgSelected = new Set();
+            window._sentMsgTargets = new Map(res.data.map(m => [m.rowIndex, { rowIndex: m.rowIndex, messageKey: m.messageKey, title: m.title }]));
             const renderBatchBar = () => {
                 const bar = document.getElementById('sentMsgBatchBar');
                 const cnt = window._sentMsgSelected.size;
@@ -5323,17 +5324,7 @@ function loadSentMessages() {
             const toolbar = `
               <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 4px;">
                 <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#6b7280;user-select:none;">
-                  <input type="checkbox" id="sentMsgSelectAll" style="width:15px;height:15px;cursor:pointer;accent-color:#6366f1;"
-                    onchange="(() => {
-                      const checked = this.checked;
-                      document.querySelectorAll('.sent-msg-cb').forEach(cb => {
-                        cb.checked = checked;
-                        const ri = parseInt(cb.dataset.rowindex);
-                        if (checked) window._sentMsgSelected.add(ri);
-                        else window._sentMsgSelected.delete(ri);
-                      });
-                      renderBatchBar();
-                    })()">
+                  <input type="checkbox" id="sentMsgSelectAll" style="width:15px;height:15px;cursor:pointer;accent-color:#6366f1;">
                   전체 선택
                 </label>
                 <div id="sentMsgBatchBar" style="display:none;align-items:center;gap:8px;margin-left:auto;">
@@ -5362,16 +5353,9 @@ function loadSentMessages() {
                            <div style="font-size:10px;color:#93c5fd;margin-top:4px;">${formatMsgDate(m.studentReplyTime)}</div>
                        </div>`
                     : '';
-                const safeTitle = m.title.replace(/'/g,"\\'").replace(/"/g,'&quot;');
                 return `<div style="border:1px solid ${hasNewReply ? '#fca5a5' : '#e5e7eb'};border-radius:10px;padding:14px 16px;margin-bottom:10px;${hasNewReply ? 'background:#fff5f5;' : ''}display:flex;gap:10px;align-items:flex-start;">
                     <input type="checkbox" class="sent-msg-cb" data-rowindex="${m.rowIndex}"
-                        style="margin-top:3px;width:15px;height:15px;cursor:pointer;accent-color:#6366f1;flex-shrink:0;"
-                        onchange="(()=>{
-                          const ri=${m.rowIndex};
-                          if(this.checked) window._sentMsgSelected.add(ri);
-                          else window._sentMsgSelected.delete(ri);
-                          renderBatchBar();
-                        })()">
+                        style="margin-top:3px;width:15px;height:15px;cursor:pointer;accent-color:#6366f1;flex-shrink:0;">
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
                             <div>
@@ -5381,7 +5365,7 @@ function loadSentMessages() {
                             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
                                 ${replyBadge}
                                 ${readBadge}
-                                <button onclick="confirmDeleteSentMsg(${m.rowIndex},'${safeTitle}')"
+                                <button class="sent-msg-delete" data-rowindex="${m.rowIndex}"
                                     style="background:none;border:none;cursor:pointer;color:#d1d5db;font-size:16px;padding:2px 4px;line-height:1;transition:color .15s;"
                                     onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#d1d5db'" title="삭제">🗑️</button>
                             </div>
@@ -5392,27 +5376,54 @@ function loadSentMessages() {
                     </div>
                 </div>`;
             }).join('');
+            list.querySelectorAll('.sent-msg-cb').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const rowIndex = Number(cb.dataset.rowindex);
+                    if (cb.checked) window._sentMsgSelected.add(rowIndex);
+                    else window._sentMsgSelected.delete(rowIndex);
+                    renderBatchBar();
+                });
+            });
+            const allCheckbox = document.getElementById('sentMsgSelectAll');
+            allCheckbox.addEventListener('change', () => {
+                const checked = allCheckbox.checked;
+                list.querySelectorAll('.sent-msg-cb').forEach(cb => {
+                    cb.checked = checked;
+                    const rowIndex = Number(cb.dataset.rowindex);
+                    if (checked) window._sentMsgSelected.add(rowIndex);
+                    else window._sentMsgSelected.delete(rowIndex);
+                });
+                renderBatchBar();
+            });
+            list.querySelectorAll('.sent-msg-delete').forEach(btn => {
+                const target = window._sentMsgTargets.get(Number(btn.dataset.rowindex));
+                btn.addEventListener('click', () => { if (target) confirmDeleteSentMsg(target.rowIndex, target.title, target.messageKey); });
+            });
         })
         .withFailureHandler(() => { ReadFeedback.fail(list, loadSentMessages); })
         .getSentTeacherMessages();
 }
 
-function confirmDeleteSentMsg(rowIndex, title) {
+function confirmDeleteSentMsg(rowIndex, title, messageKey) {
     // confirm() 대신 커스텀 모달 사용 (GAS 웹앱 환경에서 confirm 신뢰성 문제 방지)
-    showTeacherModal('🗑️', '메시지 삭제', `"${title}"<br>메시지를 삭제하시겠습니까?`, 'confirm', () => {
+    showTeacherModal('🗑️', '메시지 삭제', `"${escapeHtml(title)}"<br>메시지를 삭제하시겠습니까?`, 'confirm', () => {
         google.script.run
             .withSuccessHandler(res => {
                 if (res && res.success) { loadSentMessages(); }
-                else { showTeacherModal('❌', '삭제 실패', (res && res.error) || '알 수 없는 오류', 'error'); }
+                else { if (res && res.code === 'MESSAGE_TARGET_CHANGED') loadSentMessages(); showTeacherModal('❌', '삭제 실패', (res && res.error) || '알 수 없는 오류', 'error'); }
             })
             .withFailureHandler(() => showTeacherModal('❌', '오류', 'GAS 연결 실패', 'error'))
-            .deleteTeacherMessage(rowIndex);
+            .deleteTeacherMessage(rowIndex, messageKey);
     });
 }
 
 function confirmBulkDeleteSentMsg() {
     const selected = [...(window._sentMsgSelected || [])];
     if (selected.length === 0) return;
+    const targets = selected.map(rowIndex => ({ ...window._sentMsgTargets?.get(rowIndex) }));
+    if (targets.some(target => !Number.isInteger(target.rowIndex) || !/^[a-f0-9]{64}$/.test(target.messageKey || ''))) {
+        loadSentMessages(); showTeacherModal('⚠️', '목록 확인 필요', '메시지 목록을 새로고침한 뒤 다시 선택하세요.', 'warn'); return;
+    }
     showTeacherModal('🗑️', '선택 메시지 삭제', `선택한 <strong>${selected.length}개</strong>의 메시지를 삭제하시겠습니까?`, 'confirm', () => {
         google.script.run
             .withSuccessHandler(res => {
@@ -5420,11 +5431,12 @@ function confirmBulkDeleteSentMsg() {
                     window._sentMsgSelected = new Set();
                     loadSentMessages();
                 } else {
+                    if (res && res.code === 'MESSAGE_TARGET_CHANGED') loadSentMessages();
                     showTeacherModal('❌', '삭제 실패', (res && res.error) || '알 수 없는 오류', 'error');
                 }
             })
             .withFailureHandler(() => showTeacherModal('❌', '오류', 'GAS 연결 실패', 'error'))
-            .deleteBulkTeacherMessages(selected);
+            .deleteBulkTeacherMessages(targets);
     });
 }
 
@@ -5554,7 +5566,17 @@ function showStudentReplyPopup(replies) {
     document.body.appendChild(overlay);
 
     document.getElementById('studentReplyPopupClose').onclick = () => {
-        replies.forEach(r => google.script.run.markStudentReplyRead(r.rowIndex));
+        let warned = false;
+        const reportFailure = () => {
+            if (warned) return;
+            warned = true;
+            loadSentMessages();
+            showTeacherModal('⚠️', '답장 확인 필요', '답장이 변경되었거나 확인 상태를 저장하지 못했습니다. 새로고침한 메시지 목록에서 다시 확인하세요.', 'warn');
+        };
+        replies.forEach(r => google.script.run
+            .withSuccessHandler(res => { if (!res || res.success !== true) reportFailure(); })
+            .withFailureHandler(reportFailure)
+            .markStudentReplyRead(r.rowIndex, r.messageKey, r.replyKey));
         overlay.remove();
         loadSentMessages();
     };

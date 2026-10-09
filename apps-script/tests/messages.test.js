@@ -18,6 +18,7 @@ async function setup({ legacy = false, englishHeaders = false, nativeTable = fal
     getDataRange() { return { getValues: () => rows.map(row => [...row]) }; },
     getRange(row, column, height = 1, width = 1) {
       return {
+        getValue: () => rows[row - 1]?.[column - 1] ?? '',
         getValues: () => Array.from({ length: height }, (_, i) => Array.from({ length: width }, (_, j) => rows[row + i - 1]?.[column + j - 1] ?? '')),
         setValue(value) { rows[row - 1][column - 1] = value; },
         setValues(values) { values.forEach((valuesRow, i) => valuesRow.forEach((value, j) => {
@@ -52,12 +53,12 @@ async function setup({ legacy = false, englishHeaders = false, nativeTable = fal
         rows.push(append.rows[0].values.map(cell => cell.userEnteredValue ? Object.values(cell.userEnteredValue)[0] : ''));
       } } },
       getSpreadsheet_: () => spreadsheet,
-      Utilities: { getUuid: () => 'synthetic-record', formatDate: () => '2026-10-08 12:00:00', newBlob: () => blob },
       MimeType: { PDF: 'application/pdf' },
       DriveApp: { createFile: () => file, Access: { ANYONE_WITH_LINK: 'link' }, Permission: { VIEW: 'view' } },
     },
   });
   context.getSpreadsheet_ = () => spreadsheet;
+  Object.assign(context.Utilities, { getUuid: () => 'synthetic-record', formatDate: () => '2026-10-08 12:00:00', newBlob: () => blob });
   return { context, rows, requests };
 }
 
@@ -81,8 +82,9 @@ test('message attachments survive teacher send and student/teacher retrieval', a
 test('a student can acknowledge and reply to their message in the attachment sheet format', async () => {
   const { context, rows } = await setup({ englishHeaders: true });
   context.sendTeacherMessage({ studentId: '1101', studentName: '합성학생', title: '메시지', content: '본문' });
-  assert.equal(context.dispatchStudentAction_('markTeacherMessageRead', [2], subject).success, true);
-  assert.equal(context.dispatchStudentAction_('replyToTeacherMessage', [2, '합성 답장'], subject).success, true);
+  const messageKey = context.getTeacherMessages('1101').data[0].messageKey;
+  assert.equal(context.dispatchStudentAction_('markTeacherMessageRead', [2, messageKey], subject).success, true);
+  assert.equal(context.dispatchStudentAction_('replyToTeacherMessage', [2, '합성 답장', messageKey], subject).success, true);
   assert.equal(rows[1][5], '읽음');
   assert.equal(rows[1][7], '합성 답장');
 });
@@ -91,8 +93,9 @@ test('attachment sheet headers never allow a different student to acknowledge or
   const { context, rows } = await setup({ englishHeaders: true });
   context.sendTeacherMessage({ studentId: '1101', studentName: '합성학생', title: '메시지', content: '본문' });
   const otherStudent = { studentId: '1102', name: '합성학생둘' };
-  assert.throws(() => context.dispatchStudentAction_('markTeacherMessageRead', [2], otherStudent), /REQUEST_REJECTED/);
-  assert.throws(() => context.dispatchStudentAction_('replyToTeacherMessage', [2, '다른 학생'], otherStudent), /REQUEST_REJECTED/);
+  const messageKey = context.getTeacherMessages('1101').data[0].messageKey;
+  assert.throws(() => context.dispatchStudentAction_('markTeacherMessageRead', [2, messageKey], otherStudent), /REQUEST_REJECTED/);
+  assert.throws(() => context.dispatchStudentAction_('replyToTeacherMessage', [2, '다른 학생', messageKey], otherStudent), /REQUEST_REJECTED/);
   assert.equal(rows[1][5], '미읽음');
   assert.equal(rows[1][7], '');
 });
