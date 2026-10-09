@@ -3323,25 +3323,59 @@ function setGeminiAPIKey() {
     return;
   }
   safeLog_("✅ Gemini API 키가 설정되어 있습니다!");
-  safeLog_("확인된 키: " + apiKey.substring(0, 10) + "...");
-  safeLog_("모델: Gemini 2.5 Flash");
+  safeLog_("실제 연결 확인은 checkGeminiAPIKey()를 실행하세요.");
 }
 
 /**
- * 현재 설정된 API 키 확인
+ * 편집기 전용 연결 시험. 학생 기록을 읽거나 전송하지 않고 요청 1회만 실행합니다.
+ * 키/원문 오류/응답 내용은 기록하지 않습니다. 웹 API에 공개하지 마세요.
  */
 function checkGeminiAPIKey() {
-  const apiKey = PropertiesService.getScriptProperties()
-    .getProperty("GEMINI_API_KEY");
-
+  const apiKey = String(PropertiesService.getScriptProperties()
+    .getProperty("GEMINI_API_KEY") || "").trim();
+  const model = "gemini-3.5-flash-lite";
+  const result = { configured: !!apiKey, success: false, model: model, httpStatus: null, code: "NO_API_KEY" };
   if (apiKey) {
-    safeLog_("✅ API 키가 설정되어 있습니다");
-    safeLog_("키 앞부분: " + apiKey.substring(0, 15) + "...");
-    safeLog_("키 길이: " + apiKey.length + " 문자");
-  } else {
-    safeLog_("❌ API 키가 설정되지 않았습니다");
-    safeLog_("setGeminiAPIKey() 함수를 먼저 실행하세요");
+    try {
+      const response = UrlFetchApp.fetch(
+        "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent",
+        {
+          method: "post", contentType: "application/json", muteHttpExceptions: true,
+          headers: { "x-goog-api-key": apiKey },
+          payload: JSON.stringify({
+            contents: [{ parts: [{ text: "Reply with exactly CONNECTION_OK." }] }],
+            generationConfig: { maxOutputTokens: 1024 }
+          })
+        }
+      );
+      result.httpStatus = response.getResponseCode();
+      if (result.httpStatus !== 200) {
+        const codes = { 400: "INVALID_REQUEST_OR_KEY", 401: "UNAUTHORIZED", 403: "FORBIDDEN", 404: "MODEL_NOT_FOUND", 429: "QUOTA_EXCEEDED" };
+        result.code = codes[result.httpStatus] || "HTTP_ERROR";
+      } else {
+        result.code = "INVALID_RESPONSE";
+        try {
+          const data = JSON.parse(response.getContentText());
+          const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+          const answer = Array.isArray(parts) ? parts.filter(function(part) { return !part.thought && typeof part.text === "string"; }).map(function(part) { return part.text; }).join("").trim() : "";
+          if (answer === "CONNECTION_OK") {
+            result.success = true;
+            result.code = "CONNECTION_OK";
+          }
+        } catch (ignored) { /* 원문 응답을 로그에 남기지 않습니다. */ }
+      }
+    } catch (error) {
+      result.code = "TRANSPORT_ERROR";
+      const message = String(error && error.message || "");
+      if (/permission|authorization|권한|승인/i.test(message)) result.code = "URL_FETCH_PERMISSION_DENIED";
+      else if (/header|헤더/i.test(message)) result.code = "INVALID_REQUEST_HEADER";
+      else if (/DNS/i.test(message)) result.code = "DNS_ERROR";
+      else if (/too many times|quota|할당량/i.test(message)) result.code = "URL_FETCH_QUOTA_EXCEEDED";
+    }
   }
+  // 고정된 진단 필드만 출력하며 학생/키/제공자 원문은 포함하지 않습니다.
+  console.info(JSON.stringify(result));
+  return result;
 }
 
 /**
