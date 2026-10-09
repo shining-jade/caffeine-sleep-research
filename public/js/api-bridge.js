@@ -23,6 +23,9 @@
     setInterval(function() { if (!document.hidden) sync.flush(); }, 15000);
   }
   var readRevision = 0;
+  var liveNotificationReads = new Set([
+    'getMyInquiries', 'getTeacherMessages', 'getTeacherAwardsForStudent', 'getReminderStudentConfig',
+  ]);
   var sharedReads = new Set([
     'getStudentBootstrap', 'getWeightData', 'getStats', 'getFilteredStats', 'getCaffeineLogs', 'getSleepLogs',
     'getMyInquiries', 'getTeacherMessages', 'getTeacherAwardsForStudent',
@@ -158,11 +161,14 @@
         }
         throw error;
       }
-      var retryableRead = role === 'student' && ['getStudentBootstrap', 'getStats', 'getFilteredStats', 'getCaffeineLogs', 'getSleepLogs'].includes(action);
-      if (!retryableRead || !['GAS_UNAVAILABLE', 'NETWORK_ERROR'].includes(error.code) || generation !== sessionGeneration) throw error;
+      var retryableRead = (role === 'student'
+        ? ['getStudentBootstrap', 'getStats', 'getFilteredStats', 'getCaffeineLogs', 'getSleepLogs',
+           'getMyInquiries', 'getTeacherMessages', 'getTeacherAwardsForStudent', 'getReminderStudentConfig']
+        : ['getInquiries', 'getSentTeacherMessages', 'getUnreadInquiries']).includes(action);
+      if (!retryableRead || !['GAS_UNAVAILABLE', 'GAS_TIMEOUT', 'NETWORK_ERROR'].includes(error.code) || generation !== sessionGeneration) throw error;
       await new Promise(function(resolve) { setTimeout(resolve, 600); });
       if (generation !== sessionGeneration) throw publicError('STALE_SESSION', '로그인 정보가 변경되었습니다.', 409);
-      return requestJson('/api/' + role + '/action', requestOptions);
+      return role === 'teacher' ? scheduleTeacherRead(runRequest, action, generation) : runRequest();
     }).then(function(payload) {
       if (isRead && revision !== readRevision && generation === sessionGeneration) return callAction(action, params);
       if (role === 'student' && expectedSubject && generation === sessionGeneration
@@ -208,7 +214,8 @@
             ? sync.enqueue(action, params[0])
             : callAction(action, params).then(function(value) { return sync && action.startsWith('get') ? sync.capture(action, value) : value; })
               .catch(function(error) {
-                if (sync && action.startsWith('get') && ['NETWORK_ERROR','GAS_TIMEOUT','GAS_UNAVAILABLE'].includes(error.code)) return sync.read(action);
+                if (sync && action.startsWith('get') && !liveNotificationReads.has(action)
+                    && ['NETWORK_ERROR','GAS_TIMEOUT','GAS_UNAVAILABLE'].includes(error.code)) return sync.read(action);
                 throw error;
               });
           invocation

@@ -13,12 +13,14 @@ function response(body, status = 200) {
   };
 }
 
-function loadBridge({ role = 'student', fetchImpl }) {
+function loadBridge({ role = 'student', fetchImpl, withStudentSync = false }) {
   const warnings = [];
   const window = {};
   const context = {
     window,
-    document: { documentElement: { dataset: { appRole: role } } },
+    document: { documentElement: { dataset: { appRole: role } }, addEventListener(){} },
+    navigator: { onLine:true }, crypto:{randomUUID:()=> 'fixture-token'},
+    setInterval:()=>0,
     fetch: fetchImpl,
     console: { log() {}, error() {}, warn: (...args) => warnings.push(args) },
     Error,
@@ -28,9 +30,75 @@ function loadBridge({ role = 'student', fetchImpl }) {
     clearTimeout,
   };
   window.window = window;
+  window.addEventListener=()=>{};
+  window.dispatchEvent=()=>{};
+  context.CustomEvent=class {};
+  if(withStudentSync){
+    vm.runInNewContext(fs.readFileSync(new URL('../public/js/student-sync.js',import.meta.url),'utf8'),context);
+    const create=window.StudentSync.create,snapshots=new Map();
+    const store={list:async()=>[],snapshot:async(key,value)=>{
+      if(value===undefined)return snapshots.get(key);
+      snapshots.set(key,value);return value;
+    },lease:async()=>true,release:async()=>{}};
+    window.StudentSync.create=options=>create({...options,store});
+  }
   vm.runInNewContext(SOURCE, context, { filename: 'api-bridge.js' });
   return { window, warnings };
 }
+
+test('notification reads expose outage instead of claiming an old StudentSync cache is current',async()=>{
+  for(const action of ['getTeacherMessages','getMyInquiries','getTeacherAwardsForStudent']){
+    const subject={studentId:'0',name:'테스트'};let calls=0;
+    const data=action==='getTeacherAwardsForStudent'?{success:true,awards:[{name:'old'}]}:{success:true,data:[{title:'old'}]};
+    const {window}=loadBridge({withStudentSync:true,fetchImpl:async(url)=>{
+      if(url.endsWith('/login'))return response({success:true,...subject});
+      calls++;
+      return calls===1?response({success:true,data,subject}):response({success:false,error:'GAS_TIMEOUT'},504);
+    }});
+    await window.appAuth.loginStudent('0','테스트');
+    const invoke=()=>new Promise((resolve,reject)=>window.google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[action]('0'));
+    assert.equal((await invoke()).success,true);
+    await assert.rejects(invoke(),{code:'GAS_TIMEOUT'});
+    assert.equal(calls,3);
+    const cache=await window.studentSync.read(action);
+    assert.equal(cache.success,true,'failure still exposed even when old cache exists');
+  }
+});
+
+test('notification reads retry temporary transport failures once for both roles', async () => {
+  for (const [role, action] of [
+    ['student','getMyInquiries'], ['student','getTeacherMessages'],
+    ['student','getTeacherAwardsForStudent'], ['student','getReminderStudentConfig'],
+    ['teacher','getInquiries'], ['teacher','getSentTeacherMessages'], ['teacher','getUnreadInquiries'],
+  ]) {
+    let calls = 0;
+    const { window } = loadBridge({ role, fetchImpl: async () => {
+      calls++;
+      return calls === 1 ? response({ success:false, error:'GAS_TIMEOUT' },504)
+        : response({ success:true, data:{ success:true, data:[] } });
+    } });
+    const result = await new Promise((resolve,reject) => window.google.script.run
+      .withSuccessHandler(resolve).withFailureHandler(reject)[action]('0'));
+    assert.equal(calls,2,action);
+    assert.equal(result.success,true,action);
+  }
+});
+
+test('notification read retries are bounded and never replay writes or permission failures', async () => {
+  for (const [action,code,status,expected] of [
+    ['getTeacherMessages','GAS_UNAVAILABLE',503,2],
+    ['getTeacherMessages','DENIED',403,1],
+    ['getTeacherMessages','UNAUTHENTICATED',401,1],
+    ['sendInquiry','GAS_TIMEOUT',504,1], ['markTeacherMessageRead','NETWORK_ERROR',503,1],
+  ]) {
+    let calls=0;
+    const { window } = loadBridge({ fetchImpl: async () => {
+      calls++; return response({ success:false, error:code },status);
+    } });
+    await new Promise(resolve => window.google.script.run.withFailureHandler(resolve)[action]('0'));
+    assert.equal(calls,expected,action+code);
+  }
+});
 
 test('API bridge supports success and failure chaining', async () => {
   const { window } = loadBridge({
