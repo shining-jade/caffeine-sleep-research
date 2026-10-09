@@ -591,7 +591,7 @@
         </div>
     </div>
     <div class="pdf-stats">
-        <div class="pdf-stat"><div class="pdf-stat-label">일일 최대 섭취량</div><div class="pdf-stat-value" id="pdf_yestCaf">-</div></div>
+        <div class="pdf-stat"><div class="pdf-stat-label">목표 섭취량</div><div class="pdf-stat-value" id="pdf_yestCaf">-</div></div>
         <div class="pdf-stat"><div class="pdf-stat-label">목표 수면 취침/기상</div><div class="pdf-stat-value" id="pdf_yestSleep">-</div></div>
         <div class="pdf-stat"><div class="pdf-stat-label">기간 평균 카페인</div><div class="pdf-stat-value" id="pdf_avgCaf">-</div></div>
         <div class="pdf-stat"><div class="pdf-stat-label">기간 평균 수면</div><div class="pdf-stat-value" id="pdf_avgSleep">-</div></div>
@@ -1482,7 +1482,7 @@
                 <span style="color:#6b7280;font-size:16px;font-weight:500;margin-left:12px;" id="modalStudentId">-</span>
             </h2>
             <div class="modal-stats-row">
-                <div class="modal-stat"><span class="modal-stat-label">일일 최대 섭취량</span><span class="modal-stat-value" style="color:#ef4444;" id="modalYestCaffeine">-</span></div>
+                <div class="modal-stat"><span class="modal-stat-label">목표 섭취량</span><span class="modal-stat-value" style="color:#ef4444;" id="modalYestCaffeine">-</span></div>
                 <div class="modal-stat"><span class="modal-stat-label">목표 수면 취침/기상</span><span class="modal-stat-value" style="color:#3b82f6;" id="modalYestSleep">-</span></div>
                 <div class="modal-stat"><span class="modal-stat-label">기간 평균 카페인</span><span class="modal-stat-value" style="color:#6366f1;" id="modalAvgCaffeine">-</span></div>
                 <div class="modal-stat"><span class="modal-stat-label">기간 평균 수면</span><span class="modal-stat-value" style="color:#10b981;" id="modalAvgSleep">-</span></div>
@@ -3593,7 +3593,7 @@ function renderStudentGrid(students){
         else if(hasRec) cafDisplay=`<span style="color:#0d9488;font-weight:600;">카페인 섭취 안 함</span>`;
         else cafDisplay='<span style="color:#9ca3af;">미기록</span>';
         const sleepDisplay=as>0?`<span style="color:${sleepSt.color};font-weight:600;">${as.toFixed(1)}h</span> <span class="avg-note">${avgNote}</span>`:'<span style="color:#9ca3af;">미기록</span>';
-        const targetCafSubText=`<span class="avg-note">일일 최대 섭취량: ${targetCafText} · ${Math.round(lim)}mg 기준</span>`;
+        const targetCafSubText=`<span class="avg-note">목표 섭취량: ${targetCafText} · 일일 최대 섭취량: ${Math.round(lim)}mg</span>`;
         const targetSleepSubText=`<span class="avg-note">목표 취침/기상: ${targetSleepText}</span>`;
         const card=document.createElement('div');card.className='student-card';card.onclick=()=>openStudentModal(s.학번);
         const awardChipsHtml = renderAwardChips(s.학번, d7, filterDate, false);
@@ -3674,7 +3674,7 @@ function refreshModalData(){
     document.getElementById('modalAvgSleep').textContent=asl>0?asl.toFixed(1)+'h':'-';
     // 카페인 상태
     const cafSI=getCafStatusInfo(ac,lim,hasRecModal);
-    document.getElementById('modalCafBasis').textContent=`카페인 상태 · ${Math.round(lim)}mg 기준`;
+    document.getElementById('modalCafBasis').textContent=`카페인 상태 · 일일 최대 섭취량 ${Math.round(lim)}mg`;
     document.getElementById('modalCafStatus').innerHTML=`<span class="status-badge ${cafSI.cls}">${cafSI.text}</span>`;
     // 수면 상태
     const sleepSI=getSleepStatusInfo(asl);
@@ -3695,12 +3695,12 @@ function refreshModalData(){
         type:'bar',
         data:{labels,datasets:[
             {label:'카페인 (mg)',pointStyle:'rect',data:cafData,assessmentLimit:lim,backgroundColor:cafData.map((v,i)=>getCafBarColor(v,lim,hasCafRecordOnDates(currentStudentId,[dates[i]]))),borderWidth:0,borderRadius:5,yAxisID:'y'},
-            {label:targetCafLimit!==null?`일일 최대 섭취량 (${Math.round(targetCafLimit)}mg)`:'최대 섭취량 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.4)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,yAxisID:'y'},
+            {label:targetCafLimit!==null?`목표 섭취량 (${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.4)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,yAxisID:'y'},
             {label:'수면시간 (h)',pointStyle:'circle',data:sleepD,type:'line',borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.12)',borderWidth:3,fill:true,tension:0.4,pointRadius:5,pointBackgroundColor:sleepD.map(v=>v!==null?getSleepStatusInfo(v).color:'transparent'),yAxisID:'y2',spanGaps:true},
             ...(targetSleepHours?[{label:`목표수면 (${targetSleepHours}h)`,pointStyle:'circle',data:targetSleepLine,type:'line',borderColor:'rgba(59,130,246,0.7)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[])
         ]},
         options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
-            plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12,filter:item=>item.text!=='최대 섭취량 미설정'}},tooltip:{callbacks:{label:ctx=>{if(ctx.dataset.label.includes('일일 최대 섭취량'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0)return `카페인: ${ctx.raw}mg`;return ctx.raw!==null?`수면: ${ctx.raw}h`:'수면: 미기록';}}}},
+            plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12,filter:item=>item.text!=='목표 미설정'}},tooltip:{callbacks:{label:ctx=>{if(ctx.dataset.label.includes('목표 섭취량'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0)return `카페인: ${ctx.raw}mg`;return ctx.raw!==null?`수면: ${ctx.raw}h`:'수면: 미기록';}}}},
             scales:{y:{beginAtZero:true,position:'left',title:{display:true,text:'카페인 (mg)',color:'#6366f1'}},y2:{beginAtZero:true,position:'right',max:14,title:{display:true,text:'수면 (h)',color:'#10b981'},grid:{drawOnChartArea:false}}}}
     });
 
@@ -4490,7 +4490,7 @@ function exportStudentExcel(){
     const rows=[
         [`교사용 모니터링 다운로드 - 기간: ${rangeLabel}`],
         [],
-        ['학년','반','번호','이름','학번',`${d7.length}일평균카페인(mg)`,'카페인상태',`${d7.length}일평균수면(h)`,'수면상태','오늘카페인기록','오늘수면기록(기상일기준)','일일최대섭취량(mg)','목표취침','목표기상','자동뱃지','교사수여뱃지','교사수여코멘트']
+        ['학년','반','번호','이름','학번',`${d7.length}일평균카페인(mg)`,'카페인상태',`${d7.length}일평균수면(h)`,'수면상태','오늘카페인기록','오늘수면기록(기상일기준)','목표섭취량(mg)','목표취침','목표기상','자동뱃지','교사수여뱃지','교사수여코멘트']
     ];
 
     students.forEach(s=>{
@@ -4549,7 +4549,7 @@ function exportStudentToSheet(){
 
     // ─── 요약 시트 (학생당 1행, 뱃지현황 별도시트 없음) ───
     const summaryRows=[
-        ['학년','반','번호','이름','학번',`${d7.length}일평균카페인(mg)`,'카페인상태',`${d7.length}일평균수면(h)`,'수면상태','오늘카페인기록','오늘수면기록(기상일기준)','일일최대섭취량(mg)','목표취침','목표기상','자동뱃지수','교사수여뱃지수','자동뱃지목록','교사수여뱃지목록','교사수여코멘트']
+        ['학년','반','번호','이름','학번',`${d7.length}일평균카페인(mg)`,'카페인상태',`${d7.length}일평균수면(h)`,'수면상태','오늘카페인기록','오늘수면기록(기상일기준)','목표섭취량(mg)','목표취침','목표기상','자동뱃지수','교사수여뱃지수','자동뱃지목록','교사수여뱃지목록','교사수여코멘트']
     ];
 
     students.forEach(s=>{
@@ -4736,7 +4736,7 @@ function exportPDF(options){
     document.getElementById('pdf_avgSleep').textContent=asl>0?asl.toFixed(1)+'h':'-';
     const stInfo=getCafStatusInfo(ac,lim,hasRecPDF);
     document.getElementById('pdf_cafStatus').textContent=stInfo.text;
-    document.getElementById('pdf_cafBasis').textContent=`카페인 상태 · ${Math.round(lim)}mg 기준`;
+    document.getElementById('pdf_cafBasis').textContent=`카페인 상태 · 일일 최대 섭취량 ${Math.round(lim)}mg`;
     const slpInfo=getSleepStatusInfo(asl);
     document.getElementById('pdf_sleepStatus').textContent=slpInfo.text;
 
@@ -4823,11 +4823,11 @@ function exportPDF(options){
         type:'bar',
         data:{labels:dates.map(d=>d.substring(5)),datasets:[
             {label:'카페인(mg)',pointStyle:'rect',data:cafData,assessmentLimit:lim,backgroundColor:cafData.map((v,i)=>getCafBarColor(v,lim,hasCafRecordOnDates(currentStudentId,[dates[i]]))),borderWidth:0,borderRadius:4,yAxisID:'y'},
-            {label:targetCafLimit!==null?`일일 최대 섭취량(${Math.round(targetCafLimit)}mg)`:'최대 섭취량 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.5)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false,yAxisID:'y'},
+            {label:targetCafLimit!==null?`목표 섭취량(${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:limLine,type:'line',borderColor:'rgba(239,68,68,0.5)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[5,4],pointRadius:0,fill:false,yAxisID:'y'},
             {label:'수면(h)',pointStyle:'circle',data:sleepArr,type:'line',borderColor:'#10b981',backgroundColor:'rgba(16,185,129,0.12)',borderWidth:2,pointRadius:4,fill:false,yAxisID:'y2',spanGaps:true},
             ...(targetSleepHours?[{label:`목표수면(${targetSleepHours}h)`,pointStyle:'circle',data:targetSleepLine,type:'line',borderColor:'rgba(59,130,246,0.65)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[])
         ]},
-        options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:10,boxHeight:10,filter:item=>item.text!=='최대 섭취량 미설정'}}},scales:{y:{beginAtZero:true,position:'left'},y2:{beginAtZero:true,position:'right',max:14,grid:{drawOnChartArea:false}}}}
+        options:{responsive:true,maintainAspectRatio:false,animation:{duration:0},plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:10,boxHeight:10,filter:item=>item.text!=='목표 미설정'}}},scales:{y:{beginAtZero:true,position:'left'},y2:{beginAtZero:true,position:'right',max:14,grid:{drawOnChartArea:false}}}}
     });
 
     // 생활 패턴 차트 → 이미지 캡처 후 PDF 영역에 삽입
@@ -4927,7 +4927,7 @@ function buildStaticPdfDualChartHTML(){
     return `<div style="height:200px;position:relative;padding:4px 8px 26px 26px;box-sizing:border-box;background:white;">
         <div style="height:18px;text-align:center;font-size:9px;color:#6b7280;">
             <span style="display:inline-block;width:7px;height:7px;background:#ef4444;margin-right:3px;"></span>카페인(mg)
-            ${limValue>0?`<span style="display:inline-block;width:14px;border-top:2px dashed rgba(239,68,68,.55);margin:0 3px 2px 12px;"></span>일일 최대 섭취량(${Math.round(limValue)}mg)`:''}
+            ${limValue>0?`<span style="display:inline-block;width:14px;border-top:2px dashed rgba(239,68,68,.55);margin:0 3px 2px 12px;"></span>목표 섭취량(${Math.round(limValue)}mg)`:''}
             <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#10b981;margin:0 3px 0 12px;"></span>수면(h)
             ${targetSleep ? `<span style="display:inline-block;width:14px;border-top:2px dashed rgba(59,130,246,.65);margin:0 3px 2px 12px;"></span>목표수면(${targetSleep}h)` : ''}
         </div>
