@@ -4725,9 +4725,7 @@ function exportPDF(options){
     const dates=getModalDates();
     const lim=getLimit(currentStudentId);
 
-    const printPeriod=`분석 기간: ${dates[0]} ~ ${dates[dates.length-1]}`;
-    const printStudent=`${currentStudentId} ${s.이름}`;
-    const printTitle=`${printPeriod}        ${printStudent}`;
+    const printTitle=`${currentStudentId}_${s.이름}_${dates[0]}_${dates[dates.length-1]}`;
     const originalTitle=document.title;
     document.title=printTitle;
     document.getElementById('pdf_title').textContent=`${s.이름} 건강 기록`;
@@ -4875,7 +4873,7 @@ function exportPDF(options){
             if(typeof options.onReady === 'function') options.onReady(html, {
                 student: s,
                 dates,
-                fileName: `${currentStudentId}_${s.이름}_건강기록_${dates[0]}_${dates[dates.length-1]}.pdf`
+                fileName: `${printTitle}.pdf`
             });
             return;
         }
