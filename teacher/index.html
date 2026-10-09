@@ -1163,6 +1163,7 @@
                     rows="5" placeholder="응답 내용을 입력하세요..."
                     onfocus="this.style.borderColor='#6366f1'" onblur="this.style.borderColor='#e5e7eb'"></textarea>
                 <input type="hidden" id="replyRowIndex">
+                <input type="hidden" id="replyInquiryKey">
                 <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;flex-wrap:wrap;">
                     <button onclick="closeReplyModal()" class="btn" style="background:#f3f4f6;color:#374151;flex:1;justify-content:center;">취소</button>
                     <button onclick="submitReply()" class="btn btn-primary" style="flex:1;justify-content:center;">응답 제출</button>
@@ -5184,15 +5185,16 @@ function renderInquiries(type) {
                 </div>
             </div>
         `;
-        card.querySelector('.inquiry-reply-btn').addEventListener('click', () => openReplyModal(item.rowIndex, item.title, item.content));
-        card.querySelector('.inquiry-delete-btn').addEventListener('click', () => confirmDeleteInquiry(item.rowIndex, item.title));
+        card.querySelector('.inquiry-reply-btn').addEventListener('click', () => openReplyModal(item.rowIndex, item.title, item.content, item.inquiryKey));
+        card.querySelector('.inquiry-delete-btn').addEventListener('click', () => confirmDeleteInquiry(item.rowIndex, item.title, item.inquiryKey));
         list.appendChild(card);
     });
 }
 
-function openReplyModal(rowIndex, title, content) {
+function openReplyModal(rowIndex, title, content, inquiryKey) {
     if (document.querySelector('#replyModal .btn-primary')?.disabled) return;
     document.getElementById('replyRowIndex').value = rowIndex;
+    document.getElementById('replyInquiryKey').value = inquiryKey || '';
     document.getElementById('replyInquiryContent').innerHTML = '<strong>' + escapeHtml(title) + '</strong><br>' + escapeHtml(content);
     document.getElementById('replyContent').value = '';
     document.getElementById('replyModal').style.display = 'block';
@@ -5208,8 +5210,9 @@ function submitReply() {
     if (!btn || btn.disabled) return;
     const rowIndex = parseInt(document.getElementById('replyRowIndex').value);
     const reply = document.getElementById('replyContent').value.trim();
+    const inquiryKey = document.getElementById('replyInquiryKey').value;
     if (!reply) { showTeacherModal('⚠️', '입력 필요', '응답 내용을 입력하세요.', 'warn'); return; }
-    if (!Number.isInteger(rowIndex) || rowIndex < 2) { showTeacherModal('⚠️', '입력 필요', '응답할 문의를 다시 선택하세요.', 'warn'); return; }
+    if (!Number.isInteger(rowIndex) || rowIndex < 2 || !/^[a-f0-9]{64}$/.test(inquiryKey)) { loadInquiries(); showTeacherModal('⚠️', '목록 확인 필요', '문의 목록을 새로고침한 뒤 응답할 문의를 다시 선택하세요. 작성한 응답은 유지됩니다.', 'warn'); return; }
     btn.disabled = true; btn.textContent = '제출 중...';
     google.script.run
         .withSuccessHandler(res => {
@@ -5219,14 +5222,15 @@ function submitReply() {
                 loadInquiries();
                 showTeacherModal('✅', '응답 완료', '응답이 완료되었습니다.', 'success');
             } else {
+                if (res && res.code === 'INQUIRY_TARGET_CHANGED') loadInquiries();
                 showTeacherModal('❌', '응답 실패', (res && res.error) || '알 수 없는 오류가 발생했습니다.', 'error');
             }
         })
         .withFailureHandler(err => { btn.disabled = false; btn.textContent = '응답 제출'; showTeacherModal('❌', '오류', '응답 제출에 실패했습니다.', 'error'); })
-        .replyToInquiry(rowIndex, reply);
+        .replyToInquiry(rowIndex, reply, inquiryKey);
 }
 
-function confirmDeleteInquiry(rowIndex, title) {
+function confirmDeleteInquiry(rowIndex, title, inquiryKey) {
     if (!confirm(`"${title}" 문의를 삭제하시겠습니까?\n삭제한 문의는 복구할 수 없습니다.`)) return;
     google.script.run
         .withSuccessHandler(res => {
@@ -5234,11 +5238,12 @@ function confirmDeleteInquiry(rowIndex, title) {
                 loadInquiries();
                 showTeacherModal('✅', '삭제 완료', '문의가 삭제되었습니다.', 'success');
             } else {
+                if (res && res.code === 'INQUIRY_TARGET_CHANGED') loadInquiries();
                 showTeacherModal('❌', '삭제 실패', (res && res.error) || '알 수 없는 오류', 'error');
             }
         })
         .withFailureHandler(() => showTeacherModal('❌', '오류', 'GAS 연결 실패', 'error'))
-        .deleteInquiry(rowIndex);
+        .deleteInquiry(rowIndex, inquiryKey);
 }
 
 // ── 교사→학생 메시지 기능 ──────────────────────────────
@@ -5469,7 +5474,17 @@ function showInquiryPopup(inquiries) {
     document.body.appendChild(overlay);
 
     const close = () => {
-        inquiries.forEach(q => google.script.run.markInquiryNotified(q.rowIndex));
+        let warned = false;
+        const reportFailure = () => {
+            if (warned) return;
+            warned = true;
+            loadInquiries();
+            showTeacherModal('⚠️', '문의 확인 필요', '문의 확인 상태를 저장하지 못했습니다. 새로고침한 문의 목록을 다시 확인하세요. 작성한 응답은 유지됩니다.', 'warn');
+        };
+        inquiries.forEach(q => google.script.run
+            .withSuccessHandler(res => { if (!res || res.success !== true) reportFailure(); })
+            .withFailureHandler(reportFailure)
+            .markInquiryNotified(q.rowIndex, q.inquiryKey));
         overlay.remove();
     };
 
@@ -5478,7 +5493,7 @@ function showInquiryPopup(inquiries) {
         // 문의 탭 활성화 후 답장 모달 오픈
         const tabBtn = document.querySelector('.tab-button[onclick*="inquiries"]');
         if (tabBtn) tabBtn.click();
-        setTimeout(() => openReplyModal(q.rowIndex, q.title, q.content), 400);
+        setTimeout(() => openReplyModal(q.rowIndex, q.title, q.content, q.inquiryKey), 400);
     };
 
     document.getElementById('inquiryPopupClose').onclick = close;
