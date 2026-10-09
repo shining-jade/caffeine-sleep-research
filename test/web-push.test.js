@@ -104,6 +104,22 @@ test('push sender configures VAPID and maps a successful delivery', async () => 
   assert.equal(deliveredPayload, payload);
 });
 
+test('push provider requests have a finite timeout and transport timeouts are not replayed', async () => {
+  let attempts = 0;
+  let requestedTimeout;
+  const sender = createPushSender({
+    config, setVapidDetails() {},
+    async sendNotification(_subscription, _payload, options) {
+      attempts++;
+      requestedTimeout = options?.timeout;
+      throw new Error('transport timeout after provider might have accepted');
+    },
+  });
+  assert.deepEqual(await sender.send(subscription, '{}'), { status:'failed', errorCode:'PUSH_UNAVAILABLE' });
+  assert.equal(attempts, 1);
+  assert.ok(requestedTimeout > 0 && requestedTimeout <= 10_000);
+});
+
 test('push sender maps 404 and 410 responses to expired without retrying', async () => {
   for (const statusCode of [404, 410]) {
     let attempts = 0;

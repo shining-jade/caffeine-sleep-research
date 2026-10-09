@@ -2,6 +2,9 @@
   "cleanUrls": true,
   "outputDirectory": ".",
   "functions": {
+    "api/teacher/reminders/*.js": {
+      "maxDuration": 150
+    },
     "api/**/*.js": {
       "maxDuration": 60
     }

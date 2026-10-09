@@ -1,8 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import fs from 'node:fs';
+import { GAS_TIMEOUT_MS } from '../api/_lib/gas.js';
 
 import { createStudentPushRouter } from '../api/student/push/[...path].js';
 import { createTeacherReminderRouter } from '../api/teacher/reminders/[...path].js';
+
+test('teacher reminder deployment leaves time for target lookup delivery and result persistence', () => {
+  const { functions } = JSON.parse(fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+  const specific = 'api/teacher/reminders/*.js';
+  const patterns = Object.keys(functions);
+  assert.ok(patterns.indexOf(specific) >= 0 && patterns.indexOf(specific) < patterns.indexOf('api/**/*.js'));
+  assert.ok(functions[specific].maxDuration * 1000 > 2 * GAS_TIMEOUT_MS + 30_000);
+  assert.equal(functions['api/**/*.js'].maxDuration, 60);
+});
 
 function response() {
   return {

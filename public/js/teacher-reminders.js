@@ -98,6 +98,7 @@ function safeTestResult(value) {
     sent: nonnegative(value.sent),
     expired: nonnegative(value.expired),
     failed: nonnegative(value.failed),
+    ...(value.logSaved === false ? { logSaved: false } : {}),
   };
 }
 
@@ -311,7 +312,7 @@ export function createTeacherReminders({
     if (deviceCount < 1) return Promise.reject(new Error('이 알림 유형에 등록된 기기가 없습니다.'));
 
     const promise = (async () => {
-      emit({ testStudent: { ...previous, status: 'sending', sendingType: type, error: '' } });
+      emit({ testStudent: { ...previous, status: 'sending', sendingType: type, result: null, error: '' } });
       try {
         const result = safeTestResult(await api.sendTestStudent(type));
         let latest = previous;
@@ -334,6 +335,7 @@ export function createTeacherReminders({
             ...previous,
             status: 'error',
             sendingType: null,
+            result: null,
             error: '테스트 학생 알림 요청을 처리하지 못했습니다.',
           },
         });
@@ -471,7 +473,9 @@ function renderBrowserState(state) {
       ? '유형별로 등록된 기기에만 시험 알림을 보냅니다.'
       : '학생 화면에서 앱 설치, 알림 켜기, 브라우저 알림 허용을 완료해 주세요.',
     sending: `${testStudent.sendingType === 'sleep' ? '수면' : '카페인'} 시험 알림을 보내는 중입니다…`,
-    sent: '시험 알림 전송을 마쳤습니다.',
+    sent: testStudent.result?.logSaved === false
+      ? '알림 전송 결과를 확인했습니다. 발송 로그 저장은 확인하지 못했습니다.'
+      : '시험 알림 전송을 마쳤습니다.',
     error: testStudent.error,
   };
   setText('teacherTestStudentGuide', testMessages[testStudent.status] || '');
