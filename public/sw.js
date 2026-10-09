@@ -48,7 +48,7 @@ self.addEventListener('notificationclick', (event) => {
 });
 
 // Cache only the public student shell/assets. Session and health API responses stay network-only.
-const STUDENT_SHELL_CACHE = 'student-shell-phone-sync-v4';
+const STUDENT_SHELL_CACHE = 'student-shell-phone-sync-v5';
 const STUDENT_SHELL_FILES = ['/', '/public/data/caffeine-db.json', '/public/js/safe-render.js', '/public/js/read-feedback.js', '/public/js/student-feedback.js', '/public/js/student-sync.js', '/public/js/student-sync-ui.js', '/public/js/api-bridge.js', '/public/js/badge-journey.js', '/public/js/install-guide.js', '/public/js/push-reminders.js', '/public/js/student-startup.js'];
 const STUDENT_CDN_FILES = ['https://cdn.tailwindcss.com','https://cdn.jsdelivr.net/npm/chart.js','https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'];
 self.addEventListener('install', event => {

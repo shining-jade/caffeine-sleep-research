@@ -1,5 +1,15 @@
 import { STUDENT_ACTION_RULES } from './actions.js';
 import { validateMessageInput } from './message-validation.js';
+import { HttpError } from './http.js';
+
+function validateGoalPayload(payload) {
+  const time = /^([01]\d|2[0-3]):[0-5]\d$/;
+  if (!Number.isFinite(payload.weight) || payload.weight <= 0 || payload.weight > 200
+      || !Number.isInteger(payload.targetCaf) || payload.targetCaf < 1 || payload.targetCaf > 1000
+      || !time.test(payload.targetBedtime) || !time.test(payload.targetWakeTime)) {
+    throw new HttpError(400, 'INVALID_INPUT', 'Invalid student goals.');
+  }
+}
 
 function requireStudentSession(session) {
   if (session?.role !== 'student'
@@ -50,5 +60,6 @@ export function normalizeStudentRequest(action, params, session) {
   }
 
   validateMessageInput(action, normalizedParams);
+  if (action === 'saveInitialSetup') validateGoalPayload(normalizedParams[0]);
   return { action, params: normalizedParams, subject };
 }
