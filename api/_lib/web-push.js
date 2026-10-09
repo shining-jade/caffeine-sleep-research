@@ -14,6 +14,9 @@ const COPY = Object.freeze({
 });
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+// Push subscriptions belong to the deployed student app. WebKit parses native
+// navigate/icon URLs without a base, so the declarative payload needs full URLs.
+const STUDENT_APP_ORIGIN = 'https://caffeine-sleep-research.vercel.app';
 
 function defaultDelay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -54,9 +57,9 @@ export function buildNotificationPayload({ type, referenceDate }) {
     mutable: false,
     notification: {
       ...legacy,
-      navigate: legacy.data.url,
-      icon: '/public/icons/icon-192.png',
-      badge: '/public/icons/icon-192.png',
+      navigate: new URL(legacy.data.url, STUDENT_APP_ORIGIN).href,
+      icon: new URL('/public/icons/icon-192.png', STUDENT_APP_ORIGIN).href,
+      badge: new URL('/public/icons/icon-192.png', STUDENT_APP_ORIGIN).href,
     },
   });
 }
