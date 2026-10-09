@@ -324,7 +324,7 @@ function getReminderDispatchSnapshot_(type, nowIso) {
 
   var recordSheet = reminderRows_(spreadsheet.getSheetByName(type === 'sleep' ? 'sleep' : 'caffeine'));
   var recordIdColumn = requireNamedColumn_(recordSheet.headers, ['전체학번', '학번ID', '학번', 'studentId']);
-  var recordDateColumn = requireNamedColumn_(recordSheet.headers, type === 'sleep' ? ['날짜', '수면날짜'] : ['섭취시간', '날짜']);
+  var recordDateColumn = requireNamedColumn_(recordSheet.headers, type === 'sleep' ? ['취침날짜', '날짜', '수면날짜'] : ['섭취시간', '날짜']);
   var completedMap = {};
   recordSheet.values.forEach(function(row) {
     if (reminderDateValue_(row[recordDateColumn]) === referenceDate) {

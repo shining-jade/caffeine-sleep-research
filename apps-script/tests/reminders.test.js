@@ -234,6 +234,26 @@ test('dispatch snapshot uses named headers and returns only active minimal remin
   assert.doesNotMatch(JSON.stringify(sleep), /홍길동|김학생|private sleep note|섭취 안 함/);
 });
 
+test('dispatch snapshot recognizes the production bedtime-date header across midnight', async () => {
+  const initial = {
+    students: [['학년', '반', '번호', '이름', '학번', '연구대상자코드'], [2, 1, 1, '테스트학생', 2101, 'R001']],
+    sleep: [
+      ['타임스탬프', '전체학번', '취침날짜', '기상날짜', '메모'],
+      ['2026-10-09', 2101, '2026-10-08', '2026-10-09', 'private sleep note'],
+      ['2026-10-09', 2102, '2026-10-07', '2026-10-08', 'earlier night'],
+    ],
+    caffeine: [['전체학번', '섭취시간']],
+  };
+  const { context, spreadsheet } = await reminders(initial);
+  const snapshot = JSON.parse(JSON.stringify(call(context,
+    "getReminderDispatchSnapshot_('sleep', '2026-10-09T08:00:00+09:00')")));
+
+  assert.deepEqual(snapshot.students, [{ studentId: '2101', classId: '1' }]);
+  assert.deepEqual(snapshot.completedStudentIds, ['2101']);
+  assert.doesNotMatch(JSON.stringify(snapshot), /테스트학생|private sleep note|earlier night/);
+  assert.deepEqual(rows(spreadsheet, 'sleep'), initial.sleep);
+});
+
 test('dispatch snapshot fails closed when required named headers are missing', async () => {
   const { context } = await reminders({
     students: [['이름'], ['홍길동']],
