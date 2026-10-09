@@ -204,6 +204,7 @@
       margin-bottom:12px; box-shadow:0 1px 5px rgba(0,0,0,.07);
     }
   </style>
+  <script src="/public/js/safe-render.js"></script>
   <script src="/public/js/student-feedback.js"></script>
   <script src="/public/js/student-sync.js"></script>
   <script src="/public/js/read-feedback.js"></script>
@@ -1180,6 +1181,7 @@
   </div><!-- /mainApp -->
 
   <script>
+    const escapeHtml = window.safeRender.escapeHtml;
 
     let user = null;
     let selectedDrink = { drink: '', mg: 0 };
@@ -1295,17 +1297,12 @@
       if (sleepDateEl) sleepDateEl.value = datePartFromDatetime(sleepStartEl?.value || formatted);
     }
 
-    // ── ⭐ 세션 저장/복구 헬퍼 (카메라 앱 전환 시 페이지 재로드 대응) ──
-    // ⭐ 세션 저장소: localStorage 사용 (Android Chrome 카메라 복귀 시 sessionStorage 초기화 방지)
-    //    로그아웃 플래그(caffeineLoggedOut)만 sessionStorage 유지 (브라우저 탭 닫으면 자동 해제)
+    // 마지막 탭만 저장하고, 로그인 상태는 서버 세션으로 확인한다.
     function saveSession(_userObj, tabId) {
       try {
         if (tabId) localStorage.setItem('caffeineTab', tabId);
         localStorage.removeItem('caffeineUser');
       } catch(e) {}
-    }
-    function loadSession() {
-      return null;
     }
     function loadSessionTab() {
       try { return localStorage.getItem('caffeineTab') || 'caffeine'; } catch(e) { return 'caffeine'; }
@@ -1376,7 +1373,7 @@
       document.getElementById('calendarDetailPanel')?.classList.add('hidden');
     }
 
-    // isRestore: true면 세션 복구(카메라 복귀), false면 최초 로그인
+    // isRestore: true면 세션 복구, false면 최초 로그인
     function enterApp(res, isRestore) {
       if (!user || user.studentId !== res.studentId || user.name !== res.name) resetStudentData();
       user = res;
@@ -1403,8 +1400,7 @@
       if (typeof hideTutFab === 'function') hideTutFab();
       if (window.pushReminders) window.pushReminders.initialize(res);
 
-      // ⭐ 세션 복구(카메라 복귀) 시: 화면만 보여주고 끝
-      //    탭 전환·데이터 로드는 하지 않음 → onchange(analyzeDrinkImage)가 즉시 발화되도록
+      // 세션 복구 시 마지막 탭을 먼저 표시하고 서버 데이터를 갱신한다.
       if (isRestore) {
         // 카페인 탭이 보이도록 탭 UI만 조정 (loadCaffeineLogs 호출 없이)
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1429,8 +1425,7 @@
         setTimeout(checkMsgBubble, 2000);
         setTimeout(checkTeacherAwards, 2500);
         setTimeout(loadBadgeConfig, 800);
-        // 카메라 복귀 파일이 세팅될 짧은 여유만 둔다. 일반 재실행은 즉시 초기 데이터를 요청한다.
-        setTimeout(() => { if (user === res) waitForCameraAnalysisThenLoad(); }, 100);
+        loadStudentDataOnResume();
         return;
       }
 
@@ -1595,29 +1590,8 @@
       });
     }
 
-    function waitForCameraAnalysisThenLoad() {
+    function loadStudentDataOnResume() {
       if (!user) return;
-      const analyzing = document.getElementById('aiAnalyzing');
-      const analyzingVisible = Boolean(analyzing && !analyzing.classList.contains('hidden'));
-      const cameraHasFile = ['drinkCamera', 'drinkImage'].some(function(id) {
-        const input = document.getElementById(id);
-        return Boolean(input && input.files && input.files.length > 0);
-      });
-      const action = window.studentStartup
-        ? window.studentStartup.getStudentBootstrapAction({ analyzingVisible, cameraHasFile })
-        : (analyzingVisible ? 'wait' : 'load');
-      if (action === 'analyze') {
-        const cameraInput = ['drinkCamera', 'drinkImage']
-          .map(function(id) { return document.getElementById(id); })
-          .find(function(input) { return input && input.files && input.files.length > 0; });
-        if (cameraInput) analyzeDrinkImage({ target: cameraInput });
-        setTimeout(waitForCameraAnalysisThenLoad, 500);
-        return;
-      }
-      if (action === 'wait') {
-        setTimeout(waitForCameraAnalysisThenLoad, 500);
-        return;
-      }
       loadInitialStudentData();
       const cachedTime = localStorage.getItem('caffeine_db_cache_time');
       const cacheTtl = 24 * 60 * 60 * 1000;
@@ -1818,7 +1792,7 @@
 
     // 탭 전환
     function showTab(id) {
-      saveCurrentTab(id); // ⭐ 현재 탭을 세션에 저장 (카메라 복귀 후 복원용)
+      saveCurrentTab(id); // 현재 탭을 저장해 다음 실행에서 복원한다.
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       document.querySelectorAll('nav button').forEach(b => {
         b.classList.remove('nav-active', 'text-indigo-600');
@@ -2600,7 +2574,7 @@
       document.getElementById('confirmActionBtn').className = 'flex-1 py-3 bg-amber-500 text-white rounded-xl font-bold hover:bg-amber-600 transition';
       document.getElementById('deleteConfirmModal').style.display = 'flex';
       pendingDelete = { type: 'logout-warning', id: null };
-      // 포커스를 버튼에서 제거 - 카메라 확인키가 버튼을 자동 클릭하는 현상 방지
+      // 이전 입력의 확인키가 열린 모달 버튼을 누르지 않도록 포커스 해제
       setTimeout(function() {
         var btn = document.getElementById('confirmActionBtn');
         if (btn) btn.blur();
@@ -2680,7 +2654,6 @@
       }
 
       window.currentAnalysisPeriod = null;
-      clearImagePreview();
 
       if(caffeineChart) { caffeineChart.destroy(); caffeineChart = null; }
       if(sleepChart) { sleepChart.destroy(); sleepChart = null; }
@@ -3200,7 +3173,7 @@
       if (caffeineDbLoading) return;
       const countEl = document.getElementById('dbTotalCount');
 
-      // ⭐ localStorage 캐시 즉시 복원 (카메라 복귀 시 GAS 호출 없이 바로 사용 가능)
+      // localStorage 캐시 즉시 복원 (앱 재진입 시 GAS 호출 없이 바로 사용 가능)
       try {
         const cached = localStorage.getItem('caffeine_db_cache');
         const cachedTime = localStorage.getItem('caffeine_db_cache_time');
@@ -4038,7 +4011,7 @@
     }
 
     function confirmDelete() {
-      // 모달이 실제로 열려있을 때만 동작 (카메라 확인키 오발동 방지)
+      // 모달이 실제로 열려있을 때만 동작
       const modal = document.getElementById('deleteConfirmModal');
       if (!modal || modal.style.display === 'none' || modal.style.display === '') return;
       const { type, id } = pendingDelete;
@@ -4275,7 +4248,7 @@
         btn.style.color = 'white';
         btn.style.border = 'none';
         modal.style.display = 'flex';
-        // 카메라 복귀 시 확인 버튼이 자동 클릭되는 현상 방지
+        // 이전 입력의 확인키가 열린 모달 버튼을 누르지 않도록 포커스 해제
         setTimeout(function() {
           var wb = document.getElementById('warningConfirmBtn');
           if (wb) wb.blur();
@@ -4871,14 +4844,14 @@
         <div style="margin-bottom:14px;">
           <div style="display:flex;justify-content:flex-end;margin-bottom:6px;">
             <div style="max-width:80%;background:#f3f4f6;border-radius:16px 16px 4px 16px;padding:10px 14px;">
-              <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:3px;">${item.title}</div>
-              <div style="font-size:12px;color:#6b7280;line-height:1.5;">${item.content}</div>
+              <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:3px;">${escapeHtml(item.title)}</div>
+              <div style="font-size:12px;color:#6b7280;line-height:1.5;">${escapeHtml(item.content)}</div>
             </div>
           </div>
           <div style="display:flex;justify-content:flex-start;">
             <div style="max-width:85%;background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:16px 16px 16px 4px;padding:10px 14px;box-shadow:0 2px 8px rgba(99,102,241,0.25);">
-              <div style="font-size:11px;color:rgba(255,255,255,0.75);margin-bottom:4px;">선생님 답변 · ${formatTimestamp(item.replyTime)}</div>
-              <div style="font-size:13px;color:white;line-height:1.6;white-space:pre-wrap;">${item.reply}</div>
+              <div style="font-size:11px;color:rgba(255,255,255,0.75);margin-bottom:4px;">선생님 답변 · ${escapeHtml(formatTimestamp(item.replyTime))}</div>
+              <div style="font-size:13px;color:white;line-height:1.6;white-space:pre-wrap;">${escapeHtml(item.reply)}</div>
             </div>
           </div>
         </div>`).join('');
@@ -5286,16 +5259,16 @@
             div.className = `p-3 rounded-xl border-2 mb-2 ${isReplied ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`;
             div.innerHTML = `
               <div class="flex items-center justify-between mb-1">
-                <p class="font-bold text-sm text-gray-800">${item.title}</p>
-                <span class="text-xs px-2 py-0.5 rounded-full font-bold ${isReplied ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${item.status}</span>
+                <p class="font-bold text-sm text-gray-800">${escapeHtml(item.title)}</p>
+                <span class="text-xs px-2 py-0.5 rounded-full font-bold ${isReplied ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${escapeHtml(item.status)}</span>
               </div>
-              <p class="text-xs text-gray-500 mb-1">${formatTimestamp(item.timestamp)}</p>
-              <p class="text-xs text-gray-600">${item.content}</p>
+              <p class="text-xs text-gray-500 mb-1">${escapeHtml(formatTimestamp(item.timestamp))}</p>
+              <p class="text-xs text-gray-600">${escapeHtml(item.content)}</p>
               ${isReplied && item.reply ? `
                 <div class="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
                   <p class="text-xs font-bold text-blue-700 mb-1"><i class="fa-solid fa-chalkboard-teacher"></i> 선생님 응답</p>
-                  <p class="text-xs text-blue-600">${item.reply}</p>
-                  <p class="text-xs text-gray-400 mt-1">${formatTimestamp(item.replyTime)}</p>
+                  <p class="text-xs text-blue-600">${escapeHtml(item.reply)}</p>
+                  <p class="text-xs text-gray-400 mt-1">${escapeHtml(formatTimestamp(item.replyTime))}</p>
                 </div>
               ` : ''}
             `;
@@ -5338,27 +5311,31 @@
           const unread = res.data.filter(m => m.readStatus === '미읽음');
           if (unread.length) acknowledgeTeacherMessages(unread);
           else updateMsgBubble(0);
-          container.innerHTML = res.data.map(m => {
+          container.innerHTML = res.data.map((m, index) => {
             const isNew = m.readStatus === '미읽음';
             const hasReply = !!m.studentReply;
             const replySection = hasReply
               ? `<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px;margin-top:10px;">
                    <div style="font-size:11px;color:#3b82f6;font-weight:700;margin-bottom:4px;">내 답장</div>
-                   <div style="font-size:13px;color:#1e40af;white-space:pre-wrap;">${m.studentReply}</div>
-                   <div style="font-size:10px;color:#93c5fd;margin-top:4px;">${formatMsgDate(m.studentReplyTime)}</div>
-                   <button onclick="openReplyModal(${m.rowIndex}, \`${m.title.replace(/`/g,'\\`')}\`, true, '${m.messageKey}')" style="margin-top:6px;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;cursor:pointer;">수정</button>
+                   <div style="font-size:13px;color:#1e40af;white-space:pre-wrap;">${escapeHtml(m.studentReply)}</div>
+                   <div style="font-size:10px;color:#93c5fd;margin-top:4px;">${escapeHtml(formatMsgDate(m.studentReplyTime))}</div>
+                   <button class="student-msg-reply" data-message-index="${index}" style="margin-top:6px;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;cursor:pointer;">수정</button>
                  </div>`
-              : `<button onclick="openReplyModal(${m.rowIndex}, \`${m.title.replace(/`/g,'\\`')}\`, false, '${m.messageKey}')" style="margin-top:10px;display:inline-flex;align-items:center;gap:4px;background:#10b981;color:white;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;">💬 답장하기</button>`;
+              : `<button class="student-msg-reply" data-message-index="${index}" style="margin-top:10px;display:inline-flex;align-items:center;gap:4px;background:#10b981;color:white;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;">💬 답장하기</button>`;
             return `<div class="border rounded-xl p-4 mb-3 ${isNew ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100'}">
               <div class="flex items-start justify-between gap-2 mb-1">
-                <span class="font-bold text-sm text-gray-800">${m.title}</span>
+                <span class="font-bold text-sm text-gray-800">${escapeHtml(m.title)}</span>
                 ${isNew ? '<span style="background:#10b981;color:white;font-size:10px;font-weight:700;padding:1px 7px;border-radius:8px;">NEW</span>' : ''}
               </div>
-              <div class="text-xs text-gray-400 mb-2">${formatMsgDate(m.timestamp)}</div>
+              <div class="text-xs text-gray-400 mb-2">${escapeHtml(formatMsgDate(m.timestamp))}</div>
               <div class="text-sm text-gray-700 whitespace-pre-wrap">${formatTeacherMsgContent(m.content, m)}</div>
               ${replySection}
             </div>`;
           }).join('');
+          container.querySelectorAll('.student-msg-reply').forEach(button => {
+            const message = res.data[Number(button.dataset.messageIndex)];
+            button.addEventListener('click', () => openReplyModal(message.rowIndex, message.title, !!message.studentReply, message.messageKey));
+          });
         })
         .withFailureHandler(() => {
           ReadFeedback.fail(container, loadTeacherMessages);
@@ -5406,8 +5383,8 @@
 
       const msgsHtml = messages.map(m => `
         <div style="border:1px solid #d1fae5;border-radius:12px;padding:14px;margin-bottom:10px;background:#f0fdf4;">
-          <div style="font-weight:700;font-size:15px;color:#1f2937;margin-bottom:4px;">${m.title}</div>
-          <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;">${formatMsgDate(m.timestamp)}</div>
+          <div style="font-weight:700;font-size:15px;color:#1f2937;margin-bottom:4px;">${escapeHtml(m.title)}</div>
+          <div style="font-size:11px;color:#9ca3af;margin-bottom:8px;">${escapeHtml(formatMsgDate(m.timestamp))}</div>
           <div style="font-size:13px;color:#374151;white-space:pre-wrap;line-height:1.6;">${formatTeacherMsgContent(m.content, m)}</div>
         </div>`).join('');
 
@@ -5498,17 +5475,19 @@
           <div style="background:linear-gradient(135deg,#3b82f6,#2563eb);padding:18px 22px;">
             <div style="font-size:20px;margin-bottom:4px;">💬</div>
             <div style="font-weight:700;font-size:16px;color:white;">선생님께 답장하기</div>
-            <div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:2px;">${title}</div>
+            <div style="font-size:12px;color:rgba(255,255,255,0.8);margin-top:2px;">${escapeHtml(title)}</div>
           </div>
           <div style="padding:18px 20px;">
             <textarea id="studentReplyText" rows="5" placeholder="답장 내용을 입력하세요..." style="width:100%;padding:12px;border:2px solid #e5e7eb;border-radius:12px;font-size:14px;resize:none;font-family:inherit;outline:none;box-sizing:border-box;"></textarea>
           </div>
           <div style="padding:0 20px 20px;display:flex;gap:8px;">
-            <button onclick="closeStudentReplyModal()" style="flex:1;padding:12px;background:#f3f4f6;color:#374151;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;">취소</button>
-            <button id="studentReplySendBtn" onclick="submitStudentReply(${rowIndex})" style="flex:2;padding:12px;background:#3b82f6;color:white;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">${isEdit ? '수정하기' : '답장 보내기'}</button>
+            <button id="studentReplyCancelBtn" style="flex:1;padding:12px;background:#f3f4f6;color:#374151;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;">취소</button>
+            <button id="studentReplySendBtn" style="flex:2;padding:12px;background:#3b82f6;color:white;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;">${isEdit ? '수정하기' : '답장 보내기'}</button>
           </div>
         </div>`;
       document.body.appendChild(overlay);
+      document.getElementById('studentReplyCancelBtn').onclick = closeStudentReplyModal;
+      document.getElementById('studentReplySendBtn').onclick = () => submitStudentReply(rowIndex);
     }
 
     function submitStudentReply(rowIndex) {
@@ -5551,10 +5530,6 @@
       document.getElementById('studentReplyModal')?.remove();
     }
 
-    function checkAppVersion() {
-      // Updates are applied silently; no version toast is shown.
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
       const privateIds = [
         'caffeineLogsContainer', 'sleepLogsContainer', 'aiReportContainer',
@@ -5572,7 +5547,6 @@
       privateFormDefaults = Array.from(document.querySelectorAll('#mainApp input, #mainApp textarea, #mainApp select, #mainApp .sleep-choice-btn, #mainApp .condition-btn, #settingsTeenBtn, #settingsAdultBtn'))
         .map(element => ({ element, value: element.value, checked: element.checked, disabled: element.disabled,
           className: element.className, style: element.style.cssText }));
-      checkAppVersion();
 
       // 부작용 섹션: 다른 항목 체크 시 "없음" 자동 해제
       const symptomSection = document.getElementById('caffeineSymptomSection');
@@ -5637,267 +5611,9 @@
         history.pushState({ page: 'app' }, '', location.href);
       });
 
-      // ── ⭐ 카메라 복귀 감지: visibilitychange + pageshow ──────────────
-      // Android Chrome 일부 버전은 capture input 복귀 시
-      // onchange 대신 visibilitychange 이후에 파일이 세팅됨
-      function _checkCameraInputAndAnalyze() {
-        // ⭐ user가 null이어도 세션에서 즉시 복구 시도
-        // visibilitychange가 enterApp보다 먼저 발화하는 안드로이드 타이밍 문제 대응
-        if (!user || !user.studentId) {
-          var saved = loadSession();
-          if (saved && saved.studentId) { user = saved; }
-          else return;
-        }
-        ['drinkCamera', 'drinkImage'].forEach(function(id) {
-          var input = document.getElementById(id);
-          if (!input || !input.files || input.files.length === 0) return;
-          // 이미 분석 중인 경우만 중복 방지
-          var analyzing = document.getElementById('aiAnalyzing');
-          if (analyzing && !analyzing.classList.contains('hidden')) return;
-          analyzeDrinkImage({ target: input });
-        });
-      }
-
-      document.addEventListener('visibilitychange', function() {
-        if (document.visibilityState === 'visible') {
-          // 안드로이드: 파일 세팅 타이밍이 불규칙하므로 100ms + 600ms 두 번 시도
-          setTimeout(_checkCameraInputAndAnalyze, 100);
-          setTimeout(_checkCameraInputAndAnalyze, 600);
-        }
-      });
-
-      window.addEventListener('pageshow', function(e) {
-        // persisted 여부 무관하게 항상 체크 (iOS에서 persisted=false로 오는 경우 대응)
-        setTimeout(_checkCameraInputAndAnalyze, 300);
-      });
-
-      // iOS Safari 추가 대응: window focus 이벤트
-      window.addEventListener('focus', function() {
-        setTimeout(_checkCameraInputAndAnalyze, 500);
-      });
     });
 
 
-
-    // 이미지 분석 오류 코드 → 표시 정보
-    function getImgErrorInfo(errorCode) {
-      const map = {
-        'RATE_LIMIT':    { icon: '⏱️', color: '#f59e0b', bg: '#fef9c3', border: '#fde68a', title: '요청 한도 초과 (429)',      desc: 'API 일일 요청 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.' },
-        'SERVER_ERROR':  { icon: '🔧', color: '#f59e0b', bg: '#fef9c3', border: '#fde68a', title: '서버 일시 오류',             desc: '잠시 후 다시 시도해 주세요.' },
-        'AUTH_ERROR':    { icon: '🔑', color: '#ef4444', bg: '#fee2e2', border: '#fca5a5', title: 'API 키 오류',                desc: '선생님께 문의해 주세요.' },
-        'NO_API_KEY':    { icon: '🔑', color: '#ef4444', bg: '#fee2e2', border: '#fca5a5', title: 'API 키 미설정',              desc: '선생님께 문의해 주세요.' },
-        'NETWORK_ERROR': { icon: '📡', color: '#ef4444', bg: '#fee2e2', border: '#fca5a5', title: '네트워크 오류',              desc: '인터넷 상태를 확인 후 다시 시도해 주세요.' },
-        'NO_CANDIDATES': { icon: '📷', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a', title: '이미지를 인식하지 못함',    desc: '사진이 흐리거나 너무 어두운 경우 다시 촬영해주세요.' },
-        'SAFETY_BLOCK':  { icon: '🚫', color: '#ef4444', bg: '#fee2e2', border: '#fca5a5', title: '이미지 분석 불가',           desc: '라벨/성분표 사진을 다시 촬영해주세요.' },
-        'BLUR_IMAGE':    { icon: '📷', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a', title: '사진 화질 불량',             desc: '밝은 곳에서 흔들리지 않게 가까이 다시 촬영해주세요.' },
-        'EMPTY_CONTENT': { icon: '📷', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a', title: '이미지를 읽을 수 없음',     desc: '밝은 곳에서 성분표/영양성분표를 정면으로 다시 촬영해주세요.' },
-        'PARSE_FAIL':    { icon: '📷', color: '#f59e0b', bg: '#fffbeb', border: '#fde68a', title: '분석 결과 해석 실패',       desc: '성분표/영양성분표가 잘 보이도록 가까이 다시 촬영해주세요.' },
-        'PARSE_ERROR':   { icon: '🔧', color: '#ef4444', bg: '#fee2e2', border: '#fca5a5', title: '응답 오류',                 desc: '잠시 후 다시 시도해 주세요.' },
-        'UNKNOWN_ERROR': { icon: '❓', color: '#9ca3af', bg: '#f9fafb', border: '#e5e7eb', title: '일시적 오류',                desc: '잠시 후 다시 시도해 주세요.' }
-      };
-      return map[errorCode] || { icon: '❌', color: '#ef4444', bg: '#fee2e2', border: '#fca5a5', title: titleText || '분석 실패', desc: '' };
-    }
-
-    function showAiResultError(titleText, bodyText, errorCode) {
-      // errorCode가 없으면 bodyText에서 추출 시도
-      if (!errorCode && bodyText) {
-        const m = bodyText.match(/^\[([A-Z_]+)\]/);
-        if (m) errorCode = m[1];
-        // 숫자 코드로 온 경우도 처리 (예: "분석 실패 (429)")
-        const numMatch = bodyText.match(/\((\d{3})\)/);
-        if (!errorCode && numMatch) {
-          const codeMap = {'429':'RATE_LIMIT','500':'SERVER_ERROR','502':'SERVER_ERROR','503':'SERVER_ERROR'};
-          errorCode = codeMap[numMatch[1]] || 'UNKNOWN_ERROR';
-        }
-      }
-
-      const info = getImgErrorInfo(errorCode);
-      const aiResult = document.getElementById('aiResult');
-      // ⭐ style.display 강제 해제 후 className 설정 (hidden 충돌 방지)
-      aiResult.style.display = '';
-      aiResult.style.background = info.bg;
-      aiResult.style.borderColor = info.border;
-      aiResult.className = 'mt-3 p-3 rounded-lg border';
-
-      document.getElementById('aiResultText').innerHTML =
-        `<span style="color:${info.color};font-weight:bold;">${info.icon} ${info.title}</span>`;
-
-      // ⭐ \n → <br> 변환으로 줄바꿈 메시지 정상 표시
-      const isApiError = ['RATE_LIMIT','SERVER_ERROR','AUTH_ERROR','NO_API_KEY','NETWORK_ERROR'].includes(errorCode);
-      const bodyHtml = bodyText ? bodyText.replace(/\n/g, '<br>') : '';
-      const descHtml = `<span style="color:${info.color};font-size:12px;">${(!isApiError && bodyHtml) ? bodyHtml : info.desc}</span>`;
-      const photoHtml = isApiError ? '' : '<br><span style="color:#f87171;font-size:11px;">📸 성분표/영양성분표가 잘 보이도록 다시 촬영해주세요</span>';
-      const codeHtml = errorCode ? `<br><span style="color:#9ca3af;font-size:10px;font-family:monospace;">오류 코드: ${errorCode}</span>` : '';
-
-      document.getElementById('aiConfidence').innerHTML = descHtml + photoHtml + codeHtml;
-    }
-
-    // 분석 실행 함수
-    function _runAIAnalysis(base64Image) {
-      document.getElementById('aiAnalyzing').classList.remove('hidden');
-      const aiResultEl = document.getElementById('aiResult');
-      aiResultEl.className = 'hidden mt-3 bg-white p-3 rounded-lg border border-purple-200';
-
-      google.script.run
-        .withSuccessHandler(function(result) {
-          document.getElementById('aiAnalyzing').classList.add('hidden');
-          if (result && result.success) {
-            // ⭐ style.display로 먼저 강제 해제 후 className 재설정 (hidden 클래스 충돌 방지)
-            aiResultEl.style.display = '';
-            aiResultEl.className = 'mt-3 bg-white p-3 rounded-lg border border-purple-200';
-            document.getElementById('aiResultText').innerText = result.analysis || '분석 완료';
-            const confidenceEl = document.getElementById('aiConfidence');
-            if (confidenceEl && result.confidence) {
-              let confidenceText = '', confidenceIcon = '';
-              if (result.confidence === 'high') { confidenceIcon = '✅'; confidenceText = '영양성분표에서 확인 (높은 정확도)'; }
-              else if (result.confidence === 'medium') { confidenceIcon = '⚠️'; confidenceText = '제품 정보 기반 추정 (중간 정확도)'; }
-              else if (result.confidence === 'low') { confidenceIcon = '⚠️'; confidenceText = '일반적인 함량 추정 (낮은 정확도 - 영양성분표 촬영 권장)'; }
-              confidenceEl.innerHTML = `${confidenceIcon} ${confidenceText}`;
-            }
-            if (result.drinkName) document.getElementById('drinkName').value = result.drinkName;
-            if (result.caffeine) document.getElementById('customAmount').value = result.caffeine;
-            const display = document.getElementById('selectedDrink');
-            if (display) display.innerHTML = '<span class="text-purple-600">✨ 분석: ' + (result.drinkName || '음료') + ' - ' + (result.caffeine || 0) + 'mg</span>';
-          } else {
-            showAiResultError('분석 실패', (result && result.error) ? result.error : '알 수 없는 오류', result && result.errorCode);
-          }
-        })
-        .withFailureHandler(function(error) {
-          document.getElementById('aiAnalyzing').classList.add('hidden');
-          showAiResultError('네트워크 오류', '서버 연결에 실패했습니다.', 'NETWORK_ERROR');
-        })
-        .analyzeDrinkImageWithAI(base64Image);
-    }
-    // ── 인앱 카메라 끝 ────────────────────────────────────────────────────
-
-    async function analyzeDrinkImage(event) {
-      const file = event.target.files[0];
-      if (!file) { event.target.value = ''; return; }
-
-      // ⭐ 중복 실행 방지: 이미 분석 중이면 무시
-      const analyzingEl = document.getElementById('aiAnalyzing');
-      if (analyzingEl && !analyzingEl.classList.contains('hidden')) return;
-
-      // ── ⭐ user가 null이면 세션에서 즉시 복구 시도 ──
-      // capture input onchange는 DOMContentLoaded보다 먼저 발화될 수 있음
-      if (!user || !user.studentId) {
-        const saved = loadSession();
-        if (saved && saved.studentId) {
-          user = saved;
-          const loginPage = document.getElementById('loginPage');
-          const mainApp = document.getElementById('mainApp');
-          const userTitle = document.getElementById('userTitle');
-          if (loginPage) loginPage.classList.add('hidden');
-          if (mainApp) mainApp.classList.remove('hidden');
-          if (userTitle) userTitle.textContent = `${saved.name} 님`;
-          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-          const tabEl = document.getElementById('tab-caffeine');
-          const navEl = document.getElementById('nav-caffeine');
-          if (tabEl) tabEl.classList.add('active');
-          if (navEl) { navEl.classList.add('nav-active', 'text-indigo-600'); navEl.classList.remove('text-gray-300'); }
-        } else {
-          event.target.value = '';
-          return;
-        }
-      }
-
-      // ── 카메라 복귀 시 방어: 열려있는 모든 모달 닫기 + pendingDelete 초기화 ──
-      (function closeAllModals() {
-        var dm = document.getElementById('deleteConfirmModal');
-        var cm = document.getElementById('caffeineWarningModal');
-        var em = document.getElementById('editModalOverlay');
-        if (dm) dm.style.display = 'none';
-        if (cm) cm.style.display = 'none';
-        if (em) em.style.display = 'none';
-        pendingDelete = { type: null, id: null };
-        document.activeElement && document.activeElement.blur();
-      })();
-
-      // 미리보기 + 로딩 표시
-      const preview    = document.getElementById('imagePreview');
-      const previewImg = document.getElementById('previewImg');
-      const reader     = new FileReader();
-      reader.onload = function(e) { previewImg.src = e.target.result; preview.classList.remove('hidden'); };
-      reader.readAsDataURL(file);
-      document.getElementById('aiAnalyzing').classList.remove('hidden');
-
-      // ⭐ 이전 결과 style.cssText 완전 초기화 (이전 오류 색상 잔존 방지)
-      const aiResultEl = document.getElementById('aiResult');
-      aiResultEl.style.cssText = '';
-      aiResultEl.className = 'hidden mt-3 bg-white p-3 rounded-lg border border-purple-200';
-
-      try {
-        const base64Image = await fileToBase64(file);
-        // ⭐ input 즉시 초기화 → 같은 파일 재선택 시 onchange 재발화 가능
-        event.target.value = '';
-        _runAIAnalysis(base64Image);
-      } catch (error) {
-        document.getElementById('aiAnalyzing').classList.add('hidden');
-        showAiResultError('이미지 처리 오류', error.message || '이미지를 읽는 중 문제가 발생했습니다');
-        event.target.value = '';
-      }
-    }
-
-    // ⭐ 이미지 압축 포함 base64 변환
-    // - max 1024px 리사이즈 + JPEG 80% 품질 → 약 100~300KB
-    // - mime_type을 항상 image/jpeg로 통일 (PNG/HEIC 선택 시에도 정상 처리)
-    // - GAS google.script.run 페이로드 한도 초과 방지
-    function fileToBase64(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onerror = reject;
-        reader.onload = function(e) {
-          const img = new Image();
-          img.onerror = reject;
-          img.onload = function() {
-            try {
-              const MAX = 1024;
-              let w = img.width, h = img.height;
-
-              // 장축 기준 1024px 이하로 비율 유지 리사이즈
-              if (w > MAX || h > MAX) {
-                if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
-                else       { w = Math.round(w * MAX / h); h = MAX; }
-              }
-
-              const canvas = document.createElement('canvas');
-              canvas.width  = w;
-              canvas.height = h;
-              canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-
-              // JPEG 80% 품질로 압축 (mime_type 항상 image/jpeg 통일)
-              const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-              resolve(dataUrl.split(',')[1]);
-            } catch (err) {
-              reject(err);
-            }
-          };
-          img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    function togglePhotoGuide() {
-      const guide = document.getElementById('photoGuide');
-      if (guide.classList.contains('hidden')) { guide.classList.remove('hidden'); }
-      else { guide.classList.add('hidden'); }
-    }
-
-    function clearImagePreview() {
-      const preview = document.getElementById('imagePreview');
-      const previewImg = document.getElementById('previewImg');
-      if (preview) preview.classList.add('hidden');
-      if (previewImg) previewImg.src = '';
-      const aiResult = document.getElementById('aiResult');
-      const aiAnalyzing = document.getElementById('aiAnalyzing');
-      if (aiResult) aiResult.classList.add('hidden');
-      if (aiAnalyzing) aiAnalyzing.classList.add('hidden');
-      const drinkImage = document.getElementById('drinkImage');
-      const drinkCamera = document.getElementById('drinkCamera');
-      if (drinkImage) drinkImage.value = '';
-      if (drinkCamera) drinkCamera.value = '';
-    }
 
     // ═══════════════════════════════════════════════════════
     // 📅 달력 탭 & 뱃지 시스템
@@ -6144,288 +5860,6 @@
     }
 
     // 뱃지 업데이트 로직
-    function updateBadgesLegacy() {
-      const today = getTodayKST();
-
-      // 1) 오늘의 실천
-      const hasTodayCaf   = getCaffeineLogsForDate(today).length > 0;
-      const hasTodaySleep = !!getSleepLogForDate(today);
-
-      // 2) 카페인 / 수면 기록일 Set 구성 (별도)
-      const cafDates   = new Set();
-      const sleepDates = new Set();
-      caffeineLogs.forEach(function(log) { const d = getLogDateKST(log.time); if (d) cafDates.add(d); });
-      sleepLogs.forEach(function(log)    { if (log.date) sleepDates.add(log.date); });
-
-      // 3) 유형별 연속일 계산
-      function _calcStreakFor(dateSet) {
-        let streak = 0;
-        const cur = new Date(today + 'T00:00:00');
-        if (!dateSet.has(today)) cur.setDate(cur.getDate() - 1);
-        while (true) {
-          const ds = cur.toISOString().split('T')[0];
-          if (dateSet.has(ds)) { streak++; cur.setDate(cur.getDate() - 1); } else break;
-        }
-        return streak;
-      }
-      function _calcGapFor(dateSet) {
-        if (dateSet.has(today)) return 0;
-        let gap = 0;
-        const cur = new Date(today + 'T00:00:00');
-        cur.setDate(cur.getDate() - 1);
-        for (let i = 0; i < 30; i++) {
-          const ds = cur.toISOString().split('T')[0];
-          if (dateSet.has(ds)) break;
-          gap++; cur.setDate(cur.getDate() - 1);
-        }
-        return gap;
-      }
-      // 챌린지 기간 내 누적 기록일 계산
-      function _calcCumulative(type, startDate, endDate) {
-        if (!startDate || !endDate) return 0;
-        let count = 0;
-        const cur = new Date(startDate + 'T00:00:00');
-        const end = new Date(endDate   + 'T00:00:00');
-        while (cur <= end) {
-          const ds = cur.toISOString().split('T')[0];
-          let has = false;
-          if (type === 'caffeine' || type === 'both') has = has || cafDates.has(ds);
-          if (type === 'sleep'    || type === 'both') has = has || sleepDates.has(ds);
-          if (has) count++;
-          cur.setDate(cur.getDate() + 1);
-        }
-        return count;
-      }
-
-      const cafStreak   = _calcStreakFor(cafDates);
-      const sleepStreak = _calcStreakFor(sleepDates);
-      const cafGap      = _calcGapFor(cafDates);
-
-      // 4) 오늘의 실천 뱃지 (고정)
-      function _setActive(id, iconId, labelId, labelHTML, bgClass, txtClass) {
-        const el = document.getElementById(id);
-        const ic = document.getElementById(iconId);
-        const lb = document.getElementById(labelId);
-        if (!el || !ic || !lb) return;
-        el.className = `flex items-center gap-3 p-3 rounded-2xl transition-all duration-500 ${bgClass}`;
-        ic.className = 'text-3xl flex-shrink-0';
-        lb.className = `text-xs font-bold leading-tight ${txtClass}`;
-        lb.innerHTML = labelHTML;
-      }
-      function _setInactive(id, iconId, labelId, labelHTML) {
-        const el = document.getElementById(id);
-        const ic = document.getElementById(iconId);
-        const lb = document.getElementById(labelId);
-        if (!el || !ic || !lb) return;
-        el.className = 'flex items-center gap-3 p-3 rounded-2xl bg-gray-100 transition-all duration-500';
-        ic.className = 'text-3xl flex-shrink-0 grayscale opacity-40';
-        lb.className = 'text-xs font-bold text-gray-400 leading-tight';
-        lb.innerHTML = labelHTML;
-      }
-
-      if (hasTodayCaf)   _setActive('badge-daily-caf','badge-daily-caf-icon','badge-daily-caf-label','카페인<br>오늘 기록','bg-orange-100','text-orange-700');
-      else               _setInactive('badge-daily-caf','badge-daily-caf-icon','badge-daily-caf-label','카페인<br>오늘 기록');
-      if (hasTodaySleep) _setActive('badge-daily-sleep','badge-daily-sleep-icon','badge-daily-sleep-label','수면<br>오늘 기록','bg-blue-100','text-blue-700');
-      else               _setInactive('badge-daily-sleep','badge-daily-sleep-icon','badge-daily-sleep-label','수면<br>오늘 기록');
-
-      // 5) 챌린지 뱃지 동적 렌더 (v3: 교사 승인 기반 / 카페인 좌열·수면 우열)
-
-      // 교사 수여 여부 판정 — ID 또는 이름으로 매칭 (블록 밖에서도 사용 가능)
-      function _isBadgeEarned(badge) {
-        return teacherAwards.some(function(a) {
-          return (a.awardId === badge.id) || (a.badgeId === badge.id) ||
-                 (a.name && badge.name && a.name.trim() === badge.name.trim());
-        });
-      }
-
-      const grid = document.getElementById('challengeBadgeGrid');
-      if (grid) {
-        const cfg = badgeConfig;
-
-        // 챌린지 이름 표시
-        const nameEl = document.getElementById('badge-challenge-name');
-        if (nameEl) nameEl.textContent = (cfg && cfg.challengeName) ? '[ ' + cfg.challengeName + ' ]' : '';
-
-        // 뱃지 카드 DOM 생성
-        function _makeBadgeCard(badge) {
-          const goal    = badge.days || 1;
-          const icon    = badge.image || badge.emoji || '🏅';
-          const isCumul = (badge.method === 'cumulative' || badge.type === 'count');
-          const isEarned = _isBadgeEarned(badge);
-
-          let currentVal = 0;
-          if (!isEarned) {
-            if (isCumul) {
-              currentVal = _calcCumulative(badge.type || 'caffeine', cfg.challengeStart, cfg.challengeEnd);
-            } else {
-              const bType = badge.type || 'caffeine';
-              if      (bType === 'caffeine') currentVal = cafStreak;
-              else if (bType === 'sleep')    currentVal = sleepStreak;
-              else                           currentVal = Math.min(cafStreak, sleepStreak);
-            }
-          }
-
-          const diff = goal - currentVal;
-          const div = document.createElement('div');
-          div.className = 'flex items-center gap-3 p-3 rounded-2xl transition-all duration-500';
-
-          if (isEarned) {
-            div.style.cssText = `background:${badge.bg||'#ecfdf5'};box-shadow:0 2px 10px ${badge.color||'#059669'}28;`;
-            div.innerHTML = `
-              <span class="text-3xl flex-shrink-0" style="filter:drop-shadow(0 2px 4px ${badge.color||'#059669'}55);">${icon}</span>
-              <div class="min-w-0">
-                <p class="text-xs font-bold leading-tight" style="color:${badge.color||'#059669'};">${badge.name}</p>
-                <p class="text-[10px] mt-0.5 font-semibold" style="color:${badge.color||'#059669'}88;">달성 완료 🎉</p>
-              </div>`;
-          } else if (diff <= 2 && diff > 0) {
-            const unitStr = isCumul ? '일' : '일 연속';
-            div.style.cssText = 'background:#f3f4f6;border:1.5px dashed #6ee7b7;';
-            div.innerHTML = `
-              <span class="text-3xl flex-shrink-0 grayscale opacity-50">${icon}</span>
-              <div class="min-w-0">
-                <p class="text-xs font-bold text-gray-500 leading-tight">${badge.name}</p>
-                <p class="text-[10px] mt-0.5 font-semibold text-emerald-600">${diff}${unitStr} 더! 거의 다 왔어요 💪</p>
-              </div>`;
-          } else {
-            const typeLabel = isCumul ? `누적 ${currentVal}/${goal}일` : `연속 ${currentVal}/${goal}일`;
-            div.style.cssText = 'background:#f3f4f6;';
-            div.innerHTML = `
-              <span class="text-3xl flex-shrink-0 grayscale opacity-40">${icon}</span>
-              <div class="min-w-0">
-                <p class="text-xs font-bold text-gray-400 leading-tight">${badge.name}</p>
-                <p class="text-[10px] text-gray-400 mt-0.5">${typeLabel}</p>
-              </div>`;
-          }
-          return { div, isEarned, diff, currentVal, isCumul, icon, badge };
-        }
-
-        if (!cfg || !cfg.badges || cfg.badges.length === 0) {
-          grid.innerHTML = '<p class="col-span-2 text-xs text-gray-400 text-center py-4">교사가 챌린지를 설정하면<br>여기에 뱃지 슬롯이 나타나요!</p>';
-        } else {
-          grid.innerHTML = '';
-
-          // ── 카페인(좌) / 수면(우) / 둘다(좌) 로 분리 ──
-          const cafCol   = document.createElement('div');
-          cafCol.className = 'flex flex-col gap-2';
-          const sleepCol = document.createElement('div');
-          sleepCol.className = 'flex flex-col gap-2';
-
-          // 열 헤더
-          const cafHdr = document.createElement('p');
-          cafHdr.className = 'text-[11px] font-bold text-orange-500 pb-1 tracking-wide';
-          cafHdr.textContent = '☕ 카페인 목표';
-          cafCol.appendChild(cafHdr);
-
-          const sleepHdr = document.createElement('p');
-          sleepHdr.className = 'text-[11px] font-bold text-indigo-500 pb-1 tracking-wide';
-          sleepHdr.textContent = '😴 수면 목표';
-          sleepCol.appendChild(sleepHdr);
-
-          let nextTarget = null;
-
-          cfg.badges.forEach(function(badge) {
-            const result = _makeBadgeCard(badge);
-            if (!result.isEarned && !nextTarget) {
-              nextTarget = { badge: result.badge, icon: result.icon, currentVal: result.currentVal, diff: result.diff, isCumul: result.isCumul };
-            }
-            const bType = badge.type || 'caffeine';
-            if (bType === 'sleep') sleepCol.appendChild(result.div);
-            else                   cafCol.appendChild(result.div);   // caffeine / both → 좌열
-          });
-
-          grid.appendChild(cafCol);
-          grid.appendChild(sleepCol);
-
-          // 6) 경고 / 응원 메시지
-          const msgEl = document.getElementById('badge-challenge-msg');
-          if (msgEl) {
-            const hasUnearned     = cfg.badges.some(function(b){ return !_isBadgeEarned(b); });
-            const hasConsecUnearned = cfg.badges.some(function(b){
-              return (b.method==='consecutive'||b.type==='streak') && !_isBadgeEarned(b);
-            });
-            if (hasConsecUnearned && cafGap >= 2) {
-              const color = cafGap >= 3 ? 'red' : 'orange';
-              const txt = cafGap >= 3
-                ? `<b>${cafGap}일째 기록 없음</b> — 연속 기록이 끊겼어요 😢<br>연속 뱃지는 <b>하루라도 빠지면 처음부터 다시!</b> 오늘 기록하고 재도전해요.`
-                : `<b>이틀째 기록 없음</b> — 오늘 기록 안 하면 연속이 끊겨요! 지금 바로 기록하세요 🔥`;
-              msgEl.className = `mt-3 p-3 bg-${color}-50 border border-${color}-200 rounded-xl flex items-start gap-2`;
-              msgEl.innerHTML = `<span>⚠️</span><p class="text-xs text-${color}-600 leading-relaxed">${txt}</p>`;
-              msgEl.classList.remove('hidden');
-            } else if (nextTarget && nextTarget.diff <= 2 && hasUnearned) {
-              const t = nextTarget;
-              const typeStr = t.isCumul ? `${t.diff}일` : `연속 ${t.diff}일`;
-              msgEl.className = 'mt-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-2';
-              msgEl.innerHTML = `<span>💪</span><p class="text-xs text-emerald-700 leading-relaxed"><b>${typeStr}만 더!</b> 조건 달성 시 ${t.icon} <b>${t.badge.name}</b> 뱃지를 받을 수 있어요!</p>`;
-              msgEl.classList.remove('hidden');
-            } else {
-              msgEl.classList.add('hidden');
-            }
-          }
-
-          // 7) 하단 안내 텍스트
-          const infoEl = document.getElementById('badge-streak-info');
-          if (infoEl) {
-            const todayParts = [];
-            if (!hasTodayCaf)   todayParts.push('카페인 기록 ☕');
-            if (!hasTodaySleep) todayParts.push('수면 기록 😴');
-            if (todayParts.length > 0) {
-              infoEl.textContent = '오늘 아직: ' + todayParts.join(', ') + ' 남았어요';
-            } else if (nextTarget) {
-              const t = nextTarget;
-              const typeStr = t.isCumul
-                ? `누적 ${t.currentVal}일 / ${t.badge.days}일`
-                : `연속 ${t.currentVal}일 / ${t.badge.days}일`;
-              infoEl.textContent = `${typeStr} — ${t.icon} ${t.badge.name} 도전 중!`;
-            } else {
-              infoEl.textContent = '🎉 모든 챌린지 뱃지를 받았어요! 정말 대단해요!';
-            }
-          }
-        }
-      }
-
-      // 8) 선생님 직접 수여 뱃지 (챌린지 뱃지 목록에 없는 것)
-      const directSection = document.getElementById('teacherDirectBadgeSection');
-      const directList    = document.getElementById('teacherDirectBadgeList');
-      if (directSection && directList) {
-        const cfgBadgeIds = (badgeConfig && badgeConfig.badges)
-          ? badgeConfig.badges.map(function(b){ return b.id; }) : [];
-        const cfgBadgeNames = (badgeConfig && badgeConfig.badges)
-          ? badgeConfig.badges.map(function(b){ return (b.name||'').trim(); }) : [];
-
-        // teacherAwards 중 챌린지 그리드에서 earned로 표시되지 않는 것만 표시
-        // (badgeConfig에 없거나, 있어도 earned 감지 실패한 경우 모두 포함)
-        const directAwards = teacherAwards.filter(function(a) {
-          const aid = a.awardId || a.badgeId || '';
-          const aname = (a.name || '').trim();
-          const cfgBadge = (badgeConfig && badgeConfig.badges || []).find(function(b) {
-            return b.id === aid || (b.name||'').trim() === aname;
-          });
-          // 챌린지 뱃지가 아니면 항상 표시
-          if (!cfgBadge) return true;
-          // 챌린지 뱃지인데 earned 표시가 제대로 되면 그리드에 이미 보이므로 제외
-          return !_isBadgeEarned(cfgBadge);
-        });
-
-        if (directAwards.length > 0) {
-          directList.innerHTML = directAwards.map(function(a) {
-            const isUrl = a.image && (a.image.startsWith('http') || a.image.startsWith('/'));
-            const imgHtml = isUrl
-              ? `<img src="${a.image}" style="width:22px;height:22px;object-fit:contain;border-radius:4px;flex-shrink:0;" onerror="this.style.display='none'">`
-              : `<span style="font-size:18px;flex-shrink:0;line-height:1;">${a.image||'🏅'}</span>`;
-            const dateStr = a.grantedAt ? a.grantedAt.substring(5) : '';
-            return `<div style="display:inline-flex;align-items:center;gap:5px;background:${a.bg||'#f5f3ff'};color:${a.color||'#7c3aed'};padding:5px 10px;border-radius:20px;font-size:11px;font-weight:700;border:1.5px solid ${a.color||'#7c3aed'}33;">
-              ${imgHtml}
-              <span>${a.name}</span>
-              ${dateStr ? `<span style="opacity:0.55;font-weight:400;font-size:10px;">${dateStr}</span>` : ''}
-            </div>`;
-          }).join('');
-          directSection.classList.remove('hidden');
-        } else {
-          directSection.classList.add('hidden');
-        }
-      }
-    }
-
     function updateBadges() {
       const today = getTodayKST();
       const cafDates = caffeineLogs.map(function(log) { return getLogDateKST(log.time); }).filter(Boolean);

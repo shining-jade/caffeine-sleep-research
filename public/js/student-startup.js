@@ -26,22 +26,10 @@ export async function loadStudentBootstrap({ requestBootstrap, applyBootstrap, f
   }
 }
 
-export function shouldDeferStudentBootstrap({ analyzingVisible, cameraHasFile }) {
-  return analyzingVisible === true || cameraHasFile === true;
-}
-
-export function getStudentBootstrapAction({ analyzingVisible, cameraHasFile }) {
-  if (analyzingVisible === true) return 'wait';
-  if (cameraHasFile === true) return 'analyze';
-  return 'load';
-}
-
 if (typeof window !== 'undefined') {
   window.studentStartup = {
     loadStudentBootstrap,
-    getStudentBootstrapAction,
     restoreStudentSession,
-    shouldDeferStudentBootstrap,
   };
 }
 
