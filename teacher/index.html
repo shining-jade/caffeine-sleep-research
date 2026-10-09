@@ -3179,7 +3179,7 @@ function aiGroupSleepWords() {
 }
 
 function getStudentFilterDate(){
-    const el=document.getElementById('studentDateFilter');
+    const el=document.getElementById(studentPeriodMode==='custom'?'studentEndDate':'studentDateFilter');
     return(el&&el.value)?el.value:today;
 }
 function onStudentDateChange(){
@@ -3193,14 +3193,13 @@ function resetStudentDate(){
     if(el)el.value=today;
     onStudentDateChange();
 }
-function filterStudents(){
+function getFilteredStudents(){
     const sv=document.getElementById('studentSearchInput').value.toLowerCase();
     const gv=msGet('studentGradeFilter'), cv=msGet('studentClassFilter');
     let f=getAnalysisStudents();if(gv)f=f.filter(s=>gv.has(normalizeGrade(s.학년)));if(cv)f=f.filter(s=>cv.has(s.반));
     if(sv)f=f.filter(s=>s.학번.includes(sv)||s.이름.includes(sv));
     const fd=getStudentFilterDate();
     const d7=getStudentDates();
-    const getRatio=id=>{const ac=avgCafForDates(id,d7);return ac/getLimit(id);};
 
     // 다중 선택 필터
     const cafChips=activeFilters.caf;
@@ -3273,7 +3272,10 @@ function filterStudents(){
         });
     }
 
-    updateBadges();renderStudentGrid(f);
+    return f;
+}
+function filterStudents(){
+    updateBadges();renderStudentGrid(getFilteredStudents());
 }
 function updateBadges(){
     const fd=getStudentFilterDate();
@@ -4462,19 +4464,13 @@ function exportStudentExcel(){
     const d7=getStudentDates();
     const rangeLabel=d7[0]+' ~ '+d7[d7.length-1];
 
-    // 현재 필터 적용된 학생 목록 생성
-    const sv=document.getElementById('studentSearchInput').value.toLowerCase();
-    const gv=msGet('studentGradeFilter'),cv=msGet('studentClassFilter');
-    let students=getAnalysisStudents();
-    if(gv)students=students.filter(s=>gv.has(normalizeGrade(s.학년)));
-    if(cv)students=students.filter(s=>cv.has(s.반));
-    if(sv)students=students.filter(s=>s.학번.includes(sv)||s.이름.includes(sv));
+    const students=getFilteredStudents();
 
     // CSV 생성 (BOM 포함으로 한글 정상 표시)
     const rows=[
         [`교사용 모니터링 다운로드 - 기간: ${rangeLabel}`],
         [],
-        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','오늘수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지','교사수여뱃지','교사수여코멘트']
+        ['학년','반','번호','이름','학번',`${d7.length}일평균카페인(mg)`,'카페인상태',`${d7.length}일평균수면(h)`,'수면상태','오늘카페인기록','오늘수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지','교사수여뱃지','교사수여코멘트']
     ];
 
     students.forEach(s=>{
@@ -4495,7 +4491,7 @@ function exportStudentExcel(){
         const manualMsgText=manualList.map(a=>a.message).filter(Boolean).join(' / ')||'-';
         rows.push([
             s.학년, s.반, s.번호, s.이름, s.학번,
-            ac>0?Math.round(ac):'-',
+            hasRecCSV?Math.round(ac):'-',
             cafSI.text,
             as>0?as.toFixed(1):'-',
             sleepSI.text,
@@ -4503,7 +4499,7 @@ function exportStudentExcel(){
             getTargetCafText(s.학번).replace('mg',''),
             info&&info.목표취침?info.목표취침:'-',
             info&&info.목표기상?info.목표기상:'-',
-            autoBadgeText, manualBadgeText, manualMsgTex
+            autoBadgeText, manualBadgeText, manualMsgText
         ]);
     });
 
@@ -4527,25 +4523,14 @@ function exportStudentToSheet(){
     const fd=getStudentFilterDate();
     const d7=getStudentDates();
 
-    const sv=document.getElementById('studentSearchInput').value.toLowerCase();
-    const gv=msGet('studentGradeFilter'),cv=msGet('studentClassFilter');
-    let students=getAnalysisStudents();
-    if(gv)students=students.filter(s=>gv.has(normalizeGrade(s.학년)));
-    if(cv)students=students.filter(s=>cv.has(s.반));
-    if(sv)students=students.filter(s=>s.학번.includes(sv)||s.이름.includes(sv));
+    const students=getFilteredStudents();
 
     if(students.length===0){alert('내보낼 학생이 없습니다.');return;}
 
     // ─── 요약 시트 (학생당 1행, 뱃지현황 별도시트 없음) ───
     const summaryRows=[
-        ['학년','반','번호','이름','학번','7일평균카페인(mg)','카페인상태','7일평균수면(h)','수면상태','오늘카페인기록','오늘수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지수','교사수여뱃지수','자동뱃지목록','교사수여뱃지목록','교사수여코멘트']
+        ['학년','반','번호','이름','학번',`${d7.length}일평균카페인(mg)`,'카페인상태',`${d7.length}일평균수면(h)`,'수면상태','오늘카페인기록','오늘수면기록(기상일기준)','목표카페인(mg)','목표취침','목표기상','자동뱃지수','교사수여뱃지수','자동뱃지목록','교사수여뱃지목록','교사수여코멘트']
     ];
-
-    // 드롭다운 값 수집
-    const CAF_STATUS_VALUES  = ['미기록','카페인 안전','카페인 주의','카페인 위험','초과'];
-    const AUTO_BADGE_VALUES  = ['습관의 시작','꾸준한 기록','카페인 안전','수면 적정'];
-    const allManualNames     = [...new Set(students.flatMap(s=>getManualAwardsFor(s.학번).map(a=>a.name)))].filter(Boolean);
-    const MANUAL_BADGE_VALUES= allManualNames.length ? allManualNames : ['(없음)'];
 
     students.forEach(s=>{
         const ac=avgCafForDates(s.학번,d7);
@@ -4562,12 +4547,12 @@ function exportStudentToSheet(){
 
         summaryRows.push([
             s.학년, s.반, s.번호, s.이름, s.학번,
-            ac>0?Math.round(ac):0,
+            hasRec?Math.round(ac):'',
             cafSI.text,                                                    // G: 카페인상태 (드롭다운)
-            as>0?parseFloat(as.toFixed(1)):0,
+            as>0?parseFloat(as.toFixed(1)):'',
             sleepSI.text,                                                  // I: 수면상태 (드롭다운)
             todayCaf, todaySleep,
-            Number(getTargetCafText(s.학번).replace('mg',''))||0,
+            getTargetCafText(s.학번)==='미설정'?'':Number(getTargetCafText(s.학번).replace('mg','')),
             info&&info.목표취침?info.목표취침:'',
             info&&info.목표기상?info.목표기상:'',
             autoList.length,
@@ -4580,14 +4565,18 @@ function exportStudentToSheet(){
 
     const sheetName = '모니터링_'+fd;
 
-    // 드롭다운 컬럼 정의 (1-based 인덱스)
-    // G=7:카페인상태, I=9:수면상태, R=18:자동뱃지목록, S=19:교사수여뱃지목록
-    const SLEEP_STATUS_VALUES = ['미기록','심각한 부족','수면 부족','수면 적정','수면 과다'];
+    // 현재 상태 표시와 뱃지 조합을 그대로 드롭다운에도 허용합니다.
+    const CAF_STATUS_VALUES = ['미기록','카페인 섭취 안 함','1단계: 안전','2단계: 적정/제한','3단계: 과다','4단계: 고위험','5단계: 위험/중독'];
+    const SLEEP_STATUS_VALUES = ['미기록','수면 부족 🔴','적당한 수면 🟠','권장 수면 🟢','적당한 수면 🟡','수면 과다 🟣'];
+    const AUTO_BADGE_VALUES = [...new Set(['카페인 오늘 기록','수면 오늘 기록',...summaryRows.slice(1).map(row=>row[16]).filter(Boolean)])];
+    const allManualNames = [...new Set([...students.flatMap(s=>getManualAwardsFor(s.학번).map(a=>a.name)),...summaryRows.slice(1).map(row=>row[17])])].filter(Boolean);
+    const MANUAL_BADGE_VALUES = allManualNames.length ? allManualNames : ['(없음)'];
+    // G=7:카페인상태, I=9:수면상태, Q=17:자동뱃지목록, R=18:교사수여뱃지목록
     const dropdownCols = [
         { colIndex: 7,  values: CAF_STATUS_VALUES   },  // 카페인상태
         { colIndex: 9,  values: SLEEP_STATUS_VALUES },  // 수면상태
-        { colIndex: 18, values: AUTO_BADGE_VALUES   },  // 자동뱃지목록
-        { colIndex: 19, values: MANUAL_BADGE_VALUES }   // 교사수여뱃지목록
+        { colIndex: 17, values: AUTO_BADGE_VALUES   },  // 자동뱃지목록
+        { colIndex: 18, values: MANUAL_BADGE_VALUES }   // 교사수여뱃지목록
     ];
 
     showTeacherModal('📊','구글 시트 저장 중...',`${students.length}명 데이터를 시트에 저장합니다...`,'info');
