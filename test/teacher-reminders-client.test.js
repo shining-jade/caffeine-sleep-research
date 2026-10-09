@@ -383,6 +383,25 @@ test('test student refresh and send errors use fixed safe messages', async () =>
   assert.doesNotMatch(JSON.stringify(failed), /endpoint|provider/);
 });
 
+test('a new test send clears the previous outcome even when its response is lost', async () => {
+  let fail = false;
+  const states = [];
+  const controller=createTeacherReminders({
+    api:{
+      async getConfig(){return {config:config()};},
+      async getTestStudent(){return {sleepDevices:1,caffeineDevices:1};},
+      async sendTestStudent(){if(fail)throw new Error('lost response');return {targeted:1,sent:1,expired:0,failed:0,logSaved:false};},
+    },onState:state=>states.push(state),
+  });
+  await controller.initialize();
+  const sent=await controller.sendTestStudent('sleep');
+  assert.equal(sent.testStudent.result.logSaved,false);
+  fail=true;
+  await assert.rejects(()=>controller.sendTestStudent('caffeine'));
+  assert.equal(states.findLast(s=>s.testStudent.status==='sending').testStudent.result,null);
+  assert.equal(controller.getState().testStudent.result,null);
+});
+
 test('config loading retains confirmed data and identifies unknown initial values', async () => {
   let resolveConfig;
   const states = [];

@@ -114,11 +114,13 @@ export function createTestStudentHandler({
           ...delivery,
         };
       }));
+      let logSaved = true;
       if (results.length) {
         const recordRequest = normalizeTeacherRequest(
           'recordTestStudentReminderResults', [type, referenceDate, results],
         );
-        await callGas({ role: 'teacher', ...recordRequest });
+        try { await callGas({ role: 'teacher', ...recordRequest }); }
+        catch { logSaved = false; }
       }
       const counts = { sent: 0, expired: 0, failed: 0 };
       for (const result of results) {
@@ -131,6 +133,7 @@ export function createTestStudentHandler({
         type,
         targeted: targets.length,
         ...counts,
+        ...(!logSaved ? { logSaved: false } : {}),
       });
     } catch (error) {
       sendReminderError(res, error);

@@ -262,6 +262,27 @@ test('test student send rejects identity subscription and extra fields before an
   assert.equal(calls, 0);
 });
 
+test('confirmed push outcomes survive a failed result log without sending twice', async () => {
+  let sends = 0, writes = 0;
+  const handler = createTestStudentHandler({
+    now:()=>NOW,
+    callGas:async ({action})=>{
+      if(action==='getTestStudentReminderTargets') return {subscriptions:[{
+        studentId:'0',subscriptionId:subscriptionIdForEndpoint(SUBSCRIPTION.endpoint),...SUBSCRIPTION,
+      }]};
+      writes++;
+      throw Object.assign(new Error('private log detail'),{code:'GAS_TIMEOUT',status:504});
+    },
+    createSender:()=>({async send(){sends++;return {status:'success'};}}),
+  });
+  const res=response();
+  await handler(request('POST',JSON.stringify({type:'caffeine'}),teacherCookie()),res);
+  assert.equal(res.statusCode,200);
+  assert.deepEqual(res.json(),{success:true,type:'caffeine',targeted:1,sent:1,expired:0,failed:0,logSaved:false});
+  assert.equal(sends,1);assert.equal(writes,1);
+  assert.doesNotMatch(res.body,/private|push\.example/);
+});
+
 test('test student send delivers approved copy and persists aggregate lifecycle results', async () => {
   const deviceA = { ...SUBSCRIPTION, endpoint: 'https://push.example/student-a' };
   const deviceB = { ...SUBSCRIPTION, endpoint: 'https://push.example/student-b' };

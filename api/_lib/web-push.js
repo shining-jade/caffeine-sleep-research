@@ -62,7 +62,7 @@ export function createPushSender({
     async send(subscription, payload) {
       for (let attempt = 1; attempt <= attemptsLimit; attempt += 1) {
         try {
-          await sendNotification(subscription, payload);
+          await sendNotification(subscription, payload, { timeout: 10_000 });
           return { status: 'success', errorCode: null };
         } catch (error) {
           const statusCode = statusCodeOf(error);
