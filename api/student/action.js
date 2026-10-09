@@ -37,8 +37,8 @@ export function createActionHandler({
     }
     try {
       normalized = normalizeStudentRequest(body?.action, body?.params, session);
-    } catch {
-      sendJson(res, 403, { success: false, error: 'ACTION_NOT_ALLOWED' });
+    } catch (error) {
+      sendJson(res, error?.code === 'INVALID_INPUT' ? 400 : 403, { success: false, error: error?.code === 'INVALID_INPUT' ? 'INVALID_INPUT' : 'ACTION_NOT_ALLOWED' });
       return;
     }
 

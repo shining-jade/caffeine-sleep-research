@@ -5191,6 +5191,7 @@ function renderInquiries(type) {
 }
 
 function openReplyModal(rowIndex, title, content) {
+    if (document.querySelector('#replyModal .btn-primary')?.disabled) return;
     document.getElementById('replyRowIndex').value = rowIndex;
     document.getElementById('replyInquiryContent').innerHTML = '<strong>' + escapeHtml(title) + '</strong><br>' + escapeHtml(content);
     document.getElementById('replyContent').value = '';
@@ -5198,25 +5199,30 @@ function openReplyModal(rowIndex, title, content) {
 }
 
 function closeReplyModal() {
+    if (document.querySelector('#replyModal .btn-primary')?.disabled) return;
     document.getElementById('replyModal').style.display = 'none';
 }
 
 function submitReply() {
+    const btn = document.querySelector('#replyModal .btn-primary');
+    if (!btn || btn.disabled) return;
     const rowIndex = parseInt(document.getElementById('replyRowIndex').value);
     const reply = document.getElementById('replyContent').value.trim();
     if (!reply) { showTeacherModal('⚠️', '입력 필요', '응답 내용을 입력하세요.', 'warn'); return; }
-
+    if (!Number.isInteger(rowIndex) || rowIndex < 2) { showTeacherModal('⚠️', '입력 필요', '응답할 문의를 다시 선택하세요.', 'warn'); return; }
+    btn.disabled = true; btn.textContent = '제출 중...';
     google.script.run
         .withSuccessHandler(res => {
-            if (res.success) {
+            btn.disabled = false; btn.textContent = '응답 제출';
+            if (res && res.success === true) {
                 closeReplyModal();
                 loadInquiries();
                 showTeacherModal('✅', '응답 완료', '응답이 완료되었습니다.', 'success');
             } else {
-                showTeacherModal('❌', '응답 실패', res.error || '알 수 없는 오류가 발생했습니다.', 'error');
+                showTeacherModal('❌', '응답 실패', (res && res.error) || '알 수 없는 오류가 발생했습니다.', 'error');
             }
         })
-        .withFailureHandler(err => { showTeacherModal('❌', '오류', '응답 제출에 실패했습니다.', 'error'); })
+        .withFailureHandler(err => { btn.disabled = false; btn.textContent = '응답 제출'; showTeacherModal('❌', '오류', '응답 제출에 실패했습니다.', 'error'); })
         .replyToInquiry(rowIndex, reply);
 }
 
@@ -5238,6 +5244,7 @@ function confirmDeleteInquiry(rowIndex, title) {
 // ── 교사→학생 메시지 기능 ──────────────────────────────
 
 function openMsgSendModal() {
+    if (document.querySelector('#msgSendModal .btn-primary')?.disabled) return;
     const id = currentStudentId;
     const s = studentsData.find(st => st.학번 === id);
     if (!s) return;
@@ -5250,22 +5257,25 @@ function openMsgSendModal() {
 }
 
 function closeMsgSendModal() {
+    if (document.querySelector('#msgSendModal .btn-primary')?.disabled) return;
     document.getElementById('msgSendModal').style.display = 'none';
 }
 
 function submitTeacherMsg() {
+    const btn = document.querySelector('#msgSendModal .btn-primary');
+    if (!btn || btn.disabled) return;
     const title = document.getElementById('msgTitle').value.trim();
     const content = document.getElementById('msgContent').value.trim();
     const studentId = document.getElementById('msgTargetId').value;
     const studentName = document.getElementById('msgTargetName').value;
     if (!title) { alert('제목을 입력하세요.'); return; }
     if (!content) { alert('메시지 내용을 입력하세요.'); return; }
-    const btn = document.querySelector('#msgSendModal .btn-primary');
+    if (!studentId.trim() || !studentName.trim()) { showTeacherModal('⚠️', '입력 필요', '수신 학생을 다시 선택하세요.', 'warn'); return; }
     btn.disabled = true; btn.textContent = '전송 중...';
     google.script.run
         .withSuccessHandler(res => {
             btn.disabled = false; btn.textContent = '전송';
-            if (res && res.success) {
+            if (res && res.success === true) {
                 closeMsgSendModal();
                 showTeacherModal('✅', '전송 완료', `${studentName} 학생에게 메시지를 보냈습니다.`, 'success');
                 loadSentMessages();
