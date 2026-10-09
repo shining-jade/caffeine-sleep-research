@@ -3622,16 +3622,31 @@ function renderStudentGrid(students){
     });
 }
 
+let aiViewGeneration=0, aiViewKey='', aiReportContextKey='';
+function getAIContextKey(){
+    return JSON.stringify([String(currentStudentId||''),...getModalDates()]);
+}
+function isCurrentAIRequest(key,generation){
+    return generation===aiViewGeneration&&key===aiViewKey&&key===getAIContextKey();
+}
+function resetAIReportContext(){
+    aiViewGeneration++;
+    aiViewKey=getAIContextKey();
+    aiReportContextKey='';
+    const content=document.getElementById('aiContent');
+    content.innerHTML='<span style="color:#9ca3af;font-size:14px;">\'📊 건강분석\' 버튼을 클릭하면 결과가 여기에 표시됩니다.</span>';
+    content.contentEditable='false';
+    const badge=document.getElementById('aiStatusBadge');
+    badge.textContent='(분석 전)';badge.style.color='#818cf8';badge.classList.remove('ai-fallback-badge');
+    document.getElementById('aiBoxBody').classList.remove('open');document.getElementById('aiArrow').classList.remove('open');
+    ['aiEditBar','aiFormatBar','aiSavedBadge'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    const btn=document.getElementById('aiBtn');btn.disabled=false;btn.textContent='📊 건강분석';
+    const saveBtn=document.getElementById('aiSaveBtn');saveBtn.disabled=false;saveBtn.textContent='💾 저장';
+}
 function openStudentModal(id){
     currentStudentId=id;const s=studentsData.find(st=>st.학번===id);if(!s)return;
     document.getElementById('modalStudentName').textContent=s.이름;
     document.getElementById('modalStudentId').textContent=s.학번;
-    document.getElementById('aiContent').innerHTML='<span style="color:#9ca3af;font-size:14px;">\'📊 건강분석\' 버튼을 클릭하면 결과가 여기에 표시됩니다.</span>';
-    document.getElementById('aiStatusBadge').textContent='(분석 전)';document.getElementById('aiStatusBadge').style.color='#818cf8';
-    document.getElementById('aiBoxBody').classList.remove('open');document.getElementById('aiArrow').classList.remove('open');
-    // 편집바 및 채팅창 초기화
-    const _eb=document.getElementById('aiEditBar');if(_eb)_eb.style.display='none';
-    const _ac=document.getElementById('aiContent');if(_ac)_ac.contentEditable='false';
     // 학생 목록에서 설정한 날짜 범위를 모달에 그대로 적용
     modalPeriodMode=studentPeriodMode;
     ['7','14','30','custom'].forEach(m=>{document.getElementById('modalPeriodBtn'+m)?.classList.toggle('active',m===studentPeriodMode);});
@@ -3648,11 +3663,12 @@ function openStudentModal(id){
         document.getElementById('modalEndDate').value=listDate;
     }
     document.getElementById('modalEndDate').max=today;
+    resetAIReportContext();
     refreshModalData();document.getElementById('studentModal').classList.add('active');
     // 저장된 분석 결과가 있으면 자동 로드
     loadSavedAIReport();
 }
-function closeModal(){document.getElementById('studentModal').classList.remove('active');}
+function closeModal(){aiViewGeneration++;aiViewKey='';aiReportContextKey='';document.getElementById('studentModal').classList.remove('active');}
 window.onclick=e=>{if(e.target===document.getElementById('studentModal'))closeModal();};
 function setModalDateToday(){document.getElementById('modalEndDate').value=today;refreshModalData();}
 
@@ -3664,6 +3680,7 @@ function getSleepChartMax(values, targetHours){
 function refreshModalData(){
     const endDate=document.getElementById('modalEndDate').value||today;
     const dates=getModalDates();
+    if(getAIContextKey()!==aiViewKey){resetAIReportContext();loadSavedAIReport();}
     const rl=getPeriodLabel(dates);
     document.getElementById('modalDateRangeLabel').textContent=`📅 ${rl}`;
     document.getElementById('chartRangeLabel').textContent=`(${rl})`;
@@ -4126,6 +4143,8 @@ async function requestAIAnalysis(){
     const s=studentsData.find(st=>st.학번===currentStudentId);if(!s)return;
     const endDate=document.getElementById('modalEndDate').value||today;
     const dates=getModalDates();
+    const requestKey=getAIContextKey(),requestGeneration=++aiViewGeneration;
+    aiReportContextKey='';
     const cafDays=countCafDays(currentStudentId,dates);
     const slpDays=countSleepDays(currentStudentId,dates);
 
@@ -4232,27 +4251,31 @@ async function requestAIAnalysis(){
 
     google.script.run
         .withSuccessHandler(function(result){
+            if(!isCurrentAIRequest(requestKey,requestGeneration))return;
             if(result.success&&result.analysis&&result.analysis.length>50){
                 aiContent.innerHTML=sanitizeRichHtml(formatAIReportHTML(result.analysis));
                 const isFallback=result.source&&result.source.includes('Fallback');
                 badge.classList.toggle('ai-fallback-badge',!!isFallback);
                 if(isFallback){
-                    badge.textContent='(분석 완료 ✓)';badge.style.color='#10b981';
+                    badge.textContent='(기본 분석 완료)';badge.style.color='#10b981';
                 }else{
                     badge.textContent='(분석 완료 ✓)';badge.style.color='#10b981';
                 }
             }else{
                 aiContent.innerHTML=sanitizeRichHtml(generateFallbackAnalysis(promptData,avgCaf,avgSlp,lim));
-                badge.textContent='(분석 완료 ✓)';badge.style.color='#10b981';
+                badge.textContent='(기본 분석 완료)';badge.style.color='#10b981';
                 badge.classList.add('ai-fallback-badge');
             }
+            aiReportContextKey=requestKey;
             btn.disabled=false;btn.textContent='📊 건강분석';
             showAITools();
         })
         .withFailureHandler(function(err){
+            if(!isCurrentAIRequest(requestKey,requestGeneration))return;
             aiContent.innerHTML=sanitizeRichHtml(generateFallbackAnalysis(promptData,avgCaf,avgSlp,lim));
-            badge.textContent='(분석 완료 ✓)';badge.style.color='#10b981';
+            badge.textContent='(기본 분석 완료)';badge.style.color='#10b981';
             badge.classList.add('ai-fallback-badge');
+            aiReportContextKey=requestKey;
             btn.disabled=false;btn.textContent='📊 건강분석';
             showAITools();
         })
@@ -4265,22 +4288,26 @@ function showAITools(){
     const bar=document.getElementById('aiEditBar');if(bar)bar.style.display='flex';
     document.getElementById('aiSavedBadge').style.display='none';
     document.getElementById('aiEditBtn').style.display='';
-    document.getElementById('aiSaveBtn').style.display='none';
+    const saveBtn=document.getElementById('aiSaveBtn');saveBtn.style.display='none';saveBtn.disabled=false;saveBtn.textContent='💾 저장';
     document.getElementById('aiCancelBtn').style.display='none';
 }
 
 // 분석 결과 저장본 불러오기 (모달 열릴 때)
 function loadSavedAIReport(){
     const dates=getModalDates();
+    const requestKey=getAIContextKey(),requestGeneration=aiViewGeneration;
     const startDate=dates[0]||today;
     const endDate=dates[dates.length-1]||today;
     google.script.run
         .withSuccessHandler(function(res){
+            if(!isCurrentAIRequest(requestKey,requestGeneration))return;
             if(res&&res.success&&res.content){
                 const aiContent=document.getElementById('aiContent');
                 aiContent.innerHTML=sanitizeRichHtml(res.content.includes('<')?res.content:formatAIReportHTML(res.content));
                 document.getElementById('aiStatusBadge').textContent='(저장된 분석 ✓)';
                 document.getElementById('aiStatusBadge').style.color='#10b981';
+                document.getElementById('aiStatusBadge').classList.remove('ai-fallback-badge');
+                aiReportContextKey=requestKey;
                 document.getElementById('aiBoxBody').classList.add('open');
                 document.getElementById('aiArrow').classList.add('open');
                 showAITools();
@@ -4311,6 +4338,8 @@ function formatAIText(type){
     else if(type==='removeFormat'){document.execCommand('removeFormat',false,null);}
 }
 function saveAIEdit(){
+    const requestKey=getAIContextKey(),requestGeneration=aiViewGeneration;
+    if(aiReportContextKey!==requestKey)return;
     const el=document.getElementById('aiContent');
     el.contentEditable='false';
     const saveBtn=document.getElementById('aiSaveBtn');
@@ -4330,6 +4359,7 @@ function saveAIEdit(){
 
     google.script.run
         .withSuccessHandler(function(res){
+            if(!isCurrentAIRequest(requestKey,requestGeneration))return;
             saveBtn.disabled=false;saveBtn.textContent='💾 저장';
             document.getElementById('aiEditBtn').style.display='';
             saveBtn.style.display='none';
@@ -4340,6 +4370,7 @@ function saveAIEdit(){
             badge.style.display='';
         })
         .withFailureHandler(function(){
+            if(!isCurrentAIRequest(requestKey,requestGeneration))return;
             saveBtn.disabled=false;saveBtn.textContent='💾 저장';
             document.getElementById('aiFormatBar').style.display='none';
             badge.textContent='⚠️ 저장 실패';badge.style.color='#ef4444';badge.style.display='';
@@ -4745,7 +4776,7 @@ function exportPDF(options){
 
     const aiHTML=document.getElementById('aiContent').innerHTML||'';
     const badgeT=document.getElementById('aiStatusBadge').textContent;
-    const hasAnalysis=badgeT.includes('완료');
+    const hasAnalysis=aiReportContextKey===getAIContextKey()&&(badgeT.includes('완료')||badgeT.includes('저장된 분석'));
     if(pdfOptions.includeAi&&hasAnalysis&&aiHTML.length>50){document.getElementById('pdf_aiBox').style.display='block';document.getElementById('pdf_aiContent').innerHTML=compactPDFAIHTML(aiHTML);}
     else{document.getElementById('pdf_aiBox').style.display='none';}
 
