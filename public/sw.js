@@ -22,25 +22,48 @@ self.addEventListener('push', (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
+// Persist only a clicked destination, never a delivered notification or student data.
+// iOS can launch the home-screen start URL instead of the requested deep link.
+async function rememberReminderClick(relativeUrl) {
+  try {
+    const url = new URL(relativeUrl, self.location.origin);
+    const type = url.searchParams.get('open');
+    const date = url.searchParams.get('date');
+    if (url.pathname !== '/' || !['sleep', 'caffeine'].includes(type) || !/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return;
+    const clickedAt = Date.now();
+    const cache = await caches.open('student-reminder-click-v1');
+    const key = new URL(`/__reminder-click__/${crypto.randomUUID()}`, self.location.origin);
+    await cache.put(key.href, new Response(JSON.stringify({ url: relativeUrl, clickedAt }), {
+      headers: { 'Content-Type': 'application/json' },
+    }));
+  } catch { /* URL navigation still works if local storage is unavailable. */ }
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const relativeUrl = safeRelativeUrl(event.notification.data?.url);
   const targetUrl = new URL(relativeUrl, self.location.origin);
   event.waitUntil((async () => {
+    await rememberReminderClick(relativeUrl);
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const exact = windows.find((client) => {
       try { return new URL(client.url).href === targetUrl.href; } catch { return false; }
     });
     if (exact) {
-      await exact.focus();
+      try { await exact.focus(); } catch { /* A resumed iOS client can reject focus. */ }
+      exact.postMessage?.({ type: 'REMINDER_CLICKED' });
       return;
     }
     const sameOrigin = windows.find((client) => {
-      try { return new URL(client.url).origin === self.location.origin; } catch { return false; }
+      try {
+        const url = new URL(client.url);
+        return url.origin === self.location.origin && url.pathname === '/';
+      } catch { return false; }
     });
     if (sameOrigin && typeof sameOrigin.navigate === 'function') {
-      await sameOrigin.navigate(targetUrl.href);
-      await sameOrigin.focus();
+      try { await sameOrigin.navigate(targetUrl.href); } catch { /* App reads the saved destination on resume. */ }
+      try { await sameOrigin.focus(); } catch { /* Do not abandon the saved click. */ }
+      sameOrigin.postMessage?.({ type: 'REMINDER_CLICKED' });
       return;
     }
     await self.clients.openWindow(relativeUrl);
@@ -48,7 +71,7 @@ self.addEventListener('notificationclick', (event) => {
 });
 
 // Cache only the public student shell/assets. Session and health API responses stay network-only.
-const STUDENT_SHELL_CACHE = 'student-shell-phone-sync-v5';
+const STUDENT_SHELL_CACHE = 'student-shell-phone-sync-v6';
 const STUDENT_SHELL_FILES = ['/', '/public/data/caffeine-db.json', '/public/js/safe-render.js', '/public/js/read-feedback.js', '/public/js/student-feedback.js', '/public/js/student-sync.js', '/public/js/student-sync-ui.js', '/public/js/api-bridge.js', '/public/js/badge-journey.js', '/public/js/install-guide.js', '/public/js/push-reminders.js', '/public/js/student-startup.js'];
 const STUDENT_CDN_FILES = ['https://cdn.tailwindcss.com','https://cdn.jsdelivr.net/npm/chart.js','https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css'];
 self.addEventListener('install', event => {

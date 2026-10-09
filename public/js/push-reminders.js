@@ -56,6 +56,8 @@ export function createPushReminders({
   sessionStorageRef,
   locationRef,
   historyRef,
+  cachesRef,
+  now = () => Date.now(),
   detectEnvironment,
   openInstallGuide,
   openRecord,
@@ -65,6 +67,9 @@ export function createPushReminders({
   let config = null;
   let subscriptionId = null;
   let currentSubscription = null;
+  let activeStudentId = null;
+  let sessionVersion = 0;
+  let clickRead = Promise.resolve();
   let preferences = { sleepEnabled: true, caffeineEnabled: true };
   let state = {
     status: 'default', permission: 'default', supported: false,
@@ -126,7 +131,40 @@ export function createPushReminders({
     sessionStorageRef?.removeItem(PENDING_LINK_KEY);
     openRecord(pending);
     if (pendingFromUrl) historyRef?.replaceState?.({}, '', `${locationRef.pathname || '/'}${locationRef.hash || ''}`);
+    return pending;
   }
+
+  function resume(alreadyOpened = null) {
+    const version = sessionVersion;
+    clickRead = clickRead.then(async () => {
+      if (!activeStudentId || !cachesRef || !locationRef?.origin) return;
+      const cache = await cachesRef.open('student-reminder-click-v1');
+      const keys = await cache.keys();
+      const entries = await Promise.all(keys.map(async key => {
+        try {
+          const saved = await (await cache.match(key)).json();
+          const url = new URL(saved.url, locationRef.origin);
+          const record = parseReminderDeepLink(url.search);
+          const age = now() - saved.clickedAt;
+          if (url.origin !== locationRef.origin || url.pathname !== '/' || !record
+              || !Number.isFinite(saved.clickedAt) || age < 0 || age > 60 * 60 * 1000) return null;
+          return { record, clickedAt: saved.clickedAt };
+        } catch { return null; }
+      }));
+      if (!activeStudentId || version !== sessionVersion) return;
+      const latest = entries.filter(Boolean).sort((a, b) => b.clickedAt - a.clickedAt)[0];
+      if (latest && !(alreadyOpened?.type === latest.record.type && alreadyOpened?.date === latest.record.date)) {
+        openRecord(latest.record);
+      }
+      // Delete this snapshot only; a new click saved during the read stays pending.
+      await Promise.all(keys.map(key => cache.delete(key)));
+    }).catch(() => { /* Ordinary URL navigation remains available without CacheStorage. */ });
+    return clickRead;
+  }
+
+  navigatorRef?.serviceWorker?.addEventListener?.('message', event => {
+    if (event.data?.type === 'REMINDER_CLICKED') resume();
+  });
 
   async function loadPreferences() {
     const registration = await getRegistration();
@@ -146,8 +184,12 @@ export function createPushReminders({
   }
 
   async function initialize(session) {
-    if (!session?.studentId) return emit();
-    consumePendingLink();
+    const studentId = session?.studentId || null;
+    if (studentId !== activeStudentId) sessionVersion += 1;
+    activeStudentId = studentId;
+    if (!activeStudentId) return emit();
+    const opened = consumePendingLink();
+    await resume(opened);
     const supported = isSupported();
     const permission = permissionState();
     emit({ supported, permission, status: permission });
@@ -225,6 +267,8 @@ export function createPushReminders({
   }
 
   async function unsubscribeCurrentDevice() {
+    activeStudentId = null;
+    sessionVersion += 1;
     let subscription = currentSubscription;
     try {
       if (!subscription && isSupported()) subscription = await (await getRegistration()).pushManager.getSubscription();
@@ -243,6 +287,7 @@ export function createPushReminders({
 
   return {
     initialize,
+    resume,
     enable,
     loadPreferences,
     savePreferences,
@@ -302,6 +347,7 @@ if (typeof window !== 'undefined') {
     sessionStorageRef: window.sessionStorage,
     locationRef: window.location,
     historyRef: window.history,
+    cachesRef: window.caches,
     detectEnvironment: () => detectInstallEnvironment({
       userAgent: navigator.userAgent,
       standalone: navigator.standalone === true,
@@ -312,6 +358,11 @@ if (typeof window !== 'undefined') {
     onState: renderStudentReminderState,
   });
   window.pushReminders = controller;
+  window.addEventListener('focus', () => controller.resume());
+  window.addEventListener('pageshow', () => controller.resume());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') controller.resume();
+  });
 
   window.addEventListener('DOMContentLoaded', () => {
     document.getElementById('pushEnableBtn')?.addEventListener('click', () => controller.enable());
