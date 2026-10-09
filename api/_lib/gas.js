@@ -94,7 +94,7 @@ async function callGasOnce({
           if (!outputRead || attempt >= 1 || controller.signal.aborted || error?.name === 'AbortError') throw error;
           continue;
         }
-        if (outputRead && attempt < 1 && !controller.signal.aborted && (response.status === 429 || response.status >= 500)) {
+        if (outputRead && attempt < 1 && !controller.signal.aborted && (response.status === 404 || response.status === 429 || response.status >= 500)) {
           try { await response.body?.cancel(); } catch { /* Releasing the failed result must not replay the POST. */ }
           continue;
         }
