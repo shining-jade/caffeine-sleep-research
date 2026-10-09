@@ -1,4 +1,5 @@
 import { STUDENT_ACTION_RULES } from './actions.js';
+import { validateMessageInput } from './message-validation.js';
 
 function requireStudentSession(session) {
   if (session?.role !== 'student'
@@ -48,5 +49,6 @@ export function normalizeStudentRequest(action, params, session) {
     normalizedParams[0] = { ...subscription, role: 'student', studentId: session.studentId };
   }
 
+  validateMessageInput(action, normalizedParams);
   return { action, params: normalizedParams, subject };
 }
