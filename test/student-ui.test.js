@@ -31,6 +31,49 @@ function extract(name) {
   return html.slice(start, end);
 }
 
+function runCaffeineEdit(amount) {
+  const requests = [], notices = [];
+  const fields = {
+    editDrinkName: { value: '[검증] 섭취 안 함' },
+    editAmount: { value: amount },
+    editTime: { value: '2026-10-08T06:00' },
+    editReasonEtc: { value: '' },
+  };
+  const runner = {
+    withSuccessHandler() { return this; },
+    withFailureHandler() { return this; },
+    updateCaffeineData(payload) { requests.push(JSON.parse(JSON.stringify(payload))); },
+  };
+  const context = vm.createContext({
+    editingType: 'caffeine', editingId: 'existing-record',
+    user: { studentId: '0', name: '테스트' },
+    caffeineLogs: [{ id: 'existing-record', amount: 0 }],
+    document: { getElementById: id => fields[id], querySelectorAll: () => [] },
+    google: { script: { run: runner } },
+    getLogDateKST: value => value.slice(0, 10), getTodayKST: () => '2026-10-09',
+    showInfoModal: (...args) => notices.push(args),
+  });
+  vm.runInContext(extract('saveEdit') + '\nsaveEdit();', context);
+  return { requests, notices };
+}
+
+test('editing a zero-mg record sends its changed date with the existing record ID', () => {
+  const { requests, notices } = runCaffeineEdit('0');
+  assert.equal(notices.length, 0);
+  assert.deepEqual(requests, [{
+    id: 'existing-record', studentId: '0', name: '테스트',
+    drink: '[검증] 섭취 안 함', mg: 0, time: '2026-10-08T06:00', reason: '', symptom: '',
+  }]);
+});
+
+test('caffeine edits reject empty, nonnumeric and negative amounts before a server write', () => {
+  for (const amount of ['', 'invalid', '-1', '-0.5', 'Infinity', '1e309']) {
+    const { requests, notices } = runCaffeineEdit(amount);
+    assert.equal(requests.length, 0, `unexpected write for ${JSON.stringify(amount)}`);
+    assert.equal(notices.length, 1);
+  }
+});
+
 test('immediate caffeine guidance distinguishes pending from confirmed storage', () => {
   const elements = new Map();
   const document = { getElementById(id) {
