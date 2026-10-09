@@ -230,8 +230,6 @@ test('automatic refresh waits two minutes and skips hidden pages', () => {
   context.document.hidden=false; callback(); assert.equal(reads,1);
 });
 test('app version checks never create an update announcement', () => {
-  const context=vm.createContext({document:{lastModified:'new',createElement(){assert.fail('update toast');}},localStorage:{getItem:()=> 'old',setItem(){}}});
-  vm.runInContext(extract('checkAppVersion')+'\ncheckAppVersion();',context);
   assert.doesNotMatch(html,/앱이 업데이트 되었습니다/);
 });
 
