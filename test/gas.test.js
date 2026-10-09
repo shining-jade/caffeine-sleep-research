@@ -14,7 +14,78 @@ const request = {
   action: 'getStats',
   params: ['1101'],
   subject: { studentId: '1101', name: '테스트학생' },
+  onDiagnostic() {},
 };
+
+test('a transient output failure recovers the committed receipt without replaying its write', async () => {
+  for (const failure of ['http', 'network', 'body']) {
+    let writes = 0;
+    let reads = 0;
+    const fetchImpl = async (url, options) => {
+      if (options.method === 'POST') {
+        writes++;
+        return new Response(null, { status: 302, headers: { Location: 'https://script.googleusercontent.com/macros/echo?key=private-output' } });
+      }
+      assert.equal(url, 'https://script.googleusercontent.com/macros/echo?key=private-output');
+      assert.equal(options.body, undefined);
+      assert.equal(options.headers, undefined);
+      reads++;
+      if (reads === 1) {
+        if (failure === 'network') throw new TypeError('private transport detail');
+        if (failure === 'body') return new Response(new ReadableStream({ start(controller) { controller.error(new TypeError('terminated')); } }));
+        return new Response('temporary', { status: 503 });
+      }
+      return new Response(JSON.stringify({ success: true, data: { success: true, recordId: 'saved-once' } }));
+    };
+    const result = await callGas({ ...request, action: 'saveCaffeineData', fetchImpl });
+    assert.equal(result.recordId, 'saved-once');
+    assert.equal(writes, 1);
+    assert.equal(reads, 2);
+  }
+});
+
+test('output retries stop after one retry and log only safe failure metadata', async () => {
+  const diagnostics = [];
+  let writes = 0;
+  let reads = 0;
+  const fetchImpl = async (_url, options) => {
+    if (options.method === 'POST') {
+      writes++;
+      return new Response(null, { status: 302, headers: { Location: 'https://script.googleusercontent.com/macros/echo?key=private-output' } });
+    }
+    reads++;
+    return new Response('private student-health-value', { status: 503 });
+  };
+  await assert.rejects(callGas({ ...request, action: 'saveCaffeineData', fetchImpl, onDiagnostic: value => diagnostics.push(value) }), error => error.code === 'GAS_UNAVAILABLE');
+  assert.equal(writes, 1);
+  assert.equal(reads, 2);
+  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics[0].stage, 'output');
+  assert.equal(diagnostics[0].reason, 'http_status');
+  assert.equal(diagnostics[0].upstreamStatus, 503);
+  const text = JSON.stringify(diagnostics);
+  for (const privateValue of [process.env.GAS_SHARED_SECRET, process.env.GAS_API_URL, 'private-output', 'student-health-value', '1101', '테스트학생']) assert.equal(text.includes(privateValue), false);
+});
+
+test('output rejection and abort never replay the write or retry a rejected result', async () => {
+  for (const failure of ['denied', 'abort', 'malformed']) {
+    let reads = 0;
+    let writes = 0;
+    const fetchImpl = async (_url, options) => {
+      if (options.method === 'POST') {
+        writes++;
+        return new Response(null, { status: 302, headers: { Location: 'https://script.googleusercontent.com/macros/echo?key=output' } });
+      }
+      reads++;
+      if (failure === 'abort') throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+      if (failure === 'malformed') return new Response('<html>invalid response</html>');
+      return new Response('denied', { status: 403 });
+    };
+    await assert.rejects(callGas({ ...request, action: 'saveTeacherPdfAndSendMessage', fetchImpl }), error => error.code === (failure === 'abort' ? 'GAS_TIMEOUT' : 'GAS_UNAVAILABLE'));
+    assert.equal(writes, 1);
+    assert.equal(reads, 1);
+  }
+});
 
 test('callGas sends POST text plain body', async () => {
   let captured;

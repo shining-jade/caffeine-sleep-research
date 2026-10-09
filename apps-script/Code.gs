@@ -2066,33 +2066,8 @@ function getStructuredFallbackAnalysis(avgCaffeine, avgSleep, limit, weekTotal, 
 // ✅ 사용법: Apps Script 편집기 → 프로젝트 설정 → 스크립트 속성에서
 //           속성 이름: GEMINI_API_KEY, 값: 본인의 Gemini API 키를 직접 입력하세요.
 //           이 함수는 키 저장 여부를 확인하는 용도로만 사용합니다.
-function setGeminiAPIKey() {
-  // ⚠️ 보안상 API 키를 코드에 직접 입력하지 마세요.
-  // Apps Script 편집기 → 프로젝트 설정(⚙️) → 스크립트 속성 탭에서
-  // 속성: GEMINI_API_KEY / 값: 발급받은 Gemini API 키 를 직접 등록하세요.
-  const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
-  if (!apiKey) {
-    safeLog_("❌ API 키가 스크립트 속성에 설정되지 않았습니다.");
-    safeLog_("   Apps Script → 프로젝트 설정 → 스크립트 속성에서 GEMINI_API_KEY를 추가하세요.");
-    return;
-  }
-  safeLog_("✅ API 키 확인 완료: " + apiKey.substring(0, 15) + "...");
-  safeLog_("✅ 모델: Gemini 2.5 Flash");
-}
 
 // API 키 확인 함수
-function checkGeminiAPIKey() {
-  const apiKey = PropertiesService.getScriptProperties().getProperty("GEMINI_API_KEY");
-
-  if (apiKey) {
-    safeLog_("✅ API 키가 설정되어 있습니다");
-    safeLog_("키: " + apiKey.substring(0, 15) + "...");
-    safeLog_("길이: " + apiKey.length + " 문자");
-  } else {
-    safeLog_("❌ API 키가 설정되지 않았습니다!");
-    safeLog_("setGeminiAPIKey() 함수를 먼저 실행하세요");
-  }
-}
 
 // ============================================
 // 뱃지 연속 기록 기준 설정
