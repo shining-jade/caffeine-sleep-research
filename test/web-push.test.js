@@ -107,17 +107,22 @@ test('push sender configures VAPID and maps a successful delivery', async () => 
 });
 
 test('declarative notifications navigate to distinct record screens without worker click handling', () => {
+  const appOrigin = 'https://caffeine-sleep-research.vercel.app';
   for (const type of ['sleep', 'caffeine']) {
     const payload = JSON.parse(buildNotificationPayload({ type, referenceDate: '2026-10-09' }));
     assert.equal(payload.web_push, 8030);
     assert.equal(payload.mutable, false);
-    assert.equal(payload.notification.navigate, `/?open=${type}&date=2026-10-09`);
+    assert.equal(payload.notification.navigate, `${appOrigin}/?open=${type}&date=2026-10-09`);
     assert.equal(payload.notification.title, payload.title);
     assert.equal(payload.notification.body, payload.body);
     assert.equal(payload.notification.tag, `record-${type}-2026-10-09`);
-    assert.equal(payload.notification.icon, '/public/icons/icon-192.png');
+    assert.equal(payload.notification.icon, `${appOrigin}/public/icons/icon-192.png`);
+    assert.equal(payload.notification.badge, `${appOrigin}/public/icons/icon-192.png`);
     assert.deepEqual(payload.notification.data, payload.data);
-    assert.equal(new URL(payload.notification.navigate, 'https://app.example/').origin, 'https://app.example');
+    // WebKit's NotificationJSONParser constructs URLs without a base URL.
+    for (const field of ['navigate', 'icon', 'badge']) {
+      assert.equal(new URL(payload.notification[field]).origin, appOrigin);
+    }
   }
 });
 
