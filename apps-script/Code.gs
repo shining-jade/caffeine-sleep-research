@@ -2437,20 +2437,28 @@ function getAIReport(studentId, startDate, endDate) {
   }
 }
 
-// 테스트 함수
+// 편집기 전용 분석 시험. 실존 학생 조회/저장 없이 고정 가상 기록만 사용합니다.
 function testAIAnalysis() {
-  const result = generateAIHealthReport(
-    "1101",
-    "홍길동",
-    1050,
-    150,
-    7.5,
-    65,
-    100
-  );
-  safeLog_("=== AI 분석 결과 ===");
-  safeLog_("성공 여부: " + result.success);
-  safeLog_("분석 내용:\n" + result.analysis);
+  ScriptApp.requireScopes(ScriptApp.AuthMode.FULL, ["https://www.googleapis.com/auth/script.external_request"]);
+  const payload = {
+    studentId: "fictional-analysis-fixture", name: "실존 인물이 아닌 가상 자료",
+    weight: 60, limit: 150, startDate: "2000-01-01", endDate: "2000-01-03",
+    caffeineData: { topReasons: "가상 응답: 기호", topSymptoms: "없음" },
+    sleepData: { topPhone: "안 함", topActivity: "30분 미만", topLatency: "15분 이내", topWake: "0회", topDrowsy: "없음" }
+  };
+  const weekly = {
+    caffeineRecordedDays: 3, sleepRecordedDays: 3, recordedDays: 3, totalDays: 3,
+    caffeineTotal: 150, sleepTotal: 24.5, overCaffeineDays: [],
+    details: "모든 수치는 검증을 위해 만든 가상 기록입니다.\n2000-01-01: 카페인 0mg, 수면 8시간\n2000-01-02: 카페인 50mg, 수면 8시간\n2000-01-03: 카페인 100mg, 수면 8.5시간"
+  };
+  const models = [getTeacherAnalysisModel_(), "gemini-3.5-flash-lite"];
+  const report = { fictionalDataOnly: true, results: [] };
+  models.forEach(function(model) {
+    const result = analyzeTeacherHealthData_(payload, weekly, model, 1);
+    report.results.push({model: model, source: result.source || "ERROR", httpStatus: result.httpStatus || null, errorCode: result.errorCode || null, analysis: result.analysis || ""});
+  });
+  console.info(JSON.stringify(report));
+  return report;
 }
 
 // 수면 로그 테스트 함수
@@ -3678,6 +3686,17 @@ function getTeacherLifestyleValues_(summary, ignored) {
 
 function handleAIReportForTeacher(payload) {
   try {
+    return analyzeTeacherHealthData_(payload, getWeeklyDetailedData(payload.studentId, payload.startDate || null, payload.endDate || null), getTeacherAnalysisModel_(), 3);
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
+function getTeacherAnalysisModel_() { return "gemini-2.0-flash"; }
+
+// 데이터 수집을 분리하여 고정 가상 기록으로도 같은 분석 처리를 검사합니다.
+function analyzeTeacherHealthData_(payload, weeklyData, modelName, maxRetry) {
+  try {
     const studentId  = payload.studentId;
     const name       = payload.name;
     const weight     = payload.weight || 60;
@@ -3710,7 +3729,6 @@ function handleAIReportForTeacher(payload) {
     const caffeineThresholds = getTeacherCaffeineThresholds_(payload.caffeineThresholds);
 
     // ── ⭐ 교사 지정 기간 기준으로 실데이터 수집 ──────────
-    const weeklyData           = getWeeklyDetailedData(studentId, startDate, endDate);
     const weeklyDetails        = weeklyData.details;
     const caffeineRecordedDays = weeklyData.caffeineRecordedDays;
     const sleepRecordedDays    = weeklyData.sleepRecordedDays;
@@ -3736,7 +3754,6 @@ function handleAIReportForTeacher(payload) {
     const realAvgSleep = sleepRecordedDays > 0 ? weeklyData.sleepTotal / sleepRecordedDays : 0;
 
     // ── 교사용 전용 Gemini 프롬프트 ─────────────────────
-    const modelName = "gemini-2.0-flash";
     const apiUrl    = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     // ⭐ 소견 헤더에 실제 조회 기간 표시
@@ -3966,10 +3983,12 @@ ${priorityAction}
 
     safeLog_('🚀 교사용 Gemini API 호출 중...');
 
+    let apiHttpStatus = null;
     try {
-      const fetchResult   = fetchWithRetry(apiUrl, options, 3);
+      const fetchResult   = fetchWithRetry(apiUrl, options, maxRetry);
       const fetchResponse = fetchResult.response;
       const fetchErrCode  = fetchResult.errorCode;
+      apiHttpStatus = fetchResponse ? fetchResponse.getResponseCode() : null;
 
       if (!fetchResponse || fetchResponse.getResponseCode() !== 200) {
         const errInfo = getApiErrorInfo(fetchErrCode || 'UNKNOWN_ERROR');
@@ -3993,6 +4012,7 @@ ${priorityAction}
           analysis:     getTeacherFallbackAnalysis(realAvgCaffeine, realAvgSleep, limit, caffeineRecordedDays, sleepRecordedDays, periodLabel, overDays, periodForHeader, lifeAdvice, caffeineThresholds),
           source:       'Fallback (AI 미완성)',
           errorCode:    'INCOMPLETE',
+          httpStatus:   apiHttpStatus,
           recordedDays: recordedDays
         };
       }
@@ -4004,6 +4024,7 @@ ${priorityAction}
         success:      true,
         analysis:     analysis,
         source:       'AI_Teacher',
+        httpStatus:   apiHttpStatus,
         recordedDays: recordedDays
       };
 
@@ -4015,6 +4036,7 @@ ${priorityAction}
         success:      true,
         analysis:     getTeacherFallbackAnalysis(realAvgCaffeine, realAvgSleep, limit, caffeineRecordedDays, sleepRecordedDays, periodLabel, overDays, periodForHeader, lifeAdvice, caffeineThresholds),
         source:       'Fallback (API 오류)',
+        httpStatus:   apiHttpStatus,
         errorCode:    ec,
         error:        apiError.message,
         recordedDays: recordedDays
