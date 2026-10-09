@@ -3623,9 +3623,9 @@ function getTeacherCaffeineSummary_(average, limit, recordedDays, dailyRecords, 
   const overDays = (dailyRecords || []).filter(d => d.mg > 0 && d.mg >= overLimit);
   let section = !recordedDays ? '카페인 미기록으로 섭취 상태를 판정할 수 없습니다.'
     : average === 0 ? '카페인 기록 ' + recordedDays + '일 모두 카페인 섭취 안 함(0mg)으로 기록되었습니다.'
-    : '기록일 기준 일평균 ' + Math.round(average) + 'mg이며, 교사 판정 기준(' + limit + 'mg)의 ' + Math.round(pct) + '%로 ' + status + '입니다.';
+    : '기록일 기준 일평균 ' + Math.round(average) + 'mg이며, 일일 최대 섭취량(' + limit + 'mg)의 ' + Math.round(pct) + '%로 ' + status + '입니다.';
   if (overDays.length) {
-    section += '\n카페인 기록 ' + recordedDays + '일 중 ' + overDays.length + '일에 교사 판정 초과 경계(' + Math.round(overLimit * 10) / 10 + 'mg, ' + thresholds.over + '%) 이상을 섭취했습니다.\n초과 기록:\n'
+    section += '\n카페인 기록 ' + recordedDays + '일 중 ' + overDays.length + '일에 초과 경계(' + Math.round(overLimit * 10) / 10 + 'mg, ' + thresholds.over + '%) 이상을 섭취했습니다.\n초과 기록:\n'
       + overDays.map(d => '  - ' + d.date.substr(5) + ': ' + d.mg + 'mg').join('\n');
   }
   return {stage: stage, status: status, overDays: overDays, section: section};
@@ -3747,7 +3747,7 @@ function handleAIReportForTeacher(payload) {
     // 개선 방법 1 — 카페인
     let improveCaf;
     if (overDaysCount > 0) {
-      improveCaf = '교사 판정 초과일(' + overDaysCount + '일) 재발 방지를 위해 음료 선택 전 카페인 함량 라벨을 반드시 확인하고, 오후 2시 이후에는 무카페인 음료로 대체하는 습관을 형성하도록 권장합니다.';
+      improveCaf = '초과 경계 이상인 날(' + overDaysCount + '일) 재발 방지를 위해 음료 선택 전 카페인 함량 라벨을 반드시 확인하고, 오후 2시 이후에는 무카페인 음료로 대체하는 습관을 형성하도록 권장합니다.';
     } else if (caffeineSummary.stage >= 3) {
       improveCaf = '카페인 과다 섭취 개선을 위해 하루 섭취 음료 수를 1잔 줄이고, 카페인 음료를 물·보리차 등으로 단계적으로 대체하도록 지도합니다.';
     } else {
@@ -3842,7 +3842,7 @@ function handleAIReportForTeacher(payload) {
 [학생 정보]
 - 이름: ${name}
 - 조회 기간: ${periodForHeader} (총 ${totalDays}일)
-- 체중: ${weight}kg / 교사 판정 기준: ${limit}mg
+- 체중: ${weight}kg / 일일 최대 섭취량: ${limit}mg
 - 평균은 각 항목의 기록일 기준이며 0mg 기록일은 포함하고 미기록일은 제외함
 - 카페인 기록: ${caffeineRecordedDays}/${totalDays}일 / 수면 기록: ${sleepRecordedDays}/${totalDays}일
 - 현재 상태: ${cafStatusHint} / ${sleepStatusHint}
@@ -4046,7 +4046,7 @@ function getTeacherFallbackAnalysis(avgCaffeine, avgSleep, limit, cafDays, sleep
   // ── 개선 방법 ───────────────────────────────────────────
   let improve1;
   if (overDaysCount > 0) {
-    improve1 = '교사 판정 초과일(' + overDaysCount + '일) 재발 방지를 위해 음료 선택 전 카페인 함량 라벨을 반드시 확인하고, 오후 2시 이후에는 무카페인 음료로 대체하는 습관을 형성하도록 권장합니다.';
+    improve1 = '초과 경계 이상인 날(' + overDaysCount + '일) 재발 방지를 위해 음료 선택 전 카페인 함량 라벨을 반드시 확인하고, 오후 2시 이후에는 무카페인 음료로 대체하는 습관을 형성하도록 권장합니다.';
   } else if (caffeineSummary.stage >= 3) {
     improve1 = '카페인 과다 섭취 개선을 위해 하루 섭취 음료 수를 1잔 줄이고, 카페인 음료를 물·보리차 등으로 단계적으로 대체하도록 지도합니다.';
   } else {

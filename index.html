@@ -311,7 +311,7 @@
               </div>
             </div>
             <div class="text-right">
-              <p class="text-xs text-gray-400">일일 목표</p>
+              <p class="text-xs text-gray-400">일일 최대 섭취량</p>
               <p class="text-lg font-bold text-indigo-600"><span id="dashboardLimit">150</span>mg</p>
             </div>
           </div>
@@ -925,10 +925,10 @@
               </p>
             </div>
 
-            <!-- 목표 카페인 섭취량 -->
+            <!-- 일일 최대 섭취량 -->
             <div>
               <label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">
-                ☕ 목표 카페인 섭취량 (mg/일)
+                ☕ 일일 최대 섭취량 (mg/일)
               </label>
               <input type="number" id="targetCafInput" placeholder="비워두면 체중 기준 자동계산" min="1" max="1000" step="1"
                 class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-400">
@@ -1663,9 +1663,9 @@
                 oninput="calcSetupLimit()">
               <p id="setupLimitHint" class="text-xs text-indigo-500 mt-1 hidden">일일 권장량: <b id="setupLimitVal">-</b> mg</p>
             </div>
-            <!-- 목표 카페인 섭취량 -->
+            <!-- 일일 최대 섭취량 -->
             <div>
-              <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">☕ 목표 카페인 섭취량 (mg/일)</label>
+              <label class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1.5">☕ 일일 최대 섭취량 (mg/일)</label>
               <input type="number" id="setupTargetCaf" placeholder="예: 100 (비워두면 자동계산)"
                 class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-indigo-400" min="1" max="1000" step="1">
               <p class="text-xs text-gray-400 mt-1">1~1000mg을 입력하세요. 비워두면 체중 기준 자동계산 (체중 × 2.5mg)</p>
@@ -2378,7 +2378,7 @@
                 borderWidth: 2,
                 borderDash: [6, 4],
                 pointRadius: 0,
-                label: '개인 목표',
+                label: '일일 최대 섭취량',
                 fill: false
               }
             ]
@@ -2391,7 +2391,7 @@
               tooltip: {
                 callbacks: {
                   label: function(context) {
-                    if (context.datasetIndex === 1) return `개인 목표: ${userLimit}mg`;
+                    if (context.datasetIndex === 1) return `일일 최대 섭취량: ${userLimit}mg`;
                     const i = context.dataIndex;
                     const mg = caffeineData[i];
                     const hasCaf = caffeineHasData[i];
@@ -2420,7 +2420,7 @@
               <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f97316;margin-right:3px;"></span>3단계 과다</span>
               <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#ef4444;margin-right:3px;"></span>4단계 고위험</span>
               <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#a855f7;margin-right:3px;"></span>5단계 위험/중독</span>
-              <span><span style="display:inline-block;width:22px;height:3px;background:rgba(239,68,68,0.7);border-top:2px dashed rgba(239,68,68,0.7);margin-right:3px;vertical-align:middle;"></span>개인 목표</span>
+              <span><span style="display:inline-block;width:22px;height:3px;background:rgba(239,68,68,0.7);border-top:2px dashed rgba(239,68,68,0.7);margin-right:3px;vertical-align:middle;"></span>일일 최대 섭취량</span>
             </div>`;
         }
       }
@@ -2687,7 +2687,7 @@
       if (!Number.isFinite(weight) || weight <= 0 || weight > 200) throw new Error('올바른 체중을 입력해주세요. (200kg 이하)');
       const rawTarget = String(document.getElementById(initial ? 'setupTargetCaf' : 'targetCafInput')?.value || '').trim();
       const targetCaf = rawTarget === '' ? Math.round(weight * 2.5) : Number(rawTarget);
-      if (!Number.isInteger(targetCaf) || targetCaf < 1 || targetCaf > 1000) throw new Error('목표 카페인은 1~1000mg의 정수로 입력하거나 자동계산을 위해 비워주세요.');
+      if (!Number.isInteger(targetCaf) || targetCaf < 1 || targetCaf > 1000) throw new Error('일일 최대 섭취량은 1~1000mg의 정수로 입력하거나 자동계산을 위해 비워주세요.');
       const targetBedtime = document.getElementById(initial ? 'setupBedtime' : 'targetBedtimeInput')?.value || '23:00';
       const targetWakeTime = document.getElementById(initial ? 'setupWakeTime' : 'targetWakeTimeInput')?.value || '07:00';
       if (![targetBedtime, targetWakeTime].every(value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value))) throw new Error('목표 취침·기상 시간을 확인해주세요.');
@@ -4105,7 +4105,7 @@
 
     function showCaffeineWarning(addedAmount, totalOverride, saveStatus) {
       if(saveStatus === 'local' && !(window.studentSyncProfile?.targetCaf > 0)) {
-        showSaveCompleteModal('휴대폰 저장 완료 · 구글시트 전송 대기\n목표 카페인이 미설정되어 목표 초과 여부를 계산하지 않았습니다.');
+        showSaveCompleteModal('휴대폰 저장 완료 · 구글시트 전송 대기\n일일 최대 섭취량이 미설정되어 초과 여부를 계산하지 않았습니다.');
         return;
       }
 
@@ -4158,10 +4158,10 @@
         emoji.innerText = stage.emoji;
         title.innerText = stage.name;
         desc.innerText = stage.msg;
-        info.innerText = `오늘 총 ${todayTotal}mg 섭취\n(개인 목표 ${userLimit}mg 대비 ${percentage}%)`;
+        info.innerText = `오늘 총 ${todayTotal}mg 섭취\n(일일 최대 섭취량 ${userLimit}mg 대비 ${percentage}%)`;
         if (saveStatus === 'local') info.innerText = `휴대폰 저장 완료 · 구글시트 전송 대기\n오늘 총 ${todayTotal}mg 섭취` ;
-        if (saveStatus === 'pending') info.innerText = `서버에 저장 중…\n입력한 기록을 포함한 예상 합계 ${todayTotal}mg\n(개인 목표 ${userLimit}mg 대비 ${percentage}%)`;
-        if (saveStatus === 'confirmed') info.innerText = `서버 저장 완료\n오늘 총 ${todayTotal}mg 섭취\n(개인 목표 ${userLimit}mg 대비 ${percentage}%)`;
+        if (saveStatus === 'pending') info.innerText = `서버에 저장 중…\n입력한 기록을 포함한 예상 합계 ${todayTotal}mg\n(일일 최대 섭취량 ${userLimit}mg 대비 ${percentage}%)`;
+        if (saveStatus === 'confirmed') info.innerText = `서버 저장 완료\n오늘 총 ${todayTotal}mg 섭취\n(일일 최대 섭취량 ${userLimit}mg 대비 ${percentage}%)`;
         btn.style.background = stage.color;
         btn.style.color = 'white';
         btn.style.border = 'none';
@@ -4623,7 +4623,7 @@
         ctx.fillText('건강 분석 리포트', PADDING, 52);
         ctx.font = F_SUB;
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
-        ctx.fillText(`${user.name}  ·  ${periodText}  ·  개인 목표 ${userLimit}mg`, PADDING, 82);
+        ctx.fillText(`${user.name}  ·  ${periodText}  ·  일일 최대 섭취량 ${userLimit}mg`, PADDING, 82);
         const now = new Date();
         ctx.font = F_SMALL; ctx.fillStyle = 'rgba(255,255,255,0.6)';
         ctx.fillText(`${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} 기준`, PADDING, 106);
@@ -6118,7 +6118,7 @@ document.addEventListener('click', function(e) {
           </div>
           <!-- 목표 카페인 -->
           <div id="dTargetCaf" style="margin-bottom:14px;">
-            <p style="font-size:10px;color:#9ca3af;font-weight:700;margin:0 0 6px;">☕ 목표 카페인 섭취량 (mg/일)</p>
+            <p style="font-size:10px;color:#9ca3af;font-weight:700;margin:0 0 6px;">☕ 일일 최대 섭취량 (mg/일)</p>
             <input type="number" placeholder="비워두면 체중 기준 자동계산" style="width:100%;box-sizing:border-box;padding:11px;border:2px solid #e5e7eb;border-radius:10px;font-size:13px;outline:none;font-family:inherit;">
             <p style="font-size:10px;color:#9ca3af;margin:4px 0 0;">비워두면 체중 × 2.5mg 기준으로 계산돼요.</p>
           </div>
@@ -6206,8 +6206,8 @@ const TUT_STEPS = [
 
   // 목표 카페인
   { screen:'main', target:'dTargetCaf', pos:'below',
-    emoji:'☕', cat:'설정 ②', title:'목표 카페인 섭취량을 설정해요',
-    desc:'하루 카페인 목표량을 직접 입력할 수 있어요. 비워두면 체중 기준으로 자동 계산돼요.',
+    emoji:'☕', cat:'설정 ②', title:'일일 최대 섭취량을 설정해요',
+    desc:'일일 최대 섭취량을 직접 입력할 수 있어요. 비워두면 체중 기준으로 자동 계산돼요.',
     guide:[
       '직접 입력하면 대시보드 그래프 기준선으로 표시돼요',
       '비워두면 체중 × 2.5mg이 자동 적용돼요',
