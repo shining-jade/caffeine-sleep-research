@@ -3336,6 +3336,8 @@ function checkGeminiAPIKey() {
   const model = "gemini-3.5-flash-lite";
   const result = { configured: !!apiKey, success: false, model: model, httpStatus: null, code: "NO_API_KEY" };
   if (apiKey) {
+    // IDE의 세부 권한 승인 흐름을 사용합니다. 승인 예외를 삼키지 않습니다.
+    ScriptApp.requireScopes(ScriptApp.AuthMode.FULL, ["https://www.googleapis.com/auth/script.external_request"]);
     try {
       const response = UrlFetchApp.fetch(
         "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent",
@@ -3367,6 +3369,8 @@ function checkGeminiAPIKey() {
     } catch (error) {
       result.code = "TRANSPORT_ERROR";
       const message = String(error && error.message || "");
+      result.errorMentionsExternalRequestScope = /script\.external_request/.test(message);
+      result.urlFetchPermissionDenied = /UrlFetchApp\.fetch/.test(message) && /permission|권한/i.test(message);
       if (/permission|authorization|권한|승인/i.test(message)) result.code = "URL_FETCH_PERMISSION_DENIED";
       else if (/header|헤더/i.test(message)) result.code = "INVALID_REQUEST_HEADER";
       else if (/DNS/i.test(message)) result.code = "DNS_ERROR";
