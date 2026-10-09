@@ -206,6 +206,7 @@
   </style>
   <script src="/public/js/student-feedback.js"></script>
   <script src="/public/js/student-sync.js"></script>
+  <script src="/public/js/read-feedback.js"></script>
   <script src="/public/js/api-bridge.js"></script>
   <script src="/public/js/badge-journey.js"></script>
   <script type="module" src="/public/js/install-guide.js"></script>
@@ -271,6 +272,7 @@
     </header>
 
     <main class="p-4 pb-28 w-full min-w-0 overflow-x-hidden">
+      <div id="studentNotificationReadAnchor"></div>
       <!-- [1탭: 대시보드] -->
       <div id="tab-dashboard" class="tab-content active space-y-4">
         <div class="bg-white p-4 rounded-[2rem] shadow-sm">
@@ -1328,6 +1330,7 @@
     let privateFormDefaults = [];
 
     function resetStudentData() {
+      if (window.ReadFeedback) window.ReadFeedback.reset();
       stopAutoRefresh();
       caffeineLogs = []; caffeineHistoryLoaded = false;
       confirmedPendingCaffeine = [];
@@ -1870,7 +1873,12 @@
           google.script.run
             .withSuccessHandler(res => {
               console.log('[교사뱃지] 달력탭 GAS응답:', JSON.stringify(res));
-              const awards = (res && res.success) ? (res.awards || []) : [];
+              if (!res || !res.success || !Array.isArray(res.awards)) {
+                setNotificationReadError('awards', true);
+                return;
+              }
+              setNotificationReadError('awards', false);
+              const awards = res.awards;
               const prevKeys = teacherAwards.map(a => a.grantedAt + a.name).join();
               const newKeys  = awards.map(a => a.grantedAt + a.name).join();
               _applyTeacherAwards(awards);
@@ -1878,6 +1886,7 @@
             })
             .withFailureHandler(err => {
               console.error('[교사뱃지] 달력탭 GAS실패:', err);
+              setNotificationReadError('awards', true);
             })
             .getTeacherAwardsForStudent(user.studentId);
         }
@@ -4833,13 +4842,17 @@
       if (!user || !user.studentId) return;
       google.script.run
         .withSuccessHandler(res => {
-          if (!res || !res.success) return;
-          const replied = (res.data || []).filter(i => i.status === '응답완료' && i.reply);
+          if (!res || !res.success || !Array.isArray(res.data)) {
+            setNotificationReadError('replies', true);
+            return;
+          }
+          setNotificationReadError('replies', false);
+          const replied = res.data.filter(i => i.status === '응답완료' && i.reply);
           const seen = getSeenReplyKeys();
           const newReplies = replied.filter(i => !seen.includes(i.timestamp + '|' + i.title));
           if (newReplies.length > 0) showReplyPopup(newReplies);
         })
-        .withFailureHandler(() => {})
+        .withFailureHandler(() => setNotificationReadError('replies', true))
         .getMyInquiries(user.studentId);
     }
     function showReplyPopup(replies) {
@@ -4985,26 +4998,19 @@
       google.script.run
         .withSuccessHandler(res => {
           console.log('[교사뱃지] GAS 응답:', JSON.stringify(res));
-          _applyTeacherAwards((res && res.success) ? (res.awards || []) : []);
+          if (!res || !res.success || !Array.isArray(res.awards)) {
+            setNotificationReadError('awards', true);
+            return;
+          }
+          setNotificationReadError('awards', false);
+          _applyTeacherAwards(res.awards);
           _flushTeacherAwardSeenQueue();
         })
         .withFailureHandler(err => {
           console.error('[교사뱃지] GAS 실패:', err);
-          // GAS 미구현 시 localStorage 폴백
-          _localStorageFallback();
+          setNotificationReadError('awards', true);
         })
         .getTeacherAwardsForStudent(user.studentId);
-    }
-
-    // localStorage 폴백 — teacher_v3.html의 manualAwards 키 공유
-    function _localStorageFallback() {
-      try {
-        const raw = localStorage.getItem('manualAwards');
-        if (!raw) return;
-        const all = JSON.parse(raw);
-        const myAwards = all[String(user.studentId)] || [];
-        _applyTeacherAwards(myAwards);
-      } catch(e) {}
     }
 
     // 뱃지 데이터 적용 — 렌더 + 알림 공통 처리
@@ -5254,10 +5260,15 @@
       if (!user || !user.studentId) return;
       const container = document.getElementById('myInquiriesContainer');
       if (!container) return;
-      container.innerHTML = '<p class="text-center py-3 text-gray-400 text-xs">로딩 중...</p>';
+      if (!ReadFeedback.begin(container, loadMyInquiries)) return;
       google.script.run
         .withSuccessHandler(res => {
-          if (!res.success || res.data.length === 0) {
+          if (!res || !res.success || !Array.isArray(res.data)) {
+            ReadFeedback.fail(container, loadMyInquiries);
+            return;
+          }
+          if (!ReadFeedback.success(container)) return;
+          if (res.data.length === 0) {
             container.innerHTML = '<p class="text-center py-4 text-gray-400 text-xs">문의 내역이 없습니다.</p>';
             return;
           }
@@ -5285,7 +5296,7 @@
           });
         })
         .withFailureHandler(() => {
-          container.innerHTML = '<p class="text-center py-3 text-red-400 text-xs">로딩 실패</p>';
+          ReadFeedback.fail(container, loadMyInquiries);
         })
         .getMyInquiries(user.studentId);
     }
@@ -5303,14 +5314,15 @@
     function loadTeacherMessages() {
       if (!user || !user.studentId) return;
       const container = document.getElementById('teacherMsgContainer');
-      container.innerHTML = '<p class="text-center py-4 text-gray-400 text-xs">불러오는 중...</p>';
+      if (!container || !ReadFeedback.begin(container, loadTeacherMessages)) return;
       google.script.run
         .withSuccessHandler(res => {
-          if (!res || !res.success) {
-            container.innerHTML = '<p class="text-center py-3 text-red-400 text-xs">불러오기 실패</p>';
+          if (!res || !res.success || !Array.isArray(res.data)) {
+            ReadFeedback.fail(container, loadTeacherMessages);
             return;
           }
-          if (!res.data || !res.data.length) {
+          if (!ReadFeedback.success(container)) return;
+          if (!res.data.length) {
             container.innerHTML = '<p class="text-center py-4 text-gray-400 text-xs">받은 메시지가 없습니다.</p>';
             updateMsgBubble(0);
             return;
@@ -5345,7 +5357,7 @@
           }).join('');
         })
         .withFailureHandler(() => {
-          container.innerHTML = '<p class="text-center py-3 text-red-400 text-xs">GAS 연결 실패</p>';
+          ReadFeedback.fail(container, loadTeacherMessages);
         })
         .getTeacherMessages(user.studentId);
     }
@@ -5354,12 +5366,27 @@
       if (!user || !user.studentId) return;
       google.script.run
         .withSuccessHandler(res => {
-          if (!res || !res.success) return;
-          const unread = (res.data || []).filter(m => m.readStatus === '미읽음');
+          if (!res || !res.success || !Array.isArray(res.data)) {
+            setNotificationReadError('messages', true);
+            return;
+          }
+          setNotificationReadError('messages', false);
+          const unread = res.data.filter(m => m.readStatus === '미읽음');
           updateMsgBubble(unread.length);
           if (unread.length > 0) showNewMsgModal(unread);
         })
+        .withFailureHandler(() => setNotificationReadError('messages', true))
         .getTeacherMessages(user.studentId);
+    }
+
+    function setNotificationReadError(kind, failed) {
+      ReadFeedback.report(document.getElementById('studentNotificationReadAnchor'), kind, failed, retryStudentNotifications);
+    }
+
+    function retryStudentNotifications() {
+      checkReplyBubble();
+      checkMsgBubble();
+      checkTeacherAwards();
     }
 
     function showNewMsgModal(messages) {
