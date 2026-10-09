@@ -44,6 +44,43 @@ test('a transient output failure recovers the committed receipt without replayin
   }
 });
 
+test('a transient Google output 404 is reread once without reexecuting lookup or mutation', async () => {
+  for (const action of ['getTestStudentReminderTargets', 'recordTestStudentReminderResults']) {
+    let executions = 0, outputReads = 0;
+    const result = await callGas({ ...request, role: 'teacher', action, fetchImpl: async (url, options) => {
+      if (options.method === 'POST') {
+        executions++;
+        return new Response(null, { status: 302, headers: { Location: 'https://script.googleusercontent.com/macros/echo?key=private-output' } });
+      }
+      assert.equal(url, 'https://script.googleusercontent.com/macros/echo?key=private-output');
+      outputReads++;
+      return outputReads === 1 ? new Response('not ready', { status: 404 })
+        : new Response(JSON.stringify({ success: true, data: { success: true } }));
+    } });
+    assert.equal(result.success, true);
+    assert.equal(executions, 1);
+    assert.equal(outputReads, 2);
+  }
+});
+
+test('persistent output 404 has one bounded reread and execution 404 is never replayed', async () => {
+  let executions = 0, outputReads = 0;
+  const fetchImpl = async (_url, options) => {
+    if (options.method === 'POST') {
+      executions++;
+      return new Response(null, { status: 302, headers: { Location: 'https://script.googleusercontent.com/macros/echo?key=private-output' } });
+    }
+    outputReads++; return new Response('missing', { status: 404 });
+  };
+  await assert.rejects(callGas({ ...request, action: 'saveCaffeineData', fetchImpl }), error => error.code === 'GAS_UNAVAILABLE');
+  assert.equal(executions, 1); assert.equal(outputReads, 2);
+  executions = 0;
+  await assert.rejects(callGas({ ...request, action: 'saveCaffeineData', fetchImpl: async () => {
+    executions++; return new Response('missing', { status: 404 });
+  } }), error => error.code === 'GAS_UNAVAILABLE');
+  assert.equal(executions, 1);
+});
+
 test('output retries stop after one retry and log only safe failure metadata', async () => {
   const diagnostics = [];
   let writes = 0;
