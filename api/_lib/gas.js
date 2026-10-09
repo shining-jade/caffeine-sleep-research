@@ -54,6 +54,7 @@ async function callGasOnce({
   fetchImpl = fetch,
   timeoutMs = GAS_TIMEOUT_MS,
   onDiagnostic = (event) => console.warn('gas_gateway_failure', JSON.stringify(event)),
+  onRecovery = (event) => console.info('gas_output_recovered', JSON.stringify(event)),
 }) {
   const config = getRuntimeConfig();
   const controller = new AbortController();
@@ -62,6 +63,9 @@ async function callGasOnce({
   let stage = 'execution';
   let reason = 'network';
   let upstreamStatus = null;
+  let redirectKind = null;
+  let output302Reread = false;
+  let outputReads = 0;
 
   try {
     let url = config.gasApiUrl;
@@ -88,13 +92,15 @@ async function callGasOnce({
         reason = 'network';
         upstreamStatus = null;
         try {
+          if (outputRead) outputReads += 1;
           response = await fetchImpl(url, options);
           upstreamStatus = response.status;
         } catch (error) {
           if (!outputRead || attempt >= 1 || controller.signal.aborted || error?.name === 'AbortError') throw error;
           continue;
         }
-        if (outputRead && attempt < 1 && !controller.signal.aborted && (response.status === 404 || response.status === 429 || response.status >= 500)) {
+        if (outputRead && attempt < 1 && !controller.signal.aborted && (response.status === 302 || response.status === 404 || response.status === 429 || response.status >= 500)) {
+          if (response.status === 302) output302Reread = true;
           try { await response.body?.cancel(); } catch { /* Releasing the failed result must not replay the POST. */ }
           continue;
         }
@@ -116,16 +122,21 @@ async function callGasOnce({
       if (![301, 302, 303, 307, 308].includes(response.status)) break;
       reason = 'invalid_redirect';
       const location = response.headers.get('location');
+      redirectKind = !location ? 'missing_location' : redirects === 5 ? 'redirect_limit' : 'invalid_url';
       if (!location || redirects === 5) throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');
       const next = new URL(location, url);
+      redirectKind = next.protocol !== 'https:' ? 'invalid_scheme'
+        : next.hostname === 'accounts.google.com' ? 'google_sign_in' : 'external_host';
       if (next.protocol !== 'https:' || !['script.google.com', 'script.googleusercontent.com'].includes(next.hostname)) {
         throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');
       }
       if (next.hostname === 'script.googleusercontent.com') {
         options = { method: 'GET', signal: controller.signal, redirect: 'manual' };
       } else if (options.method !== 'POST') {
+        redirectKind = 'execution_from_output';
         throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service is unavailable.');
       }
+      redirectKind = null;
       url = next.href;
     }
 
@@ -150,11 +161,16 @@ async function callGasOnce({
       reason = 'invalid_data';
       throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service returned an invalid response.');
     }
+    if (output302Reread) {
+      try { onRecovery({ role, action, upstreamStatus: 302, outputReads }); }
+      catch { /* Recovery diagnostics cannot change a successful result. */ }
+    }
     return payload.data;
   } catch (error) {
     const timedOut = error?.name === 'AbortError' || controller.signal.aborted;
     try {
       onDiagnostic({ role, action, stage, reason: timedOut ? 'timeout' : reason, upstreamStatus,
+        ...(redirectKind ? { redirectKind } : {}),
         code: error instanceof GasGatewayError ? error.code : timedOut ? 'GAS_TIMEOUT' : 'GAS_UNAVAILABLE',
         elapsedMs: Date.now() - started });
     } catch { /* Diagnostics cannot change the API result. */ }
