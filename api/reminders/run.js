@@ -120,6 +120,7 @@ export function createReminderRunHandler({
   createExecutionId = () => randomUUID(),
   now = () => Math.floor(Date.now() / 1000),
   concurrency = 4,
+  onScheduledTestEvent = event => console.info('scheduled_test_reminder_stage', JSON.stringify(event)),
 } = {}) {
   return async function reminderRunHandler(req, res) {
     if (req.method !== 'GET') {
@@ -146,7 +147,7 @@ export function createReminderRunHandler({
     try {
       if (scheduledTest) {
         const result = await runScheduledTestReminder({
-          schedule: scheduledTest, nowMs, callGas, createSender, createExecutionId,
+          schedule: scheduledTest, nowMs, callGas, createSender, createExecutionId, onEvent: onScheduledTestEvent,
         });
         sendJson(res, 200, result);
         return;

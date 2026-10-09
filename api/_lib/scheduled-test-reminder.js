@@ -7,7 +7,7 @@ import { buildNotificationPayload } from './web-push.js';
 // Temporary physical-device audit. An exact date AND hour prevent future daily
 // cron invocations from sending again. This never changes the school schedule.
 export const SCHEDULED_TEST_REMINDER = Object.freeze({
-  id: '20261010-sleep-03', date: '2026-10-10', hour: 3, type: 'sleep', studentId: '0',
+  id: '20261010-sleep-06', date: '2026-10-10', hour: 6, type: 'sleep', studentId: '0',
 });
 
 const SAFE_ERROR_CODES = new Set([
@@ -28,12 +28,15 @@ function safeDelivery(value) {
   return { status: 'failed', errorCode: SAFE_ERROR_CODES.has(value?.errorCode) ? value.errorCode : 'PUSH_UNAVAILABLE' };
 }
 
-export async function runScheduledTestReminder({ schedule, nowMs, callGas, createSender, createExecutionId }) {
+export async function runScheduledTestReminder({ schedule, nowMs, callGas, createSender, createExecutionId, onEvent = () => {} }) {
   const clock = getKstClock(nowMs);
   const aggregate = { success: true, type: schedule.type, scheduledTest: schedule.id,
     targeted: 0, sent: 0, expired: 0, failed: 0, skipped: 0 };
   if (clock.date !== schedule.date || clock.hour !== schedule.hour) return aggregate;
-
+  let stage = 'targets';
+  const report = event => { try { onEvent({ event, stage, ...aggregate }); } catch {} };
+  try {
+  report('started');
   const request = normalizeTeacherRequest('getTestStudentReminderTargets', [schedule.type]);
   const snapshot = await callGas({ role: 'teacher', ...request });
   if (snapshot?.name !== '테스트' || !Array.isArray(snapshot.subscriptions) || snapshot.subscriptions.length > 100) {
@@ -48,19 +51,21 @@ export async function runScheduledTestReminder({ schedule, nowMs, callGas, creat
     targetsByKey.set(`scheduled-test:${schedule.id}:${target.subscriptionId}`, target);
   }
   aggregate.targeted = targetsByKey.size;
-  if (!aggregate.targeted) return aggregate;
+  if (!aggregate.targeted) { stage = 'finished'; report('finished'); return aggregate; }
 
   const claimRequest = normalizeSchedulerRequest('claimReminderDeliveries', [
     [...targetsByKey.keys()], createExecutionId(), new Date(nowMs).toISOString(),
   ]);
+  stage = 'claim'; report('started');
   const claimed = await callGas({ role: 'scheduler', ...claimRequest });
   if (!Array.isArray(claimed) || new Set(claimed).size !== claimed.length
       || claimed.some(key => !targetsByKey.has(key))) throw new Error('Invalid scheduled test claims.');
   aggregate.skipped = aggregate.targeted - claimed.length;
-  if (!claimed.length) return aggregate;
+  if (!claimed.length) { stage = 'finished'; report('finished'); return aggregate; }
 
   const referenceDate = schedule.type === 'sleep' ? previousKstDate(clock.date) : clock.date;
   const payload = buildNotificationPayload({ type: schedule.type, referenceDate });
+  stage = 'send'; report('started');
   const sender = createSender();
   const results = await Promise.all(claimed.map(async (key) => {
     const target = targetsByKey.get(key);
@@ -74,9 +79,16 @@ export async function runScheduledTestReminder({ schedule, nowMs, callGas, creat
       studentId: target.studentId, subscriptionId: target.subscriptionId, ...delivery };
   }));
   const recordRequest = normalizeSchedulerRequest('recordReminderDeliveryResults', [results]);
+  stage = 'record'; report('started');
   try { await callGas({ role: 'scheduler', ...recordRequest }); }
   catch { aggregate.logSaved = false; }
   // Non-sensitive operational evidence is visible in automatic Cron logs.
   console.info('scheduled_test_reminder_result', JSON.stringify(aggregate));
+  stage = 'finished'; report('finished');
   return aggregate;
+  } catch (error) {
+    aggregate.success = false;
+    report('failed');
+    throw error;
+  }
 }
