@@ -19,6 +19,7 @@ function harness({
   existingSubscription = null,
   supported = true,
   search = '',
+  configWait = null,
 } = {}) {
   const calls = [];
   const subscription = existingSubscription || {
@@ -46,7 +47,7 @@ function harness({
   const opened = [];
   const states = [];
   const api = {
-    async getConfig() { calls.push(['config']); return { success: true, publicKey: 'AQID', sleepTime: '08:00', caffeineTime: '20:00', globallyEnabled: false }; },
+    async getConfig() { calls.push(['config']); if (configWait) await configWait; return { success: true, publicKey: 'AQID', sleepTime: '08:00', caffeineTime: '20:00', globallyEnabled: false }; },
     async subscribe(value) { calls.push(['api-subscribe', value]); return { success: true, subscriptionId: 'a'.repeat(64) }; },
     async getPreferences(id) { calls.push(['get-preferences', id]); return { success: true, subscriptionId: id, sleepEnabled: true, caffeineEnabled: false, active: true }; },
     async savePreferences(value) { calls.push(['save-preferences', value]); return { success: true, ...value, active: true }; },
@@ -172,4 +173,20 @@ test('deep links accept only known record types and real ISO calendar dates', as
   assert.equal(opened.length, 0);
   await controller.initialize({ studentId: '1101' });
   assert.deepEqual(opened, [{ type: 'sleep', date: '2026-09-09' }]);
+});
+
+test('authenticated reminder opens before slow settings can overwrite a newer manual draft', async () => {
+  let finishConfig;
+  const configWait = new Promise((resolve) => { finishConfig = resolve; });
+  const { controller, opened } = harness({ environment: 'installed', search: '?open=sleep&date=2026-10-07', configWait });
+  await controller.initialize(null);
+  assert.equal(opened.length, 0, 'wait for authenticated app');
+  const pending = controller.initialize({ studentId: '1101' });
+  try {
+    assert.deepEqual(opened, [{ type: 'sleep', date: '2026-10-07' }], 'apply navigation before network settings');
+  } finally {
+    finishConfig();
+    await pending;
+  }
+  assert.equal(opened.length, 1, 'late settings must not reapply the reminder');
 });
