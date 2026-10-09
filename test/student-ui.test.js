@@ -33,15 +33,17 @@ function extract(name) {
 
 function runCaffeineEdit(amount) {
   const requests = [], notices = [];
+  let success, failure;
   const fields = {
     editDrinkName: { value: '[검증] 섭취 안 함' },
     editAmount: { value: amount },
     editTime: { value: '2026-10-08T06:00' },
     editReasonEtc: { value: '' },
+    editSaveBtn: { disabled:false, innerText:'저장하기' },
   };
   const runner = {
-    withSuccessHandler() { return this; },
-    withFailureHandler() { return this; },
+    withSuccessHandler(fn) { success=fn; return this; },
+    withFailureHandler(fn) { failure=fn; return this; },
     updateCaffeineData(payload) { requests.push(JSON.parse(JSON.stringify(payload))); },
   };
   const context = vm.createContext({
@@ -53,8 +55,8 @@ function runCaffeineEdit(amount) {
     getLogDateKST: value => value.slice(0, 10), getTodayKST: () => '2026-10-09',
     showInfoModal: (...args) => notices.push(args),
   });
-  vm.runInContext(extract('saveEdit') + '\nsaveEdit();', context);
-  return { requests, notices };
+  vm.runInContext(extract('setEditSavePending') + '\n' + extract('saveEdit') + '\nsaveEdit();', context);
+  return { requests, notices, context, fields, fail:()=>failure(new Error('GAS_UNAVAILABLE')) };
 }
 
 test('editing a zero-mg record sends its changed date with the existing record ID', () => {
@@ -72,6 +74,31 @@ test('caffeine edits reject empty, nonnumeric and negative amounts before a serv
     assert.equal(requests.length, 0, `unexpected write for ${JSON.stringify(amount)}`);
     assert.equal(notices.length, 1);
   }
+});
+
+test('pending edit ignores repeated save clicks and unconfirmed feedback never claims the write failed',()=>{
+  const {context,requests,fields,notices,fail}=runCaffeineEdit('0');
+  vm.runInContext('saveEdit();',context);
+  assert.equal(requests.length,1);
+  assert.equal(fields.editSaveBtn.disabled,true);
+  assert.match(fields.editSaveBtn.innerText,/확인 중/);
+  fail();
+  assert.equal(fields.editSaveBtn.disabled,false);
+  assert.match(notices[0][1],/저장 여부/);
+  assert.doesNotMatch(notices[0][1],/수정하지 못/);
+});
+
+test('unconfirmed sleep edit preserves the previously confirmed record',()=>{
+  const original={id:'sleep-id',date:'2026-10-05',wakeDate:'2026-10-06',start:'23:00',end:'07:00',hours:8,condition:'😐',memo:'원래'};
+  const fields={editSleepStart:{value:'2026-10-04T22:30'},editSleepEnd:{value:'2026-10-05T07:00'},editMemo:{value:'수정'},editSaveBtn:{disabled:false,innerText:'저장하기'}};
+  let failure; const notices=[];
+  const runner={withSuccessHandler(){return this;},withFailureHandler(fn){failure=fn;return this;},updateSleepData(){}};
+  const context=vm.createContext({editingType:'sleep',editingId:'sleep-id',user:{studentId:'0',name:'테스트'},sleepLogs:[{...original}],window:{editCondition:'😐',editSleepChoices:{}},document:{getElementById:id=>fields[id]},google:{script:{run:runner}},datePartFromDatetime:v=>v.slice(0,10),timePartFromDatetime:v=>v.slice(11),showInfoModal:(...args)=>notices.push(args)});
+  vm.runInContext(extract('setEditSavePending')+'\n'+extract('saveEdit')+'\nsaveEdit();',context);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.sleepLogs[0])),original);
+  failure(new Error('GAS_UNAVAILABLE'));
+  assert.equal(fields.editSaveBtn.disabled,false);
+  assert.match(notices[0][1],/저장 여부/);
 });
 
 test('immediate caffeine guidance distinguishes pending from confirmed storage', () => {
@@ -158,9 +185,10 @@ test('public DB remains searchable when the live Google request fails', async ()
 test('session reset clears previous student records, settings and rendered private content', () => {
   const container = { innerHTML: 'previous student inquiry', className: 'changed', style: { cssText: 'display:block' } };
   const field = { value: 'previous student weight', checked: true, disabled: false };
+  const saveBtn = {disabled:true,innerText:'저장 결과 확인 중...'};
   const context = vm.createContext({
     window: { _weightLoaded: true, currentAIAnalysis: 'private report' },
-    document: { getElementById: id => id === 'myInquiriesContainer' ? container : null },
+    document: { getElementById: id => id === 'myInquiriesContainer' ? container : id === 'editSaveBtn' ? saveBtn : null },
     privateUiDefaults: [{ id: 'myInquiriesContainer', html: '', className: 'initial', style: '' }],
     privateFormDefaults: [{ element: field, value: '', checked: false, disabled: true }],
     caffeineLogs: [1], confirmedPendingCaffeine: [{ amount: 100 }], sleepLogs: [2], teacherAwards: [3], lastDashboardData: { private: true },
@@ -169,7 +197,7 @@ test('session reset clears previous student records, settings and rendered priva
     caffeineDbLoading: true, stopAutoRefresh() {},
     SLEEP_CFG: {},
   });
-  vm.runInContext(extract('resetStudentData') + '\nresetStudentData();', context);
+  vm.runInContext(extract('setEditSavePending') + '\n' + extract('resetStudentData') + '\nresetStudentData();', context);
   assert.equal(container.innerHTML, '');
   assert.equal(field.value, '');
   assert.equal(context.caffeineLogs.length, 0);
@@ -178,6 +206,8 @@ test('session reset clears previous student records, settings and rendered priva
   assert.equal(context.teacherAwards.length, 0);
   assert.equal(context.lastDashboardData, null);
   assert.equal(context.window._weightLoaded, false);
+  assert.equal(saveBtn.disabled,false);
+  assert.equal(saveBtn.innerText,'저장하기');
 });
 
 for (const kind of ['Caffeine', 'Sleep']) {
