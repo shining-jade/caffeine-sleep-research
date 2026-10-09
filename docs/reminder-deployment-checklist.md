@@ -69,3 +69,13 @@ Preview에 먼저 네 값과 기존 서버 전용 환경 변수를 설정한다.
 - 파일럿 결과와 반별 운영 기간을 교사가 확인한 뒤에만 `전체 학생 알림`을 명시적으로 켠다.
 - 문제가 생기면 먼저 전체 학생 알림을 끈다. 필요하면 직전 Vercel 배포를 승격하고 Apps Script 웹 앱을 직전 버전으로 되돌린 뒤 대응하는 `GAS_API_URL`을 복원한다.
 - 최종 인계에는 학생·교사 URL, Apps Script 버전, 수행한 시험 결과, Cron 등록 상태, 전체 학생 알림 활성화 여부만 기록한다. 비밀값·시트 ID·구독 식별자·학생 건강 행은 기록하지 않는다.
+# Temporary scheduled device check (2026-10-10)
+
+- Approved recipient: student ID `0`, exact name `테스트`, active sleep subscriptions only.
+- Extra Cron: `/api/reminders/run?scheduledTest=20261010-sleep-03`, `0 18 * * *` UTC.
+- Eligible window: 2026-10-10 03:00–03:59 KST. Other dates/hours return zero without gateway calls.
+- Existing 24 Cron jobs and teacher settings remain unchanged. This pilot bypasses class periods and completed-record suppression only for the approved test account.
+- Requests require the existing Cron secret; there is no browser-accessible scheduling control or new credential.
+- Existing delivery claims prevent overlapping sends for five minutes; successful persisted results deduplicate repeated invocation. There is no durable exactly-once guarantee after logging fails or a send fails. Do not manually rerun the pilot after an uncertain provider/logging outcome; this is a single automatic Cron invocation.
+- Logs include only aggregate `scheduled_test_reminder_result` counts. A provider acceptance does not establish actual phone receipt: obtain user confirmation separately.
+- After the test, remove the extra Cron and pilot code/tests in a follow-up change. The exact-date guard makes it inert even before cleanup.

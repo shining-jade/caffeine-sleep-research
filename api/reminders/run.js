@@ -11,6 +11,7 @@ import {
 } from '../_lib/reminder-policy.js';
 import { normalizePushSubscription } from '../_lib/push-subscription.js';
 import { normalizeSchedulerRequest } from '../_lib/scheduler-policy.js';
+import { runScheduledTestReminder, scheduledTestRequest } from '../_lib/scheduled-test-reminder.js';
 import { buildNotificationPayload, createPushSender } from '../_lib/web-push.js';
 
 const SAFE_ERROR_CODES = new Set([
@@ -137,7 +138,19 @@ export function createReminderRunHandler({
 
     const nowMs = now() * 1000;
     const nowIso = new Date(nowMs).toISOString();
+    let scheduledTest;
+    try { scheduledTest = scheduledTestRequest(req.url); } catch {
+      sendJson(res, 400, { success: false, error: 'INVALID_SCHEDULED_TEST' });
+      return;
+    }
     try {
+      if (scheduledTest) {
+        const result = await runScheduledTestReminder({
+          schedule: scheduledTest, nowMs, callGas, createSender, createExecutionId,
+        });
+        sendJson(res, 200, result);
+        return;
+      }
       const sleepSnapshot = normalizeSnapshot(await schedulerCall(
         callGas, 'getReminderDispatchSnapshot', ['sleep', nowIso],
       ));

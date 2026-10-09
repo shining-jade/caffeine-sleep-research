@@ -40,7 +40,7 @@ function requireSendBody(value) {
   return value.type;
 }
 
-function normalizeTarget(value) {
+export function normalizeTestStudentTarget(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid test student target.');
   const studentId = typeof value.studentId === 'string' ? value.studentId.trim() : String(value.studentId ?? '').trim();
   if (!studentId || studentId.length > 128) throw new Error('Invalid test student target.');
@@ -96,7 +96,7 @@ export function createTestStudentHandler({
       if (!Array.isArray(snapshot?.subscriptions) || snapshot.subscriptions.length > 100) {
         throw new Error('Invalid test student target response.');
       }
-      const targets = snapshot.subscriptions.map(normalizeTarget);
+      const targets = snapshot.subscriptions.map(normalizeTestStudentTarget);
       const requestId = String(randomId()).trim();
       if (!/^[A-Za-z0-9-]{1,64}$/.test(requestId)) throw new Error('Invalid test request identifier.');
       const clock = getKstClock(now() * 1000);
