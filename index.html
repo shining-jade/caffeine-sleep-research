@@ -5335,12 +5335,9 @@
             return;
           }
           // 미읽음 메시지 읽음 처리
-          res.data.forEach(m => {
-            if (m.readStatus === '미읽음') {
-              google.script.run.markTeacherMessageRead(m.rowIndex);
-            }
-          });
-          updateMsgBubble(0);
+          const unread = res.data.filter(m => m.readStatus === '미읽음');
+          if (unread.length) acknowledgeTeacherMessages(unread);
+          else updateMsgBubble(0);
           container.innerHTML = res.data.map(m => {
             const isNew = m.readStatus === '미읽음';
             const hasReply = !!m.studentReply;
@@ -5349,9 +5346,9 @@
                    <div style="font-size:11px;color:#3b82f6;font-weight:700;margin-bottom:4px;">내 답장</div>
                    <div style="font-size:13px;color:#1e40af;white-space:pre-wrap;">${m.studentReply}</div>
                    <div style="font-size:10px;color:#93c5fd;margin-top:4px;">${formatMsgDate(m.studentReplyTime)}</div>
-                   <button onclick="openReplyModal(${m.rowIndex}, \`${m.title.replace(/`/g,'\\`')}\`, true)" style="margin-top:6px;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;cursor:pointer;">수정</button>
+                   <button onclick="openReplyModal(${m.rowIndex}, \`${m.title.replace(/`/g,'\\`')}\`, true, '${m.messageKey}')" style="margin-top:6px;font-size:11px;color:#6b7280;background:none;border:1px solid #e5e7eb;border-radius:6px;padding:2px 8px;cursor:pointer;">수정</button>
                  </div>`
-              : `<button onclick="openReplyModal(${m.rowIndex}, \`${m.title.replace(/`/g,'\\`')}\`, false)" style="margin-top:10px;display:inline-flex;align-items:center;gap:4px;background:#10b981;color:white;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;">💬 답장하기</button>`;
+              : `<button onclick="openReplyModal(${m.rowIndex}, \`${m.title.replace(/`/g,'\\`')}\`, false, '${m.messageKey}')" style="margin-top:10px;display:inline-flex;align-items:center;gap:4px;background:#10b981;color:white;border:none;border-radius:8px;padding:6px 14px;font-size:12px;font-weight:600;cursor:pointer;">💬 답장하기</button>`;
             return `<div class="border rounded-xl p-4 mb-3 ${isNew ? 'border-emerald-300 bg-emerald-50' : 'border-gray-100'}">
               <div class="flex items-start justify-between gap-2 mb-1">
                 <span class="font-bold text-sm text-gray-800">${m.title}</span>
@@ -5430,9 +5427,8 @@
       document.body.appendChild(overlay);
 
       const closeModal = () => {
-        messages.forEach(m => google.script.run.markTeacherMessageRead(m.rowIndex));
+        acknowledgeTeacherMessages(messages);
         overlay.remove();
-        updateMsgBubble(0);
         const body = document.getElementById('teacherMsgBody');
         if (body && !body.classList.contains('hidden')) loadTeacherMessages();
       };
@@ -5446,13 +5442,33 @@
         if (msgBody && msgBody.classList.contains('hidden')) toggleTeacherMsgSection();
         if (messages.length === 1) {
           // 단일 메시지면 바로 답장 모달
-          setTimeout(() => openReplyModal(messages[0].rowIndex, messages[0].title, false), 300);
+          setTimeout(() => openReplyModal(messages[0].rowIndex, messages[0].title, false, messages[0].messageKey), 300);
         } else {
           // 복수 메시지면 메시지함으로 스크롤
           const section = document.getElementById('teacherMsgSection');
           if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       };
+    }
+
+    function acknowledgeTeacherMessages(messages) {
+      if (!messages.length) { updateMsgBubble(0); return; }
+      let pending = messages.length;
+      let failed = false;
+      const reportFailure = () => {
+        if (failed) return;
+        failed = true;
+        updateMsgBubble(messages.length);
+        showInfoModal('메시지 확인 필요', '메시지 읽음 상태를 저장하지 못했습니다. 메시지함을 다시 열어 확인해주세요.');
+      };
+      messages.forEach(m => google.script.run
+        .withSuccessHandler(res => {
+          if (!res || res.success !== true) reportFailure();
+          pending--;
+          if (pending === 0 && !failed) updateMsgBubble(0);
+        })
+        .withFailureHandler(reportFailure)
+        .markTeacherMessageRead(m.rowIndex, m.messageKey));
     }
 
     function updateMsgBubble(count) {
@@ -5470,11 +5486,12 @@
     }
 
     // ── 학생→선생님 답장 기능 ──────────────────────────────────────────────────
-    function openReplyModal(rowIndex, title, isEdit) {
+    function openReplyModal(rowIndex, title, isEdit, messageKey) {
       if (document.getElementById('studentReplySendBtn')?.disabled) return;
       if (document.getElementById('studentReplyModal')) document.getElementById('studentReplyModal').remove();
       const overlay = document.createElement('div');
       overlay.id = 'studentReplyModal';
+      overlay.dataset.messageKey = messageKey || '';
       overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
       overlay.innerHTML = `
         <div style="background:white;border-radius:24px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.25);">
@@ -5501,6 +5518,12 @@
       const text = input.value.trim();
       if (!text) { alert('답장 내용을 입력해주세요.'); return; }
       const modal = document.getElementById('studentReplyModal');
+      const messageKey = modal?.dataset.messageKey;
+      if (!/^[a-f0-9]{64}$/.test(messageKey || '')) {
+        loadTeacherMessages();
+        alert('메시지 목록을 확인한 뒤 다시 선택하세요. 작성한 답장은 유지됩니다.');
+        return;
+      }
       const label = btn.textContent;
       btn.disabled = true; btn.textContent = '전송 중...';
       google.script.run
@@ -5510,14 +5533,17 @@
             loadTeacherMessages();
           } else {
             btn.disabled = false; btn.textContent = label;
-            alert('전송에 실패했습니다. 다시 시도해주세요.');
+            if (res && res.code === 'MESSAGE_TARGET_CHANGED') {
+              loadTeacherMessages();
+              alert('메시지가 삭제 또는 변경되었습니다. 목록을 확인한 뒤 다시 선택하세요. 작성한 답장은 유지됩니다.');
+            } else alert('전송에 실패했습니다. 다시 시도해주세요.');
           }
         })
         .withFailureHandler(() => {
           btn.disabled = false; btn.textContent = label;
           alert('서버 연결에 실패했습니다.');
         })
-        .replyToTeacherMessage(rowIndex, text);
+        .replyToTeacherMessage(rowIndex, text, messageKey);
     }
 
     function closeStudentReplyModal() {

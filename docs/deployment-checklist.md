@@ -18,6 +18,11 @@
   include the inquiry key returned by a fresh list read. Older open screens fail
   safely; reload the teacher page before continuing. Missing or duplicate inquiry
   identities reject the operation rather than targeting another row.
+- Message replies, read acknowledgments and deletes likewise require the message
+  key returned by the list. Teacher reply acknowledgments also require the reply
+  key for the displayed reply version. Bulk deletion requires distinct verified
+  targets and validates the entire selection before deleting any row. Deploy
+  Apps Script before Vercel and reload both student and teacher screens.
 
 ## 3. Vercel private configuration
 

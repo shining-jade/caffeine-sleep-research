@@ -134,7 +134,7 @@ test('sleep update overwrites identity only after ownership check', async () => 
   });
 });
 
-test('teacher-message row operations validate row bounds and owner', async () => {
+test('teacher-message ownership guard validates resolved row bounds and owner', async () => {
   const { context } = await ownership({
     teacher_messages: sheet([
       ['타임스탬프', '학번', '이름', '내용'],
@@ -143,14 +143,9 @@ test('teacher-message row operations validate row bounds and owner', async () =>
     ]),
   });
   context.subject = { studentId: '1101', name: '학생' };
-  context.ownRead = [2];
-  context.ownReply = [2, '확인했습니다'];
-  context.other = [3];
-  context.invalid = [1];
-  assert.equal(call(context, "dispatchStudentAction_('markTeacherMessageRead',ownRead,subject)").row, 2);
-  assert.equal(call(context, "dispatchStudentAction_('replyToTeacherMessage',ownReply,subject)").reply, '확인했습니다');
-  assert.throws(() => call(context, "dispatchStudentAction_('markTeacherMessageRead',other,subject)"), /REQUEST_REJECTED/);
-  assert.throws(() => call(context, "dispatchStudentAction_('markTeacherMessageRead',invalid,subject)"), /REQUEST_REJECTED/);
+  assert.doesNotThrow(() => call(context, "requireOwnedRow_('teacher_messages',2,subject)"));
+  assert.throws(() => call(context, "requireOwnedRow_('teacher_messages',3,subject)"), /REQUEST_REJECTED/);
+  assert.throws(() => call(context, "requireOwnedRow_('teacher_messages',1,subject)"), /REQUEST_REJECTED/);
 });
 
 test('badge acknowledgement identity is always replaced by the session subject', async () => {

@@ -78,8 +78,8 @@ test('student ownership metadata is attached to record and row operations', () =
   for (const [action, params] of [
     ['deleteCaffeineData', ['record-id']],
     ['deleteSleepData', ['sleep-id']],
-    ['markTeacherMessageRead', [7]],
-    ['replyToTeacherMessage', [7, 'reply']],
+    ['markTeacherMessageRead', [7, 'a'.repeat(64)]],
+    ['replyToTeacherMessage', [7, 'reply', 'a'.repeat(64)]],
   ]) {
     const result = normalizeStudentRequest(action, params, SESSION);
     assert.deepEqual(result.subject, { studentId: '1101', name: '테스트학생' });

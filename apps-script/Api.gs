@@ -156,7 +156,14 @@ function dispatchStudentAction_(action, params, subject) {
     if (rule === 'sleepRecord') requireOwnedRecord_('sleep', safeParams[0], subject);
     if (rule === 'caffeinePayload') requireOwnedRecord_('caffeine', safeParams[0].id, subject);
     if (rule === 'sleepPayload') requireOwnedRecord_('sleep', safeParams[0].id, subject);
-    if (rule === 'messageRow') requireOwnedRow_('teacher_messages', safeParams[0], subject);
+    if (rule === 'messageRow') {
+      var messageKey = safeParams[action === 'replyToTeacherMessage' ? 2 : 1];
+      var messageSheet = getSpreadsheet_().getSheetByName('teacher_messages');
+      var messageRow = resolveTeacherMessageRow_(messageSheet, safeParams[0], messageKey);
+      if (!messageRow) return messageTargetChanged_();
+      safeParams[0] = messageRow;
+      requireOwnedRow_('teacher_messages', messageRow, subject);
+    }
     var result = action === 'saveSleepData' && syncConfirmation ? saveSleepData(safeParams[0], syncConfirmation) : invokeAction_(action, safeParams);
     if (action === 'saveCaffeineData' && result && result.success === true) {
       var saved = safeParams[0];

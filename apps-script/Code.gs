@@ -2162,9 +2162,45 @@ function formatTeacherMsgDate_(value) {
     : String(value);
 }
 
+function messageDigest_(parts) {
+  const values = parts.map(value => value instanceof Date ? value.toISOString()
+    : String(value === null || value === undefined ? '' : value));
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, JSON.stringify(values), Utilities.Charset.UTF_8)
+    .map(byte => ('0' + ((byte + 256) % 256).toString(16)).slice(-2)).join('');
+}
+
+// Include original message/attachment fields, never mutable read/reply columns.
+function teacherMessageKey_(row) {
+  return messageDigest_([0, 1, 2, 3, 4, 10, 11, 12].map(index => row[index]));
+}
+
+function studentReplyKey_(row) {
+  return messageDigest_([teacherMessageKey_(row), row[7], row[8]]);
+}
+
+function messageTargetChanged_() {
+  return { success: false, code: 'MESSAGE_TARGET_CHANGED',
+    error: '메시지가 삭제 또는 변경되었거나 동일한 메시지가 여러 건 있습니다. 목록을 확인한 뒤 다시 선택하세요.' };
+}
+
+// Mutation gateway holds the shared script lock while resolving and writing.
+function resolveTeacherMessageRow_(sheet, rowIndex, expectedKey) {
+  if (!sheet || !Number.isInteger(rowIndex) || rowIndex < 2 || typeof expectedKey !== 'string'
+      || !/^[a-f0-9]{64}$/.test(expectedKey)) return 0;
+  const rows = sheet.getDataRange().getValues();
+  let found = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (teacherMessageKey_(rows[i]) !== expectedKey) continue;
+    if (found) return 0;
+    found = i + 1;
+  }
+  return found;
+}
+
 function readTeacherMessageRow_(row, rowIndex, includeStudent) {
   const item = {
     rowIndex: rowIndex,
+    messageKey: teacherMessageKey_(row),
     timestamp: formatTeacherMsgDate_(row[0]),
     title: String(row[3] || ''),
     content: String(row[4] || ''),
@@ -5568,15 +5604,16 @@ function exportDataToNewSheet(params) {
 /**
  * 학생용: 메시지 읽음 처리
  */
-function markTeacherMessageRead(rowIndex) {
+function markTeacherMessageRead(rowIndex, expectedKey) {
   try {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName('teacher_messages');
     if (!sheet) return { success: false, error: '시트 없음' };
+    const targetRow = resolveTeacherMessageRow_(sheet, rowIndex, expectedKey);
+    if (!targetRow) return messageTargetChanged_();
     const now = new Date();
     const ts = Utilities.formatDate(now, 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.getRange(rowIndex, 6).setValue('읽음');
-    sheet.getRange(rowIndex, 7).setValue(ts);
+    sheet.getRange(targetRow, 6, 1, 2).setValues([['읽음', ts]]);
     return { success: true };
   } catch (err) {
     safeLog_('❌ markTeacherMessageRead 오류: ' + err.message);
@@ -5587,13 +5624,14 @@ function markTeacherMessageRead(rowIndex) {
 /**
  * 교사용: 발송 메시지 삭제
  */
-function deleteTeacherMessage(rowIndex) {
+function deleteTeacherMessage(rowIndex, expectedKey) {
   try {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName('teacher_messages');
     if (!sheet) return { success: false, error: '시트 없음' };
-    if (rowIndex < 2 || rowIndex > sheet.getLastRow()) return { success: false, error: '유효하지 않은 행' };
-    sheet.deleteRow(rowIndex);
+    const targetRow = resolveTeacherMessageRow_(sheet, rowIndex, expectedKey);
+    if (!targetRow) return messageTargetChanged_();
+    sheet.deleteRow(targetRow);
     return { success: true };
   } catch (err) {
     safeLog_('❌ deleteTeacherMessage 오류: ' + err.message);
@@ -5605,14 +5643,23 @@ function deleteTeacherMessage(rowIndex) {
  * 교사 발신 메시지 다중 삭제
  * 행 번호가 큰 것부터 삭제해야 인덱스 밀림 방지
  */
-function deleteBulkTeacherMessages(rowIndices) {
+function deleteBulkTeacherMessages(targets) {
   try {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName('teacher_messages');
     if (!sheet) return { success: false, error: '시트 없음' };
-    const lastRow = sheet.getLastRow();
-    // 내림차순 정렬 후 삭제 (위 행 삭제 시 아래 행 인덱스 밀림 방지)
-    const sorted = rowIndices.filter(r => r >= 2 && r <= lastRow).sort((a, b) => b - a);
+    if (!Array.isArray(targets) || !targets.length) return messageTargetChanged_();
+    const keys = new Set();
+    const indices = new Set();
+    const resolved = [];
+    for (const target of targets) {
+      if (!target || keys.has(target.messageKey) || indices.has(target.rowIndex)) return messageTargetChanged_();
+      const targetRow = resolveTeacherMessageRow_(sheet, target.rowIndex, target.messageKey);
+      if (!targetRow) return messageTargetChanged_();
+      keys.add(target.messageKey); indices.add(target.rowIndex); resolved.push(targetRow);
+    }
+    // Verify the entire selection before the first deletion, then delete bottom-up.
+    const sorted = resolved.sort((a, b) => b - a);
     sorted.forEach(r => sheet.deleteRow(r));
     return { success: true, deleted: sorted.length };
   } catch (err) {
@@ -5625,16 +5672,20 @@ function deleteBulkTeacherMessages(rowIndices) {
  * 학생용: 교사 메시지에 답장 저장
  * H열: 학생답장, I열: 학생답장시간, J열: 학생답장읽음
  */
-function replyToTeacherMessage(rowIndex, replyContent) {
+function replyToTeacherMessage(rowIndex, replyContent, expectedKey) {
   try {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName('teacher_messages');
     if (!sheet) return { success: false, error: '시트 없음' };
-    if (rowIndex < 2 || rowIndex > sheet.getLastRow()) return { success: false, error: '유효하지 않은 행' };
-    const ts = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss');
-    sheet.getRange(rowIndex, 8).setValue(String(replyContent));  // H열: 학생답장
-    sheet.getRange(rowIndex, 9).setValue(ts);                    // I열: 학생답장시간
-    sheet.getRange(rowIndex, 10).setValue('미확인');              // J열: 교사 확인 여부
+    const targetRow = resolveTeacherMessageRow_(sheet, rowIndex, expectedKey);
+    if (!targetRow) return messageTargetChanged_();
+    if (typeof replyContent !== 'string' || !replyContent.trim()) return { success: false, error: '답장 내용을 입력하세요.' };
+    // Persist millisecond precision and advance monotonically under the gateway
+    // lock so even identical replies at the same clock instant get a new key.
+    const previousTime = sheet.getRange(targetRow, 9).getValue();
+    const previousMillis = previousTime instanceof Date ? previousTime.getTime() : 0;
+    const ts = new Date(Math.max(Date.now(), previousMillis + 1));
+    sheet.getRange(targetRow, 8, 1, 3).setValues([[replyContent, ts, '미확인']]);
     return { success: true };
   } catch (err) {
     safeLog_('❌ replyToTeacherMessage 오류: ' + err.message);
@@ -5659,6 +5710,8 @@ function getUnreadStudentReplies() {
       if (reply && replyRead === '미확인') {
         result.push({
           rowIndex:         i + 1,
+          messageKey:       teacherMessageKey_(rows[i]),
+          replyKey:         studentReplyKey_(rows[i]),
           timestamp:        rows[i][0] ? (rows[i][0] instanceof Date ? Utilities.formatDate(rows[i][0], 'Asia/Seoul', 'yyyy-MM-dd HH:mm:ss') : String(rows[i][0])) : '',
           studentId:        String(rows[i][1] || ''),
           studentName:      String(rows[i][2] || ''),
@@ -5678,12 +5731,16 @@ function getUnreadStudentReplies() {
 /**
  * 교사용: 학생 답장 확인 처리
  */
-function markStudentReplyRead(rowIndex) {
+function markStudentReplyRead(rowIndex, expectedKey, expectedReplyKey) {
   try {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName('teacher_messages');
     if (!sheet) return { success: false, error: '시트 없음' };
-    sheet.getRange(rowIndex, 10).setValue('확인');
+    const targetRow = resolveTeacherMessageRow_(sheet, rowIndex, expectedKey);
+    if (!targetRow) return messageTargetChanged_();
+    const row = sheet.getRange(targetRow, 1, 1, 13).getValues()[0];
+    if (!row[7] || studentReplyKey_(row) !== expectedReplyKey) return messageTargetChanged_();
+    sheet.getRange(targetRow, 10).setValue('확인');
     return { success: true };
   } catch (err) {
     safeLog_('❌ markStudentReplyRead 오류: ' + err.message);

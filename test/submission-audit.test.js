@@ -20,6 +20,7 @@ function form(html,name,action,indent='    '){
     'studentReplyModal','replyRowIndex','replyInquiryKey','replyContent','replyModal','msgTitle','msgContent','msgTargetId','msgTargetName','msgSendModal'];
   const fields=Object.fromEntries(ids.map(id=>[id,{value:'valid text',disabled:false,textContent:'전송',innerText:'전송',style:{display:'block'},remove(){this.removed=true;}}]));
   fields.replyRowIndex.value='2';fields.replyInquiryKey.value='a'.repeat(64);fields.msgTargetId.value='0';fields.msgTargetName.value='테스트';fields.studentReplySendBtn.textContent='수정하기';
+  fields.studentReplyModal.dataset={messageKey:'a'.repeat(64)};
   const replyBtn={disabled:false,textContent:'응답 제출'},messageBtn={disabled:false,textContent:'전송'};
   let success,failure;const requests=[],notices=[];
   const runner={withSuccessHandler(fn){success=fn;return this;},withFailureHandler(fn){failure=fn;return this;},[action](...args){requests.push(args);}};
@@ -82,7 +83,7 @@ test('canceling teacher inquiry deletion does not call the API',()=>{
 test('canceling teacher single and bulk message deletion does not call the API',()=>{
   for(const name of ['confirmDeleteSentMsg','confirmBulkDeleteSentMsg']){
     let confirms=0;
-    const context=vm.createContext({window:{_sentMsgSelected:new Set([2])},showTeacherModal(_e,_t,_m,type){assert.equal(type,'confirm');confirms++;},
+    const context=vm.createContext({window:{_sentMsgSelected:new Set([2]),_sentMsgTargets:new Map([[2,{rowIndex:2,messageKey:'a'.repeat(64)}]])},escapeHtml:x=>x,showTeacherModal(_e,_t,_m,type){assert.equal(type,'confirm');confirms++;},
       google:{script:{run:{get withSuccessHandler(){assert.fail('cancelled delete');}}}}});
     vm.runInContext(extract(teacher,name,''),context);context[name](2,'test');assert.equal(confirms,1);
   }
@@ -104,7 +105,7 @@ test('reply policies reject invalid and header row indices but preserve valid ro
     assert.throws(()=>normalizeTeacherRequest('replyToInquiry',[row,'reply']));
   }
   assert.deepEqual(normalizeTeacherRequest('replyToInquiry',[2,' reply ','a'.repeat(64)]).params,[2,' reply ','a'.repeat(64)]);
-  assert.deepEqual(normalizeStudentRequest('replyToTeacherMessage',[2,'reply'],session).params,[2,'reply']);
+  assert.deepEqual(normalizeStudentRequest('replyToTeacherMessage',[2,'reply','a'.repeat(64)],session).params,[2,'reply','a'.repeat(64)]);
 });
 test('teacher message recipient must be present while test student zero remains valid',()=>{
   const payload={studentId:'0',studentName:'테스트',title:'title',content:'body'};
