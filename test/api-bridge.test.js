@@ -240,6 +240,28 @@ test('API bridge invokes session expiry callback on 401', async () => {
   assert.equal(expired, 1);
 });
 
+test('first visit without a session shows ordinary login without an expiry notification', async () => {
+  for (const role of ['student', 'teacher']) {
+    const { window } = loadBridge({ role, fetchImpl: async () => response({ authenticated:false },401) });
+    let expired = 0;
+    window.appAuth.onSessionExpired(() => expired++);
+    await assert.rejects(window.appAuth.getSession(), { status:401 });
+    assert.equal(expired, 0);
+  }
+});
+
+test('an authenticated student still receives an expiry notification for a rejected record read', async () => {
+  const { window } = loadBridge({ fetchImpl: async url => url.endsWith('/login')
+    ? response({ success:true, studentId:'0', name:'테스트' })
+    : response({ success:false, error:'UNAUTHENTICATED' },401) });
+  await window.appAuth.loginStudent('0','테스트');
+  let expired = 0;
+  window.appAuth.onSessionExpired(() => expired++);
+  await assert.rejects(new Promise((resolve,reject) => window.google.script.run
+    .withSuccessHandler(resolve).withFailureHandler(reject).getSleepLogs('0')), { status:401 });
+  assert.equal(expired, 1);
+});
+
 test('API bridge rejects malformed JSON responses safely', async () => {
   const { window } = loadBridge({
     fetchImpl: async () => ({ ok: true, status: 200, async json() { throw new Error('private html'); } }),
