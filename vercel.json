@@ -2,6 +2,9 @@
   "cleanUrls": true,
   "outputDirectory": ".",
   "functions": {
+    "api/reminders/run.js": {
+      "maxDuration": 180
+    },
     "api/teacher/reminders/*.js": {
       "maxDuration": 150
     },
@@ -10,6 +13,7 @@
     }
   },
   "crons": [
+    { "path": "/api/reminders/run?scheduledTest=20261010-sleep-03", "schedule": "0 18 * * *" },
     { "path": "/api/reminders/run?slot=00", "schedule": "0 0 * * *" },
     { "path": "/api/reminders/run?slot=01", "schedule": "0 1 * * *" },
     { "path": "/api/reminders/run?slot=02", "schedule": "0 2 * * *" },
