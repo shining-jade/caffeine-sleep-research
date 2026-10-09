@@ -54,3 +54,12 @@ test('sheet dropdowns align with status and badge columns and accept emitted val
  assert.deepEqual(Array.from(dropdownCols,d=>rows[0][d.colIndex-1]),['카페인상태','수면상태','자동뱃지목록','교사수여뱃지목록']);
  for(const d of dropdownCols)for(const row of rows.slice(1))if(row[d.colIndex-1])assert.ok(d.values.includes(row[d.colIndex-1]),row[d.colIndex-1]);
 });
+test('stage filter headings describe the current custom or preset period',()=>{
+ for(const days of [1,14]){
+  const fields={studentDateRangeLabel:{},studentCafStageLabel:{},studentSleepStageLabel:{}};
+  const c=vm.createContext({document:{getElementById:id=>fields[id]||null},getStudentDates:()=>Array(days).fill('2026-10-09'),getPeriodLabel:()=>'',filterStudents(){}});
+  vm.runInContext(extract('onStudentDateChange'),c);c.onStudentDateChange();
+  assert.equal(fields.studentCafStageLabel.textContent,`카페인 단계 (${days}일 평균)`);
+  assert.equal(fields.studentSleepStageLabel.textContent,`수면 단계 (${days}일 평균)`);
+ }
+});
