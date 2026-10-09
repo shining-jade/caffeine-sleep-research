@@ -1361,6 +1361,7 @@
       teacherAwards = [];
       lastDashboardData = null;
       window.studentDashboardEndDate = null;
+      window.studentCalendarDetailDate = null;
       window.studentAgeGroup = null;
       window.studentDashboardRequestId = (window.studentDashboardRequestId || 0) + 1;
       window._weightLoaded = false;
@@ -3538,6 +3539,7 @@
     }
 
     function renderCaffeineLogs() {
+      refreshCalendarIfVisible();
       const container = document.getElementById('caffeineLogsContainer');
       if(!container) return;
       if(caffeineLogs.length === 0 && !pendingCaffeineSave) {
@@ -3567,24 +3569,27 @@
         const timeStr = logTime.toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         const logId = String(log.id);
         const drinkName = log.name || '음료명 없음';
-        const reasonText = log.reason ? `<p class="text-xs text-indigo-400 mt-0.5">이유: ${log.reason}</p>` : '';
+        const reasonText = log.reason ? `<p class="text-xs text-indigo-400 mt-0.5">이유: ${escapeHtml(log.reason)}</p>` : '';
         div.innerHTML = `
           <div class="flex-1">
-            <p class="font-bold text-sm text-gray-800">${drinkName}</p>
-            <p class="text-xs text-gray-400">${log.amount || 0}mg · ${timeStr}</p>
+            <p class="font-bold text-sm text-gray-800">${escapeHtml(drinkName)}</p>
+            <p class="text-xs text-gray-400">${Number(log.amount) || 0}mg · ${escapeHtml(timeStr)}</p>
             ${reasonText}
             ${log.localPending ? '<p class="text-xs text-blue-600">휴대폰 보관 · 시트 전송 대기</p>' : ''}
           </div>
           <div class="flex gap-2">
-            <button onclick="openEditModal('caffeine', '${logId}')" class="text-xs text-indigo-600 font-bold px-2 py-1 hover:bg-indigo-50 rounded">편집</button>
-            <button onclick="showDeleteConfirm('caffeine', '${logId}', '${drinkName}')" class="text-xs text-red-500 font-bold px-2 py-1 hover:bg-red-50 rounded">삭제</button>
+            <button data-record-edit class="text-xs text-indigo-600 font-bold px-2 py-1 hover:bg-indigo-50 rounded">편집</button>
+            <button data-record-delete class="text-xs text-red-500 font-bold px-2 py-1 hover:bg-red-50 rounded">삭제</button>
           </div>
         `;
+        div.querySelector('[data-record-edit]').onclick = () => openEditModal('caffeine', logId);
+        div.querySelector('[data-record-delete]').onclick = () => showDeleteConfirm('caffeine', logId, drinkName);
         container.appendChild(div);
       });
     }
 
     function renderSleepLogs() {
+      refreshCalendarIfVisible();
       applyRecentSleepTimeDefaults();
       const container = document.getElementById('sleepLogsContainer');
       if(!container) return;
@@ -3603,20 +3608,22 @@
         div.innerHTML = `
           <div class="flex-1">
             <p class="font-bold text-sm text-gray-800 flex flex-wrap items-center gap-2">
-              <span>${dateStr} ${formatConditionWithLabel(log.condition)}</span>
+              <span>${escapeHtml(dateStr)} ${escapeHtml(formatConditionWithLabel(log.condition))}</span>
               <span class="${timing.badgeClass} text-[11px] font-bold px-2 py-0.5 rounded-full">${timing.label}</span>
-              ${timing.wakeText ? `<span class="text-xs text-gray-400 font-normal">(${timing.wakeText})</span>` : ''}
+              ${timing.wakeText ? `<span class="text-xs text-gray-400 font-normal">(${escapeHtml(timing.wakeText)})</span>` : ''}
             </p>
-            <p class="text-xs text-gray-400 mt-1">${log.hours || 0}시간 수면 (${log.start || ''}~${log.end || ''})</p>
-            <p class="text-xs text-indigo-500 mt-1 font-semibold">${timing.graphText}</p>
+            <p class="text-xs text-gray-400 mt-1">${Number(log.hours) || 0}시간 수면 (${escapeHtml(log.start || '')}~${escapeHtml(log.end || '')})</p>
+            <p class="text-xs text-indigo-500 mt-1 font-semibold">${escapeHtml(timing.graphText)}</p>
             ${log.localPending ? '<p class="text-xs text-blue-600">휴대폰 보관 · 시트 전송 대기</p>' : ''}
-            ${log.memo ? `<p class="mt-1 text-xs text-gray-500">📝 ${log.memo}</p>` : ''}
+            ${log.memo ? `<p class="mt-1 text-xs text-gray-500">📝 ${escapeHtml(log.memo)}</p>` : ''}
           </div>
           <div class="flex gap-2">
-            <button onclick="openEditModal('sleep', '${logId}')" class="text-xs text-indigo-600 font-bold px-2 py-1 hover:bg-indigo-50 rounded">편집</button>
-            <button onclick="showDeleteConfirm('sleep', '${logId}', '${dateStr}')" class="text-xs text-red-500 font-bold px-2 py-1 hover:bg-red-50 rounded">삭제</button>
+            <button data-record-edit class="text-xs text-indigo-600 font-bold px-2 py-1 hover:bg-indigo-50 rounded">편집</button>
+            <button data-record-delete class="text-xs text-red-500 font-bold px-2 py-1 hover:bg-red-50 rounded">삭제</button>
           </div>
         `;
+        div.querySelector('[data-record-edit]').onclick = () => openEditModal('sleep', logId);
+        div.querySelector('[data-record-delete]').onclick = () => showDeleteConfirm('sleep', logId, dateStr);
         container.appendChild(div);
       });
     }
@@ -3734,11 +3741,11 @@
         title.innerText = '카페인 기록 수정';
         body.innerHTML = `
           <div><label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">음료명</label>
-          <input type="text" id="editDrinkName" value="${log.name || ''}" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400"></div>
+          <input type="text" id="editDrinkName" value="${escapeHtml(log.name || '')}" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400"></div>
           <div><label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">카페인 함량(mg)</label>
-          <input type="number" id="editAmount" value="${log.amount || 0}" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400"></div>
+          <input type="number" id="editAmount" value="${Number(log.amount) || 0}" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400"></div>
           <div><label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">섭취 시간</label>
-          <input type="datetime-local" id="editTime" value="${log.time || ''}" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400"></div>
+          <input type="datetime-local" id="editTime" value="${escapeHtml(log.time || '')}" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400"></div>
           <div><label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">섭취 이유 <span class="text-gray-300 font-normal normal-case">(복수 선택 가능)</span></label>
           <div class="space-y-2" id="editReasonGroup">
             ${['몸이 너무 피곤해서','졸음을 깨려고','공부나 일에 집중이 필요해서','스트레스나 불안을 해소하려고','커피나 음료 맛이 좋아서','습관적으로','운동할 때 에너지를 얻으려고','친구들이 마셔서'].map(opt => `
@@ -3780,12 +3787,12 @@
         const startDateTime = combineDateAndTime(startDate, log.start || '');
         title.innerText = '수면 기록 수정';
         body.innerHTML = `
-          <input type="hidden" id="editDate" value="${log.date}">
+          <input type="hidden" id="editDate" value="${escapeHtml(log.date)}">
           <div class="grid grid-cols-2 gap-3">
             <div><label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">취침 날짜·시간</label>
-            <input type="datetime-local" id="editSleepStart" value="${startDateTime}" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400"></div>
+            <input type="datetime-local" id="editSleepStart" value="${escapeHtml(startDateTime)}" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400"></div>
             <div><label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">기상 날짜·시간</label>
-            <input type="datetime-local" id="editSleepEnd" value="${wakeDateTime}" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400"></div>
+            <input type="datetime-local" id="editSleepEnd" value="${escapeHtml(wakeDateTime)}" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400"></div>
           </div>
           <div><label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">상태</label>
           <div class="grid grid-cols-5 gap-2" id="editConditionContainer">
@@ -3796,7 +3803,7 @@
             <button onclick="setEditCondition('😊')" class="condition-btn p-2 bg-gray-100 rounded-lg text-xl ${log.condition === '😊' ? 'selected' : ''}">😊</button>
           </div></div>
           <div><label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">📓 수면 일기</label>
-          <textarea id="editMemo" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 resize-none" rows="3">${log.memo || ''}</textarea></div>
+          <textarea id="editMemo" class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400 resize-none" rows="3">${escapeHtml(log.memo || '')}</textarea></div>
           <div><label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">📱 취침 전 스마트폰</label>
           <div class="grid grid-cols-2 gap-2" id="edit-smartphone-btns">
             ${['안 함','30분 미만','30~60분','60분 이상'].map(v=>`<button onclick="setEditSleepChoice('smartphone','${v}',this)" class="edit-sleep-choice-btn py-2.5 px-2 rounded-xl text-sm font-bold active:scale-95 transition-all ${log.smartphone===v?'bg-indigo-600 text-white':'bg-gray-100 text-gray-600'}">${v}</button>`).join('')}
@@ -3833,13 +3840,13 @@
             if(etcCheck) etcCheck.checked = true;
             if(etcInput) { etcInput.value = val.replace('기타: ', ''); etcInput.classList.remove('hidden'); }
           } else {
-            const cb = document.querySelector(`#editReasonGroup input[name="editReason"][value="${val}"]`);
+            const cb = Array.from(document.querySelectorAll('#editReasonGroup input[name="editReason"]')).find(input => input.value === val);
             if(cb) cb.checked = true;
           }
         });
         const savedSymptoms = (log && log.symptom) ? log.symptom.split(', ') : [];
         savedSymptoms.forEach(val => {
-          const cb = document.querySelector(`#editSymptomGroup input[name="editSymptom"][value="${val}"]`);
+          const cb = Array.from(document.querySelectorAll('#editSymptomGroup input[name="editSymptom"]')).find(input => input.value === val);
           if(cb) cb.checked = true;
         });
         // 편집 부작용 섹션: 다른 항목 체크 시 "없음" 자동 해제
@@ -4090,9 +4097,6 @@
           sleepLogs = logs || []; cacheStudentRecords('sleepLogs');
           renderSleepLogs();
           if(lastDashboardData) renderCharts(lastDashboardData);
-          // 달력 탭이 활성화 상태면 달력도 업데이트
-          const calTab = document.getElementById('tab-calendar');
-          if (calTab && calTab.classList.contains('active')) renderCalendar();
         })
         .withFailureHandler(err => { showRecordConnectionError('sleep'); })
         .getSleepLogs(user.studentId);
@@ -5601,9 +5605,9 @@
 
     // 달력 초기화 - 오늘 기준
     function initCalendarDate() {
-      const now = new Date();
-      calendarYear = now.getFullYear();
-      calendarMonth = now.getMonth();
+      const today = getTodayKST();
+      calendarYear = Number(today.slice(0, 4));
+      calendarMonth = Number(today.slice(5, 7)) - 1;
     }
 
     function calendarPrevMonth() {
@@ -5620,12 +5624,17 @@
 
     // 날짜 문자열 (YYYY-MM-DD) 로부터 수면 로그 찾기
     function getSleepLogForDate(dateStr) {
-      return sleepLogs.find(log => log.date === dateStr) || null;
+      return sleepLogs.filter(log => log.date === dateStr).sort(compareSleepLogsByEndDesc)[0] || null;
     }
 
     // 날짜 문자열로부터 카페인 로그들 찾기
     function getCaffeineLogsForDate(dateStr) {
       return caffeineLogs.filter(log => getLogDateKST(log.time) === dateStr);
+    }
+
+    function refreshCalendarIfVisible() {
+      const tab = document.getElementById('tab-calendar');
+      if (tab && tab.classList.contains('active')) renderCalendar();
     }
 
     // 달력 전체 렌더링
@@ -5688,7 +5697,7 @@
             dotsRow.appendChild(sleepDot);
           }
           if (hasCaf) {
-            const cafTotal = cafLogs.reduce((sum, l) => sum + (l.amount || 0), 0);
+            const cafTotal = cafLogs.reduce((sum, l) => sum + (Number(l.amount) || 0), 0);
             const cafDot = document.createElement('div');
             // 카페인 0mg = 섭취 안 함 → teal / 있음 → orange
             cafDot.className = `w-1.5 h-1.5 rounded-full flex-shrink-0 ${cafTotal === 0 ? 'bg-teal-400' : 'bg-orange-400'}`;
@@ -5730,14 +5739,25 @@
 
       // 뱃지 업데이트
       updateBadges();
+      const selectedDate = window.studentCalendarDetailDate;
+      if (selectedDate) {
+        const visibleMonth = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}`;
+        if (selectedDate.slice(0, 7) === visibleMonth) {
+          showCalendarDetail(selectedDate, getSleepLogForDate(selectedDate), getCaffeineLogsForDate(selectedDate), false);
+        } else {
+          window.studentCalendarDetailDate = null;
+          document.getElementById('calendarDetailPanel')?.classList.add('hidden');
+        }
+      }
     }
 
     // 날짜 클릭 시 상세 패널 표시
-    function showCalendarDetail(dateStr, sleepLog, cafLogs) {
+    function showCalendarDetail(dateStr, sleepLog, cafLogs, scrollToPanel = true) {
       const panel = document.getElementById('calendarDetailPanel');
       const dateEl = document.getElementById('calendarDetailDate');
       const contentEl = document.getElementById('calendarDetailContent');
       if (!panel || !dateEl || !contentEl) return;
+      window.studentCalendarDetailDate = dateStr;
 
       const d = new Date(dateStr + 'T00:00:00');
       const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
@@ -5748,11 +5768,11 @@
       if (sleepLog) {
         html += `
           <div class="flex items-start gap-3 p-3 bg-indigo-50 rounded-xl">
-            <span class="text-xl">${sleepLog.condition || '😐'}</span>
+            <span class="text-xl">${escapeHtml(sleepLog.condition || '😐')}</span>
             <div class="flex-1 min-w-0">
-              <p class="font-bold text-indigo-700 text-sm">수면 ${sleepLog.hours || 0}시간</p>
-              <p class="text-xs text-indigo-500">${sleepLog.start || ''} ~ ${sleepLog.end || ''}</p>
-              ${sleepLog.memo ? `<p class="text-xs text-gray-500 mt-1">📓 ${sleepLog.memo}</p>` : ''}
+              <p class="font-bold text-indigo-700 text-sm">수면 ${Number(sleepLog.hours) || 0}시간</p>
+              <p class="text-xs text-indigo-500">${escapeHtml(sleepLog.start || '')} ~ ${escapeHtml(sleepLog.end || '')}</p>
+              ${sleepLog.memo ? `<p class="text-xs text-gray-500 mt-1">📓 ${escapeHtml(sleepLog.memo)}</p>` : ''}
             </div>
           </div>`;
       } else {
@@ -5760,11 +5780,11 @@
       }
 
       if (cafLogs.length > 0) {
-        const total = cafLogs.reduce((s, l) => s + (l.amount || 0), 0);
+        const total = cafLogs.reduce((s, l) => s + (Number(l.amount) || 0), 0);
         html += `<div class="p-3 bg-orange-50 rounded-xl">
           <p class="font-bold text-orange-700 text-sm mb-1">☕ 카페인 총 ${total}mg</p>`;
         cafLogs.forEach(log => {
-          html += `<p class="text-xs text-orange-500">· ${log.name || '음료'} ${log.amount || 0}mg</p>`;
+          html += `<p class="text-xs text-orange-500">· ${escapeHtml(log.name || '음료')} ${Number(log.amount) || 0}mg</p>`;
         });
         html += `</div>`;
       } else {
@@ -5780,16 +5800,19 @@
         html += `<div class="p-3 rounded-xl border-2 border-purple-200 bg-purple-50">
           <p class="font-bold text-purple-700 text-sm mb-2">👩‍🏫 선생님이 주신 뱃지</p>`;
         dayAwards.forEach(a => {
-          const isUrl = a.image && (a.image.startsWith('http') || a.image.startsWith('/'));
+          const isUrl = typeof a.image === 'string' && /^(https?:\/\/|\/(?!\/))/i.test(a.image);
+          const colorPattern = /^#(?:[0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+          const bg = colorPattern.test(a.bg || '') ? a.bg : '#f5f3ff';
+          const color = colorPattern.test(a.color || '') ? a.color : '#6d28d9';
           const imgEl = isUrl
-            ? `<img src="${a.image}" style="width:24px;height:24px;object-fit:contain;border-radius:6px;flex-shrink:0;" onerror="this.style.display='none'">`
-            : `<span style="font-size:20px;flex-shrink:0;">${a.image || '🏅'}</span>`;
+            ? `<img src="${escapeHtml(a.image)}" style="width:24px;height:24px;object-fit:contain;border-radius:6px;flex-shrink:0;" onerror="this.style.display='none'">`
+            : `<span style="font-size:20px;flex-shrink:0;">${escapeHtml(a.image || '🏅')}</span>`;
           const msgEl = a.message
-            ? `<p class="text-[10px] text-gray-400 mt-0.5 italic">"${a.message}"</p>` : '';
-          html += `<div class="flex items-center gap-2 p-2 mb-1 rounded-xl" style="background:${a.bg||'#f5f3ff'};">
+            ? `<p class="text-[10px] text-gray-400 mt-0.5 italic">"${escapeHtml(a.message)}"</p>` : '';
+          html += `<div class="flex items-center gap-2 p-2 mb-1 rounded-xl" style="background:${bg};">
             ${imgEl}
             <div class="flex-1 min-w-0">
-              <span class="text-xs font-bold" style="color:${a.color||'#6d28d9'};">${a.name}</span>
+              <span class="text-xs font-bold" style="color:${color};">${escapeHtml(a.name)}</span>
               ${msgEl}
             </div>
           </div>`;
@@ -5799,7 +5822,7 @@
 
       contentEl.innerHTML = html;
       panel.classList.remove('hidden');
-      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      if (scrollToPanel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     // ── 뱃지 설정 서버에서 로드 (v3: 챌린지 교사 승인 방식) ─────
