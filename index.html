@@ -282,7 +282,7 @@
               <label class="text-xs text-gray-400 font-bold uppercase tracking-wider block mb-2">
                 <i class="fa-solid fa-calendar-days"></i> 조회 기간
               </label>
-              <input type="date" id="filterEndDate"
+              <input type="date" id="filterEndDate" onchange="resetStudentAnalysis()"
                 class="w-full p-3 border-2 border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-400">
             </div>
             <div class="flex gap-2 items-end pb-1">
@@ -2228,6 +2228,7 @@
       }
 
       const queriedEndDate = input.value;
+      resetStudentAnalysis();
       const endDate = new Date(queriedEndDate);
       const startDate = new Date(endDate);
       startDate.setDate(startDate.getDate() - 6);
@@ -4180,27 +4181,44 @@
       if(modal) modal.style.display = 'none';
     }
 
+    function resetStudentAnalysis() {
+      window.studentAnalysisRequestId = (window.studentAnalysisRequestId || 0) + 1;
+      window.currentAIAnalysis = null;
+      window.currentAnalysisPeriod = null;
+      const btn = document.getElementById('aiAnalysisBtn');
+      if (btn) { btn.disabled = false; btn.innerHTML = '분석하기'; }
+      const container = document.getElementById('aiReportContainer');
+      if (container) container.innerHTML = '<p class="text-sm text-gray-500">선택한 기간의 기록을 분석해보세요.</p>';
+    }
+
     async function generateAIReport() {
       if (!user || !user.studentId) { showInfoModal('로그인 필요', '로그인이 필요합니다.'); return; }
       const btn = document.getElementById('aiAnalysisBtn');
       const container = document.getElementById('aiReportContainer');
-      if(!btn || !container) return;
+      if (!btn || !container || btn.disabled) return;
+      const requestedStudentId = user.studentId;
+      const requestId = (window.studentAnalysisRequestId || 0) + 1;
+      window.studentAnalysisRequestId = requestId;
+      window.currentAIAnalysis = null;
+      window.currentAnalysisPeriod = null;
       const filterEndDate = document.getElementById('filterEndDate');
       let endDate, startDate;
       if(filterEndDate && filterEndDate.value) {
         endDate = new Date(filterEndDate.value);
         startDate = new Date(endDate);
-        startDate.setDate(startDate.getDate() - 6);
+        startDate.setUTCDate(startDate.getUTCDate() - 6);
       } else {
-        endDate = new Date();
-        startDate = new Date();
-        startDate.setDate(startDate.getDate() - 6);
+        endDate = new Date(getTodayKST() + 'T00:00:00Z');
+        startDate = new Date(endDate);
+        startDate.setUTCDate(startDate.getUTCDate() - 6);
       }
       const startDateStr = startDate.toISOString().split('T')[0];
       const endDateStr = endDate.toISOString().split('T')[0];
-      const formatDate = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+      const formatDate = (d) => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
       const periodText = `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
-      window.currentAnalysisPeriod = { start: startDateStr, end: endDateStr, text: periodText };
+      const requestedEndDate = filterEndDate?.value || '';
+      const isCurrentRequest = () => user && user.studentId === requestedStudentId
+        && window.studentAnalysisRequestId === requestId && (filterEndDate?.value || '') === requestedEndDate;
       btn.disabled = true;
       btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 분석 중...';
       container.innerHTML = `<div class="flex items-center gap-2 text-blue-600"><i class="fa-solid fa-spinner fa-spin"></i><span class="text-sm font-semibold">${periodText} 데이터를 분석하고 있습니다...</span></div>`;
@@ -4210,14 +4228,17 @@
         caffeineLogs.forEach(log => {
           const logDate = getLogDateKST(log.time);
           if(logDate >= startDateStr && logDate <= endDateStr) {
-            weekCaffeineTotal += log.amount;
+            weekCaffeineTotal += Number(log.amount) || 0;
             caffeineDates.add(logDate);
           }
         });
         const caffeineDays = caffeineDates.size;
-        sleepLogs.forEach(log => { if(log.date >= startDateStr && log.date <= endDateStr) { weekSleepTotal += log.hours; sleepDays++; } });
+        const sleepByDate = new Map();
+        sleepLogs.forEach(log => { if(log.date >= startDateStr && log.date <= endDateStr) sleepByDate.set(log.date, Number(log.hours) || 0); });
+        sleepDays = sleepByDate.size;
+        sleepByDate.forEach(hours => { weekSleepTotal += hours; });
         const avgSleep = sleepDays > 0 ? (weekSleepTotal / sleepDays).toFixed(1) : 0;
-        const avgCaffeine = (weekCaffeineTotal / 7).toFixed(0);
+        const avgCaffeine = caffeineDays > 0 ? (weekCaffeineTotal / caffeineDays).toFixed(0) : 0;
 
         // ⭐ 카페인·수면 둘 다 3일 미만일 때만 분석 불가
         if(caffeineDays < 3 && sleepDays < 3) {
@@ -4275,12 +4296,14 @@
 
         google.script.run
           .withSuccessHandler(response => {
+            if (!isCurrentRequest()) return;
             if (response.success) {
+              window.currentAnalysisPeriod = { start: startDateStr, end: endDateStr, text: periodText };
+              // 먼저 결과를 그린 뒤 기본 분석 안내를 추가해야 안내가 사라지지 않습니다.
+              displayAIReport(response.analysis, periodText, lackingNotice);
               if (response.errorCode && response.source && response.source.startsWith('Fallback')) {
                 showFallbackNotice(response.errorCode);
               }
-              // 부족 데이터 배너는 AI 결과 위에 유지
-              displayAIReport(response.analysis, periodText, lackingNotice);
             } else {
               showErrorReport(response.error, response.errorCode);
             }
@@ -4288,11 +4311,12 @@
             btn.innerHTML = '<i class="fa-solid fa-sparkles"></i> 분석하기';
           })
           .withFailureHandler(err => {
+            if (!isCurrentRequest()) return;
             showErrorReport(err.message || '서버 연결에 실패했습니다.', 'NETWORK_ERROR');
             btn.disabled = false;
             btn.innerHTML = '<i class="fa-solid fa-sparkles"></i> 분석하기';
           })
-          .generateAIHealthReport(user.studentId, user.name, weekCaffeineTotal, avgCaffeine, avgSleep, userWeight, userLimit);
+          .generateAIHealthReport(user.studentId, user.name, weekCaffeineTotal, avgCaffeine, avgSleep, userWeight, userLimit, startDateStr, endDateStr);
       } catch (error) {
         showErrorReport();
         btn.disabled = false;
@@ -4316,8 +4340,8 @@
           const sa = ln.match(/^__SLP_AVG__:(.+)/);
           if (cm) { cafCount = +cm[1]; cafNeed = +cm[2]; }
           if (sm) { slpCount = +sm[1]; slpNeed = +sm[2]; }
-          if (ca) cafAvg = ca[1];
-          if (sa) slpAvg = sa[1];
+          if (ca && Number.isFinite(Number(ca[1])) && Number(ca[1]) >= 0) cafAvg = Math.round(Number(ca[1]));
+          if (sa && Number.isFinite(Number(sa[1])) && Number(sa[1]) >= 0) slpAvg = Number(sa[1]).toFixed(1);
         });
         const cafOk = cafCount >= 3, slpOk = slpCount >= 3;
         container.innerHTML = `
@@ -4349,7 +4373,7 @@
       }
 
       // ── 섹션 파싱 (☕ / 😴 / 💪) ──────────────────────────────
-      const rawLines = analysis.split('\n');
+      const rawLines = escapeHtml(analysis).split('\n');
       let summary = [], caf = [], slp = [], tips = [];
       let section = 'summary';
       rawLines.forEach(line => {

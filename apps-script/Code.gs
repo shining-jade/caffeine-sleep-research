@@ -1431,7 +1431,31 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
 // AI 건강 리포트 생성 (카페인/수면 개별 체크)
 // ============================================
 
-function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine, avgSleep, weight, limit) {
+// 학생 대시보드의 7일 조회 기간을 검증하고 서버 기본 기간을 KST로 고정합니다.
+function getStudentAnalysisPeriod_(startDate, endDate) {
+  if (startDate == null && endDate == null) {
+    endDate = Utilities.formatDate(new Date(), "Asia/Seoul", "yyyy-MM-dd");
+    const start = new Date(endDate + "T00:00:00Z");
+    start.setUTCDate(start.getUTCDate() - 6);
+    startDate = start.toISOString().slice(0, 10);
+  }
+  function validDate(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const date = new Date(value + 'T00:00:00Z');
+    return !isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }
+  if (!validDate(startDate) || !validDate(endDate)
+      || new Date(endDate + 'T00:00:00Z') - new Date(startDate + 'T00:00:00Z') !== 6 * 86400000) {
+    throw new Error('INVALID_PERIOD');
+  }
+  return { start: startDate, end: endDate };
+}
+
+function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine, avgSleep, weight, limit, startDate, endDate) {
+  let period;
+  try { period = getStudentAnalysisPeriod_(startDate, endDate); }
+  catch (_error) { return {success: false, errorCode: 'INVALID_PERIOD', error: '분석 기간을 다시 선택해주세요.'}; }
+
   safeLog_('\n\n========================================');
   safeLog_('=== AI 건강 리포트 생성 시작 ===');
   safeLog_('========================================');
@@ -1463,7 +1487,7 @@ function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine,
     safeLog_(`\n🔍 스프레드시트에서 학번 ${studentId}의 실제 데이터 조회 중...`);
 
     // 주간 데이터 수집
-    const weeklyData = getWeeklyDetailedData(studentId);
+    const weeklyData = getWeeklyDetailedData(studentId, period.start, period.end);
     const weeklyDetails = weeklyData.details;
     recordedDays = weeklyData.recordedDays;
     caffeineRecordedDays = weeklyData.caffeineRecordedDays;
@@ -1473,72 +1497,10 @@ function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine,
     safeLog_('✓ 주간 데이터 수집 완료');
     safeLog_(`⭐⭐⭐ 카페인: ${caffeineRecordedDays}일, 수면: ${sleepRecordedDays}일`);
 
-    // ⭐⭐⭐ 서버에서 직접 통계 재계산 ⭐⭐⭐
-    safeLog_(`\n🔄 서버에서 실제 통계 재계산 중...`);
-
-    const ss = getSpreadsheet_();
-    const caffeineSheet = ss.getSheetByName("caffeine");
-    const sleepSheet = ss.getSheetByName("sleep");
-
-    // 최근 7일 날짜 범위
-    const today = new Date();
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(today.getDate() - 6);
-
-    let realWeekCaffeineTotal = 0;
-    let realWeekSleepTotal = 0;
-    let realSleepDays = 0;
-
-    // 카페인 데이터 수집
-    if (caffeineSheet) {
-      const caffeineData = caffeineSheet.getDataRange().getValues();
-      for (let i = 1; i < caffeineData.length; i++) {
-        if (normalizeId(caffeineData[i][4]) === normalizeId(studentId)) {
-          const intakeTime = caffeineData[i][8];
-          if (intakeTime instanceof Date) {
-            const intakeDate = new Date(intakeTime);
-            if (intakeDate >= sevenDaysAgo && intakeDate <= today) {
-              const amount = parseFloat(caffeineData[i][7]) || 0;
-              realWeekCaffeineTotal += amount;
-            }
-          }
-        }
-      }
-    }
-
-    // 수면 데이터 수집
-    if (sleepSheet) {
-      const sleepData = sleepSheet.getDataRange().getValues();
-      for (let i = 1; i < sleepData.length; i++) {
-        if (normalizeId(sleepData[i][4]) === normalizeId(studentId)) {
-          const sleepDate = sleepData[i][6];
-          if (sleepDate instanceof Date) {
-            const dateObj = new Date(sleepDate);
-            if (dateObj >= sevenDaysAgo && dateObj <= today) {
-              const hours = parseFloat(sleepData[i][10]) || 0;
-              realWeekSleepTotal += hours;
-              realSleepDays++;
-            }
-          }
-        }
-      }
-    }
-
-    const realAvgSleep = realSleepDays > 0 ? (realWeekSleepTotal / realSleepDays) : 0;
-    const realAvgCaffeine = realWeekCaffeineTotal / 7;
-
-    safeLog_(`\n📊 서버에서 계산한 실제 통계:`);
-    safeLog_(`   - 카페인 총량: ${realWeekCaffeineTotal}mg`);
-    safeLog_(`   - 카페인 평균: ${realAvgCaffeine.toFixed(0)}mg/일`);
-    safeLog_(`   - 수면 총량: ${realWeekSleepTotal.toFixed(1)}시간`);
-    safeLog_(`   - 수면 평균: ${realAvgSleep.toFixed(1)}시간 (${realSleepDays}일)`);
-
-    // ⭐⭐⭐ 실제 계산된 값으로 변수 교체 ⭐⭐⭐
-    weekCaffeineTotal = realWeekCaffeineTotal;
-    avgCaffeine = realAvgCaffeine;
-    avgSleep = realAvgSleep;
-
-    safeLog_(`\n✅ 통계 재계산 완료 - 실제 값으로 업데이트됨`);
+    // 같은 일별 집계로 기록일 수와 평균을 계산합니다. 미기록일은 평균에서 제외합니다.
+    weekCaffeineTotal = weeklyData.caffeineTotal || 0;
+    avgCaffeine = caffeineRecordedDays ? weekCaffeineTotal / caffeineRecordedDays : 0;
+    avgSleep = sleepRecordedDays ? (weeklyData.sleepTotal || 0) / sleepRecordedDays : 0;
 
     // 개별 체크: 카페인·수면 둘 다 3일 미만일 때만 분석 불가 (하나라도 3일 이상이면 진행)
     if (caffeineRecordedDays < 3 && sleepRecordedDays < 3) {
@@ -1577,9 +1539,8 @@ function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine,
 safeLog_('✅✅✅ 데이터 충분 → AI 분석 진행');
 
 const modelName = "gemini-2.0-flash";
-const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent`;
 
-const todayStr = Utilities.formatDate(new Date(), "Asia/Seoul", "MM/dd");
 const overDaysText = overCaffeineDays && overCaffeineDays.length > 0
   ? overCaffeineDays.map(d => d.date.substr(5) + ': ' + d.mg + 'mg' + (d.mg > limit ? ' [!초과]' : '')).join('\n')
   : '없음';
@@ -1587,21 +1548,21 @@ const overDaysText = overCaffeineDays && overCaffeineDays.length > 0
 const prompt = `너는 친근한 건강 코치야. 아래 데이터를 보고 학생에게 짧고 핵심만 담아 한국어로 말해줘.
 
 [데이터]
-이름: ${name} | 기준일: ${todayStr}
-카페인 평균: ${Math.round(avgCaffeine)}mg/일 (목표 섭취량 ${limit}mg) | 기록: ${caffeineRecordedDays}/7일
-수면 평균: ${avgSleep.toFixed(1)}h | 기록: ${sleepRecordedDays}/7일
+분석 기간: ${period.start} ~ ${period.end}
+${caffeineRecordedDays ? `카페인 평균: ${Math.round(avgCaffeine)}mg/일 (목표 섭취량 ${limit}mg) | 기록: ${caffeineRecordedDays}/7일` : '카페인 미기록: 섭취 상태를 판단할 수 없음'}
+${sleepRecordedDays ? `수면 평균: ${avgSleep.toFixed(1)}h | 기록: ${sleepRecordedDays}/7일` : '수면 미기록: 수면 상태를 판단할 수 없음'}
 목표 섭취량 초과일: ${overDaysText}
 일별: ${weeklyDetails}
 
 [출력 형식 — 반드시 이 구조 그대로]
-${name}님 건강 한줄평 (${todayStr})
+건강 한줄평 (${period.start} ~ ${period.end})
 [칭찬 또는 격려 한 문장. 이모지 1개]
 
 ☕ 카페인
-[1~2문장. 평균 ${Math.round(avgCaffeine)}mg과 목표 섭취량 ${limit}mg 비교. 초과일 있으면 날짜·수치 언급. 없으면 칭찬.]
+[${caffeineRecordedDays ? `1~2문장. 평균 ${Math.round(avgCaffeine)}mg과 목표 섭취량 ${limit}mg 비교. 초과일 있으면 날짜·수치 언급. 없으면 칭찬.` : '카페인 미기록임을 알리고 기록 권장. 섭취량을 0mg으로 단정하거나 안전·양호로 판단하지 말 것.'}]
 
 😴 수면
-[1~2문장. 평균 ${avgSleep.toFixed(1)}h와 권장 8~10h 비교.${sleepRecordedDays < 3 ? ` 수면 기록이 ${sleepRecordedDays}일뿐임을 언급하고 더 기록 권장.` : ''}]
+[${sleepRecordedDays ? `1~2문장. 평균 ${avgSleep.toFixed(1)}h와 권장 8~10h 비교.${sleepRecordedDays < 3 ? ` 수면 기록이 ${sleepRecordedDays}일뿐임을 언급하고 더 기록 권장.` : ''}` : '수면 미기록임을 알리고 기록 권장. 0시간 수면이나 수면 부족으로 단정하지 말 것.'}]
 
 💡 오늘부터 해봐요
 1. [구체적 실천 팁 — 예: "오후 2시 이후 카페인 금지"]
@@ -1630,6 +1591,7 @@ const payload = {
 const options = {
   method: "post",
   contentType: "application/json",
+  headers: { "x-goog-api-key": apiKey },
   payload: JSON.stringify(payload),
   muteHttpExceptions: true
 };
@@ -1810,6 +1772,10 @@ function getStructuredFallbackAnalysis(avgCaffeine, avgSleep, limit, weekTotal, 
   // ⭐ 제목 바로 다음 줄에 일평균 (빈 줄 없이)
   t += "☕ 카페인 분석\n";
 
+  if (!caffeineCount) {
+    t += "- 카페인 미기록 — 섭취 상태를 판단할 수 없어요\n";
+    t += "- 마시지 않은 날도 0mg으로 기록해주세요\n";
+  } else {
   let cafStatus = "";
   if (avgCaffeine === 0 && caffeineCount > 0) cafStatus = "이내 👍";
   else if (avgCaffeine > limit)               cafStatus = "초과 ⚠️";
@@ -1850,6 +1816,8 @@ function getStructuredFallbackAnalysis(avgCaffeine, avgSleep, limit, weekTotal, 
     t += "- 기록된 날 기준으로 안정적인 수준이에요, 이 페이스 그대로 유지해봐요!\n";
   }
 
+  }
+
   t += "\n";
 
   // ── 😴 수면 분석 (격려형) ───────────────────────
@@ -1873,7 +1841,7 @@ function getStructuredFallbackAnalysis(avgCaffeine, avgSleep, limit, weekTotal, 
   else if (avgSleep > 0)          sleepStatus = "수면 부족 🔴";
   else                            sleepStatus = "기록 부족";
 
-  t += `- 평균 ${avgSleep.toFixed(1)}h / 권장 ${slpWarn}~${slpGood}시간 (${sleepStatus})\n`;
+  t += sleepCount ? `- 평균 ${avgSleep.toFixed(1)}h / 권장 ${slpWarn}~${slpGood}시간 (${sleepStatus})\n` : "- 수면 미기록 — 수면 상태를 판단할 수 없어요\n";
 
   if (avgSleep >= slpMax) {
     t += `- 권장 상한(${slpGood}시간)을 크게 넘는 ${avgSleep.toFixed(1)}시간으로 수면 과다 상태예요 🟣\n`;
@@ -1901,7 +1869,11 @@ function getStructuredFallbackAnalysis(avgCaffeine, avgSleep, limit, weekTotal, 
   t += "💪 실천 조언\n";
 
   const overDaysList = overCaffeineDays ? overCaffeineDays.filter(d => d.mg > limit) : [];
-  if (overDaysList.length > 0 && avgSleep < slpWarn) {
+  if (!sleepCount || !caffeineCount) {
+    t += !sleepCount ? "1. 취침·기상 시각을 기록해보기\n" : "1. 카페인을 마시지 않은 날도 0mg으로 기록하기\n";
+    t += "2. 매일 같은 시각에 기록하는 습관 만들기\n";
+    t += "3. 기록을 쌓은 뒤 나의 생활 패턴 확인하기";
+  } else if (overDaysList.length > 0 && avgSleep < slpWarn) {
     t += "1. 취침 시간을 30분만 앞당겨보기\n";
     t += "2. 오후 2시 이후엔 카페인 음료를 무카페인으로 바꿔보기\n";
     t += "3. 음료 고를 때 카페인 함량 라벨 한 번씩 확인해보기";
