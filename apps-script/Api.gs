@@ -94,20 +94,30 @@ function doGet() {
 }
 
 function doPost(e) {
+  var diagnostic = { stage: 'decode' };
   try {
     if (!e || !e.postData || typeof e.postData.contents !== 'string') throw new Error('REQUEST_REJECTED');
     var request = JSON.parse(e.postData.contents);
-    var result = handleApiRequest_(request);
+    var result = handleApiRequest_(request, diagnostic);
     return jsonOutput_({ success: true, data: result });
   } catch (error) {
-    Logger.log('API request rejected');
-    return jsonOutput_({ success: false, error: 'REQUEST_REJECTED' });
+    // Only fixed categories leave this boundary; exception text may contain PII.
+    var message = String(error && error.message || '');
+    diagnostic.kind = message === 'REQUEST_REJECTED' ? 'rejected'
+      : /quota|rate limit|too many times|resource.exhausted/i.test(message) ? 'rate_limit'
+      : /service unavailable|temporarily unavailable|internal error|timed?\s*out|timeout/i.test(message) ? 'service_unavailable'
+      : 'unexpected';
+    try { Logger.log('API request rejected ' + JSON.stringify(diagnostic)); } catch (_logError) {}
+    return jsonOutput_({ success: false, error: 'REQUEST_REJECTED', diagnostic: diagnostic });
   }
 }
 
-function handleApiRequest_(request) {
+function handleApiRequest_(request, diagnostic) {
+  diagnostic = diagnostic || {};
   if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('REQUEST_REJECTED');
+  diagnostic.stage = 'authorization';
   verifyGatewaySecret_(request.secret);
+  diagnostic.stage = 'dispatch';
   if (typeof request.action !== 'string' || !Array.isArray(request.params)) throw new Error('REQUEST_REJECTED');
   if (request.role === 'public') {
     if (request.action !== 'checkLogin') throw new Error('REQUEST_REJECTED');
@@ -118,7 +128,7 @@ function handleApiRequest_(request) {
     return invokeAction_(request.action, []);
   }
   if (request.role === 'student') {
-    return dispatchStudentAction_(request.action, request.params, requireSubject_(request.subject));
+    return dispatchStudentAction_(request.action, request.params, requireSubject_(request.subject), diagnostic);
   }
   if (request.role === 'teacher') return dispatchTeacherAction_(request.action, request.params);
   if (request.role === 'scheduler') return dispatchSchedulerAction_(request.action, request.params);
@@ -132,7 +142,8 @@ function validateGoalPayload_(payload) {
       || !time.test(payload.targetBedtime) || !time.test(payload.targetWakeTime)) throw new Error('REQUEST_REJECTED');
 }
 
-function dispatchStudentAction_(action, params, subject) {
+function dispatchStudentAction_(action, params, subject, diagnostic) {
+  diagnostic = diagnostic || {};
   var rule = STUDENT_ACTIONS_[action];
   if (!rule) throw new Error('REQUEST_REJECTED');
   var safeParams = params.slice();
@@ -183,7 +194,9 @@ function dispatchStudentAction_(action, params, subject) {
   };
   var synced = ['saveCaffeineData','saveSleepData','saveInitialSetup'].indexOf(action) >= 0 && safeParams[0] && safeParams[0]._sync;
   var operation = synced ? function() { return runSyncedMutation_(action, safeParams[0], subject, execute); } : execute;
+  diagnostic.stage = 'student_operation';
   var result = STUDENT_MUTATIONS_[action] ? withScriptLock_(operation) : operation();
+  diagnostic.stage = 'profile_sync';
   if (action === 'getWeightData' && result) result.syncVersion = syncProfileState_(subject).version;
   if (action === 'getStudentBootstrap' && result && result.weight) result.weight.syncVersion = syncProfileState_(subject).version;
   return result;
