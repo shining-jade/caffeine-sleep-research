@@ -432,14 +432,14 @@
           <div class="mb-4">
             <div class="flex items-center justify-between mb-2">
               <label class="text-xs text-gray-400 font-bold uppercase tracking-wider">빠른 선택</label>
-              <button onclick="showTab('settings')" class="text-xs text-indigo-500 font-semibold flex items-center gap-1 hover:text-indigo-700 transition-colors">
+              <button onclick="showTab('settings', 'quickMenuSection')" class="text-xs text-indigo-500 font-semibold flex items-center gap-1 hover:text-indigo-700 transition-colors">
                 <i class="fa-solid fa-gear text-xs"></i> 목록 수정
               </button>
             </div>
             <div class="mb-3 px-3 py-2 bg-indigo-50 rounded-xl border border-indigo-100 flex items-start gap-2">
               <i class="fa-solid fa-lightbulb text-indigo-400 text-xs mt-0.5 flex-shrink-0"></i>
               <p class="text-xs text-indigo-500 leading-relaxed">
-                자주 마시는 음료는 <b>설정 탭 › 빠른메뉴관리</b>에서 직접 수정할 수 있어요! ☕
+                자주 마시는 음료는 <b>목록 수정 › 퀵메뉴 관리</b>에서 직접 수정할 수 있어요! ☕
               </p>
             </div>
 
@@ -1029,7 +1029,7 @@
           </div>
         </div>
 
-        <div class="bg-white p-5 rounded-[2rem] shadow-sm">
+        <div id="quickMenuSection" class="bg-white p-5 rounded-[2rem] shadow-sm">
           <div class="flex justify-between items-end mb-2">
             <h4 class="font-bold text-lg flex items-center gap-2">
               <i class="fa-solid fa-bolt text-indigo-600"></i> 퀵메뉴 관리
@@ -1855,7 +1855,7 @@
     }
 
     // 탭 전환
-    function showTab(id) {
+    function showTab(id, sectionId) {
       saveCurrentTab(id); // 현재 탭을 저장해 다음 실행에서 복원한다.
       document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
       document.querySelectorAll('nav button').forEach(b => {
@@ -1868,7 +1868,10 @@
       navBtn.classList.add('nav-active', 'text-indigo-600');
       navBtn.classList.remove('text-gray-300');
 
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const section = sectionId ? document.getElementById(sectionId) : null;
+      const headerHeight = section ? (document.querySelector('#mainApp > header')?.getBoundingClientRect().height || 0) : 0;
+      const top = section ? Math.max(0, window.scrollY + section.getBoundingClientRect().top - headerHeight - 16) : 0;
+      window.scrollTo({ top, behavior: 'smooth' });
 
       if(id === 'dashboard') refreshData();
       if(id === 'caffeine') {
