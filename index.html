@@ -134,7 +134,7 @@
       border-radius: 10px;
       background: #f5f3ff;
       color: #1f2937;
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 800;
       line-height: 1.5;
       letter-spacing: 0;
@@ -143,13 +143,13 @@
     }
     .record-question-note { color: #4b5563; font-size: 13px; font-weight: 500; }
     .record-field-title { display: block; margin-bottom: 8px; color: #374151; font-size: 15px; font-weight: 700; }
-    .record-phase-heading { display: flex; align-items: center; gap: 8px; padding-top: 8px; color: #4338ca; font-size: 18px; font-weight: 800; line-height: 1.5; }
+    .record-phase-heading { display: flex; align-items: center; gap: 8px; padding-top: 8px; color: #4338ca; font-size: 17px; font-weight: 800; line-height: 1.5; }
     .record-phase-heading::after { content: ''; flex: 1; min-width: 12px; height: 2px; background: #e0e7ff; }
     .drink-selection-guide { margin: 0 0 12px; padding: 0 4px; color: #4338ca; font-size: 15px; font-weight: 700; line-height: 1.6; overflow-wrap: anywhere; }
     #tab-caffeine input:not([type="checkbox"]), #tab-sleep input:not([type="hidden"]), #tab-sleep textarea { font-size: 16px; }
     @media (min-width: 1024px) {
-      .record-question { font-size: 18px; }
-      .record-phase-heading { font-size: 20px; }
+      .record-question { font-size: 17px; }
+      .record-phase-heading { font-size: 19px; }
     }
 
     #refreshBtn {
@@ -640,7 +640,7 @@
                 <input type="checkbox" name="caffeineSymptom" value="두통이 있었다" class="w-4 h-4 accent-amber-500">
                 <span class="text-sm text-gray-700">두통이 있었다 🤕</span>
               </label>
-              <label class="flex items-center gap-2 p-2.5 bg-green-50 rounded-xl cursor-pointer hover:bg-green-100 transition">
+              <label class="flex items-center gap-2 p-2.5 bg-gray-50 rounded-xl cursor-pointer hover:bg-amber-50 transition">
                 <input type="checkbox" name="caffeineSymptom" value="없음" id="caffeineSymptomNone" class="w-4 h-4 accent-green-500" onchange="handleSymptomNone(this)">
                 <span class="text-sm text-gray-700">없음 ✅</span>
               </label>
