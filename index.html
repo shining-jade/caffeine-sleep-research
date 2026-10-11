@@ -1871,7 +1871,7 @@
       const section = sectionId ? document.getElementById(sectionId) : null;
       const headerHeight = section ? (document.querySelector('#mainApp > header')?.getBoundingClientRect().height || 0) : 0;
       const top = section ? Math.max(0, window.scrollY + section.getBoundingClientRect().top - headerHeight - 16) : 0;
-      window.scrollTo({ top, behavior: 'smooth' });
+      window.scrollTo({ top, behavior: 'instant' });
 
       if(id === 'dashboard') refreshData();
       if(id === 'caffeine') {
