@@ -29,6 +29,67 @@ test('upstream rejection diagnostics retain only fixed stage/category metadata',
   }
 });
 
+test('student bootstrap retries one explicitly transient upstream rejection', async () => {
+  for (const kind of ['service_unavailable', 'rate_limit']) {
+    let executions = 0;
+    const result = await callGas({ ...request, action: 'getStudentBootstrap', fetchImpl: async () => {
+      executions++;
+      return new Response(JSON.stringify(executions === 1
+        ? { success: false, error: 'REQUEST_REJECTED', diagnostic: { stage: 'profile_sync', kind } }
+        : { success: true, data: { weight: { weight: 55 }, caffeineLogs: [] } }));
+    } });
+    assert.equal(result.weight.weight, 55);
+    assert.equal(executions, 2);
+  }
+});
+
+test('bootstrap transient retry is bounded and never applies to writes, other roles or unclassified rejections', async () => {
+  for (const [role, action, kind, stage, expectedExecutions] of [
+    ['student', 'getStudentBootstrap', 'service_unavailable', 'profile_sync', 2],
+    ['student', 'saveSleepData', 'service_unavailable', 'student_operation', 1],
+    ['student', 'saveCaffeineData', 'rate_limit', 'student_operation', 1],
+    ['teacher', 'getStudentBootstrap', 'service_unavailable', 'dispatch', 1],
+    ['student', 'getStudentBootstrap', 'rejected', 'authorization', 1],
+    ['student', 'getStudentBootstrap', 'service_unavailable', 'authorization', 1],
+    ['student', 'getStudentBootstrap', 'unexpected', 'profile_sync', 1],
+    ['student', 'getStudentBootstrap', 'service_unavailable', 'private-stage', 1],
+    ['student', 'getStudentBootstrap', undefined, undefined, 1],
+  ]) {
+    let executions = 0;
+    await assert.rejects(callGas({ ...request, role, action, fetchImpl: async () => {
+      executions++;
+      return new Response(JSON.stringify({ success: false, error: 'REQUEST_REJECTED', diagnostic: { stage, kind } }));
+    } }), { code: 'GAS_REJECTED' });
+    assert.equal(executions, expectedExecutions, `${role}/${action}/${kind}/${stage}`);
+  }
+});
+
+test('bootstrap transient recovery uses the remaining deadline rather than resetting its timeout', async () => {
+  let executions = 0;
+  const delays = [];
+  const originalTimeout = globalThis.setTimeout;
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    delays.push(delay);
+    return originalTimeout(callback, delay, ...args);
+  };
+  try {
+    await assert.rejects(callGas({ ...request, action: 'getStudentBootstrap', timeoutMs: 80,
+      fetchImpl: async (_url, { signal }) => {
+        executions++;
+        if (executions === 1) {
+          await new Promise(resolve => originalTimeout(resolve, 20));
+          return new Response(JSON.stringify({ success: false, diagnostic: { stage: 'profile_sync', kind: 'service_unavailable' } }));
+        }
+        return new Promise((_resolve, reject) => signal.addEventListener('abort', () =>
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true }));
+      },
+    }), { code: 'GAS_TIMEOUT' });
+    assert.equal(executions, 2);
+    assert.equal(delays.length, 2);
+    assert.ok(delays[1] < delays[0] - 10);
+  } finally { globalThis.setTimeout = originalTimeout; }
+});
+
 test('a transient output failure recovers the committed receipt without replaying its write', async () => {
   for (const failure of ['http', 'network', 'body']) {
     let writes = 0;

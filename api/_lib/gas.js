@@ -43,7 +43,13 @@ async function callGasReadWithRetry(input) {
     try {
       return await callGasOnce({ ...input, timeoutMs: Math.max(1, snapshotRead && attempt === 0 ? Math.min(25000, deadline - Date.now()) : deadline - Date.now()) });
     } catch (error) {
-      const retryable = snapshotRead ? ['GAS_UNAVAILABLE','GAS_TIMEOUT'].includes(error.code) && attempt < 1 : input.action === 'getCaffeineDB' && error.code === 'GAS_UNAVAILABLE' && attempt < 2;
+      const bootstrapTransient = input.role === 'student' && input.action === 'getStudentBootstrap'
+        && error.code === 'GAS_REJECTED'
+        && ['student_operation', 'profile_sync'].includes(error.upstreamDiagnostic?.stage)
+        && ['service_unavailable', 'rate_limit'].includes(error.upstreamDiagnostic?.kind);
+      const retryable = bootstrapTransient ? attempt < 1
+        : snapshotRead ? ['GAS_UNAVAILABLE','GAS_TIMEOUT'].includes(error.code) && attempt < 1
+        : input.action === 'getCaffeineDB' && error.code === 'GAS_UNAVAILABLE' && attempt < 2;
       if (!retryable || Date.now() >= deadline) throw error;
     }
   }
@@ -160,7 +166,9 @@ async function callGasOnce({
         upstreamDiagnostic = { stage: diagnostic.stage, kind: diagnostic.kind };
       }
       reason = 'rejected';
-      throw new GasGatewayError(502, 'GAS_REJECTED', 'The data service rejected the request.');
+      const rejection = new GasGatewayError(502, 'GAS_REJECTED', 'The data service rejected the request.');
+      if (upstreamDiagnostic) rejection.upstreamDiagnostic = upstreamDiagnostic;
+      throw rejection;
     }
     if (!Object.hasOwn(payload, 'data')) {
       reason = 'missing_data';
