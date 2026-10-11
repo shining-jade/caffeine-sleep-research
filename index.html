@@ -16,6 +16,15 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
 
+    .dashboard-chart-region { position: relative; }
+    .dashboard-chart-status {
+      position: absolute; inset: 0; z-index: 1;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; border-radius: 16px; background: #f9fafb;
+      color: #6366f1; font-size: 14px; font-weight: 500;
+      line-height: 1.6; text-align: center; word-break: keep-all;
+    }
+    .dashboard-chart-status[hidden] { display: none; }
     /* ── Google Apps Script iframe 모바일 반응형 핵심 픽스 ── */
     html {
       box-sizing: border-box;
@@ -401,11 +410,14 @@
           <h3 class="text-xs font-semibold text-gray-400 mb-4 uppercase tracking-wider">
             주간 카페인 섭취 현황 (mg)
           </h3>
-          <div class="overflow-x-auto pb-2">
-            <div id="caffeineChartWrapper" style="min-width: 100%; height: 200px;">
-              <canvas id="caffeineChart"></canvas>
+          <div id="caffeineChartRegion" class="dashboard-chart-region" aria-busy="true">
+            <div id="caffeineChartStatus" class="dashboard-chart-status" role="status" aria-live="polite">데이터를 불러오는 중입니다…</div>
+            <div class="overflow-x-auto pb-2">
+              <div id="caffeineChartWrapper" style="min-width: 100%; height: 200px;">
+                <canvas id="caffeineChart"></canvas>
+              </div>
+              <div id="caffeineLegend"></div>
             </div>
-            <div id="caffeineLegend"></div>
           </div>
         </div>
 
@@ -413,11 +425,14 @@
           <h3 class="text-xs font-semibold text-gray-400 mb-4 uppercase tracking-wider">
             주간 수면 패턴 분석 (시간)
           </h3>
-          <div class="overflow-x-auto pb-2">
-            <div id="sleepChartWrapper" style="min-width: 100%; height: 200px;">
-              <canvas id="sleepChart"></canvas>
+          <div id="sleepChartRegion" class="dashboard-chart-region" aria-busy="true">
+            <div id="sleepChartStatus" class="dashboard-chart-status" role="status" aria-live="polite">데이터를 불러오는 중입니다…</div>
+            <div class="overflow-x-auto pb-2">
+              <div id="sleepChartWrapper" style="min-width: 100%; height: 200px;">
+                <canvas id="sleepChart"></canvas>
+              </div>
+              <div id="sleepLegend"></div>
             </div>
-            <div id="sleepLegend"></div>
           </div>
         </div>
       </div>
@@ -1470,6 +1485,7 @@
         if (element) element.style.display = 'none';
       });
       document.getElementById('calendarDetailPanel')?.classList.add('hidden');
+      setDashboardChartState('loading');
     }
 
     // isRestore: true면 세션 복구, false면 최초 로그인
@@ -1688,6 +1704,7 @@
     }
 
     function loadInitialStudentData() {
+      setDashboardChartState('loading');
       if (!window.studentStartup) {
         loadLegacyStudentData();
         return Promise.resolve(false);
@@ -2388,6 +2405,22 @@
       return requestDashboardStats(input.value);
     }
 
+    function setDashboardChartState(state) {
+      // Keep existing graphs visible during background refreshes and failed refreshes.
+      if (lastDashboardData) state = 'ready';
+      ['caffeine', 'sleep'].forEach(kind => {
+        const status = document.getElementById(kind + 'ChartStatus');
+        const region = document.getElementById(kind + 'ChartRegion');
+        if (status) {
+          status.hidden = state === 'ready';
+          status.textContent = state === 'error'
+            ? '데이터를 불러오지 못했습니다. 위의 조회 버튼을 눌러 다시 시도해 주세요.'
+            : '데이터를 불러오는 중입니다…';
+        }
+        if (region) region.setAttribute('aria-busy', state === 'loading' ? 'true' : 'false');
+      });
+    }
+
     function requestDashboardStats(endDateStr) {
       if (!user || !user.studentId) return Promise.resolve(false);
       const studentId = user.studentId, studentName = user.name;
@@ -2402,6 +2435,7 @@
       const formatDate = d => `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
       const period = `${formatDate(startDate)} ~ ${formatDate(endDate)}`;
       if (rangeText) rangeText.textContent = `${period} 데이터 조회 중...`;
+      setDashboardChartState('loading');
       return new Promise(resolve => {
         google.script.run
           .withSuccessHandler(res => {
@@ -2411,7 +2445,10 @@
             resolve(true);
           })
           .withFailureHandler(() => {
-            if (isCurrent() && rangeText) rangeText.textContent = '최신 데이터 조회에 실패했습니다. 기존 기록은 유지됩니다. 조회 버튼으로 다시 확인해 주세요.';
+            if (isCurrent()) {
+              if (rangeText) rangeText.textContent = '최신 데이터 조회에 실패했습니다. 기존 기록은 유지됩니다. 조회 버튼으로 다시 확인해 주세요.';
+              setDashboardChartState('error');
+            }
             resolve(false);
           })
           .getFilteredStats(studentId, endDateStr);
@@ -2461,6 +2498,7 @@
       }
 
       renderCharts(data);
+      setDashboardChartState('ready');
     }
 
     // 차트 렌더링

@@ -216,7 +216,7 @@ test('session reset clears previous student records, settings and rendered priva
     caffeineDbLoading: true, stopAutoRefresh() {},
     SLEEP_CFG: {},
   });
-  vm.runInContext(extract('setEditSavePending') + '\n' + extract('resetStudentData') + '\nresetStudentData();', context);
+  vm.runInContext(extract('setDashboardChartState') + '\n' + extract('setEditSavePending') + '\n' + extract('resetStudentData') + '\nresetStudentData();', context);
   assert.equal(container.innerHTML, '');
   assert.equal(field.value, '');
   assert.equal(context.caffeineLogs.length, 0);
