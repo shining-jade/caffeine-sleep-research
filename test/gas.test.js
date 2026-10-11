@@ -17,6 +17,18 @@ const request = {
   onDiagnostic() {},
 };
 
+test('upstream rejection diagnostics retain only fixed stage/category metadata', async () => {
+  for (const diagnostic of [
+    { stage: 'profile_sync', kind: 'rate_limit', privateDetail: 'private-student' },
+    { stage: 'private-student', kind: 'private-secret' },
+  ]) {
+    const events = [];
+    await assert.rejects(callGas({ ...request, onDiagnostic: (event) => events.push(event), fetchImpl: async () => new Response(JSON.stringify({ success: false, error: 'private-sheet-id', diagnostic })) }), { code: 'GAS_REJECTED' });
+    assert.doesNotMatch(JSON.stringify(events), /private-/);
+    assert.deepEqual(events[0].upstreamDiagnostic, diagnostic.stage === 'profile_sync' ? { stage: 'profile_sync', kind: 'rate_limit' } : undefined);
+  }
+});
+
 test('a transient output failure recovers the committed receipt without replaying its write', async () => {
   for (const failure of ['http', 'network', 'body']) {
     let writes = 0;

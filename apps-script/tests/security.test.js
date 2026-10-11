@@ -61,6 +61,37 @@ test('public role permits only login', async () => {
   assert.equal(outputJson(call(context, 'doPost(deniedEvent)')).error, 'REQUEST_REJECTED');
 });
 
+test('bootstrap profile failures report a fixed stage without exposing the underlying exception', async () => {
+  const logs = [];
+  const { context } = await gateway({
+    Logger: { log(value) { logs.push(String(value)); } },
+    getStudentBootstrap() { return { weight: { success: true, weight: 55 } }; },
+    syncProfileState_() { throw new Error('Service unavailable: private-sheet-id private-student-name'); },
+  });
+  context.profileEvent = event({ secret, role: 'student', action: 'getStudentBootstrap', params: ['1101'], subject: { studentId: '1101', name: 'private-student-name' } });
+  const result = outputJson(call(context, 'doPost(profileEvent)'));
+  assert.equal(result.success, false);
+  assert.equal(result.error, 'REQUEST_REJECTED');
+  assert.deepEqual(result.diagnostic, { stage: 'profile_sync', kind: 'service_unavailable' });
+  assert.doesNotMatch(JSON.stringify([result, logs]), /private-|1101|gateway-test-secret/);
+});
+
+test('authentication failures are diagnosed without trusting client role or action text', async () => {
+  const logs = [];
+  const { context } = await gateway({ Logger: { log(value) { logs.push(String(value)); } } });
+  context.untrustedEvent = event({ secret: 'wrong-secret', role: 'private-role', action: 'private-action', params: ['private-student'] });
+  const result = outputJson(call(context, 'doPost(untrustedEvent)'));
+  assert.deepEqual(result.diagnostic, { stage: 'authorization', kind: 'rejected' });
+  assert.doesNotMatch(JSON.stringify([result, logs]), /private-|wrong-secret/);
+});
+
+test('diagnostic logger failure cannot replace the generic rejection response', async () => {
+  const { context } = await gateway({ Logger: { log() { throw new Error('logging unavailable'); } } });
+  const result = outputJson(call(context, 'doPost({})'));
+  assert.equal(result.error, 'REQUEST_REJECTED');
+  assert.deepEqual(result.diagnostic, { stage: 'decode', kind: 'rejected' });
+});
+
 test('health role permits only the connection probe', async () => {
   const { context } = await gateway({ testConnection() { return { success: true, private: 'not returned by Vercel' }; } });
   context.healthEvent = event({ secret, role: 'health', action: 'testConnection', params: ['ignored'] });

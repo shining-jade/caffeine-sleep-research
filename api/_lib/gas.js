@@ -69,6 +69,7 @@ async function callGasOnce({
   let redirectKind = null;
   let output302Reread = false;
   let outputReads = 0;
+  let upstreamDiagnostic;
 
   try {
     let url = config.gasApiUrl;
@@ -153,6 +154,11 @@ async function callGasOnce({
       throw new GasGatewayError(502, 'GAS_UNAVAILABLE', 'The data service returned an invalid response.');
     }
     if (payload.success !== true) {
+      const diagnostic = payload.diagnostic;
+      if (diagnostic && ['decode', 'authorization', 'dispatch', 'student_operation', 'profile_sync'].includes(diagnostic.stage)
+          && ['rejected', 'rate_limit', 'service_unavailable', 'unexpected'].includes(diagnostic.kind)) {
+        upstreamDiagnostic = { stage: diagnostic.stage, kind: diagnostic.kind };
+      }
       reason = 'rejected';
       throw new GasGatewayError(502, 'GAS_REJECTED', 'The data service rejected the request.');
     }
@@ -173,6 +179,7 @@ async function callGasOnce({
     const timedOut = error?.name === 'AbortError' || controller.signal.aborted;
     try {
       onDiagnostic({ role, action, stage, reason: timedOut ? 'timeout' : reason, upstreamStatus,
+        ...(upstreamDiagnostic ? { upstreamDiagnostic } : {}),
         ...(redirectKind ? { redirectKind } : {}),
         code: error instanceof GasGatewayError ? error.code : timedOut ? 'GAS_TIMEOUT' : 'GAS_UNAVAILABLE',
         elapsedMs: Date.now() - started });
