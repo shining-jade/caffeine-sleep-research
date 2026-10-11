@@ -381,12 +381,13 @@ function toProfileHHMM_(value) {
 }
 
 // 체중 데이터 조회
-function getWeightData(studentId) {
+function getWeightData(studentId, strictRead) {
   try {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("info");
 
     if (!sheet) {
+      if (strictRead) throw new Error('BOOTSTRAP_SHEET_MISSING');
       safeLog_('info 시트를 찾을 수 없습니다');
       return { success: false, weight: null };
     }
@@ -421,6 +422,7 @@ function getWeightData(studentId) {
     safeLog_(`초기설정 정보 없음: ${studentId}`);
     return { success: false, weight: null };
   } catch (error) {
+    if (strictRead) throw error;
     safeLog_('체중 조회 오류: ' + error);
     return { success: false, weight: null };
   }
@@ -429,11 +431,11 @@ function getWeightData(studentId) {
 // 학생 앱 재실행 시 필요한 초기 데이터를 한 번의 게이트웨이 요청으로 조회
 function getStudentBootstrap(studentId) {
   return {
-    weight: getWeightData(studentId),
-    stats: getStats(studentId),
-    caffeineLogs: getCaffeineLogs(studentId),
-    sleepLogs: getSleepLogs(studentId),
-    sleepSettings: getSleepSettings()
+    weight: getWeightData(studentId, true),
+    stats: getStats(studentId, true),
+    caffeineLogs: getCaffeineLogs(studentId, null, null, true),
+    sleepLogs: getSleepLogs(studentId, null, null, true),
+    sleepSettings: getSleepSettings(true)
   };
 }
 
@@ -638,12 +640,13 @@ function deleteSleepData(id) {
 }
 
 // 카페인 로그 조회
-function getCaffeineLogs(studentId, startDate, endDate) {
+function getCaffeineLogs(studentId, startDate, endDate, strictRead) {
   try {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("caffeine");
 
     if (!sheet) {
+      if (strictRead) throw new Error('BOOTSTRAP_SHEET_MISSING');
       safeLog_('카페인 시트를 찾을 수 없습니다');
       return [];
     }
@@ -700,13 +703,14 @@ function getCaffeineLogs(studentId, startDate, endDate) {
 
     return logs;
   } catch (error) {
+    if (strictRead) throw error;
     safeLog_('카페인 로그 조회 오류: ' + error);
     return [];
   }
 }
 
 // 수면 로그 조회 (강화된 디버깅 버전)
-function getSleepLogs(studentId, startDate, endDate) {
+function getSleepLogs(studentId, startDate, endDate, strictRead) {
   try {
     safeLog_(`=== getSleepLogs 시작 ===`);
     safeLog_(`입력 파라미터:`);
@@ -718,6 +722,7 @@ function getSleepLogs(studentId, startDate, endDate) {
     const sheet = ss.getSheetByName("sleep");
 
     if (!sheet) {
+      if (strictRead) throw new Error('BOOTSTRAP_SHEET_MISSING');
       safeLog_('❌ 수면 시트를 찾을 수 없습니다');
       return [];
     }
@@ -838,6 +843,7 @@ function getSleepLogs(studentId, startDate, endDate) {
 
     return logs;
   } catch (error) {
+    if (strictRead) throw error;
     safeLog_('❌ 수면 로그 조회 오류: ' + error);
     safeLog_('오류 스택: ' + error.stack);
     return [];
@@ -921,11 +927,13 @@ function getDashboardData(studentId, startDate, endDate) {
 }
 
 // 통계 조회 (최근 7일)
-function getStats(studentId) {
+function getStats(studentId, strictRead) {
   try {
     const ss = getSpreadsheet_();
     const caffeineSheet = ss.getSheetByName("caffeine");
     const sleepSheet = ss.getSheetByName("sleep");
+
+    if (strictRead && (!caffeineSheet || !sleepSheet)) throw new Error('BOOTSTRAP_SHEET_MISSING');
 
     const today = getKSTDate();
 
@@ -1021,6 +1029,7 @@ function getStats(studentId) {
       sleepData: sleepDataArray
     };
   } catch (error) {
+    if (strictRead) throw error;
     safeLog_('통계 조회 오류: ' + error);
     safeLog_('오류 상세: ' + error.stack);
     return {
@@ -1960,12 +1969,13 @@ function saveBadgeThresholds(habitStart, streak, monthly, habitStartName, streak
 // 수면 기준 설정 (연령대별: 청소년/성인)
 // ============================================
 
-function getSleepSettings() {
+function getSleepSettings(strictRead) {
   try {
     const raw = PropertiesService.getScriptProperties().getProperty('SLEEP_SETTINGS');
     if (raw) return { success: true, settings: JSON.parse(raw) };
     return { success: true, settings: { ageGroup: 'teen', sleepSevere: 7, sleepWarn: 8, sleepGood: 10, sleepMax: 11 } };
   } catch(e) {
+    if (strictRead) throw e;
     return { success: false, error: e.message, settings: { ageGroup: 'teen', sleepSevere: 7, sleepWarn: 8, sleepGood: 10, sleepMax: 11 } };
   }
 }
