@@ -45,7 +45,7 @@ test('Ctrl or Command S saves only the active teacher settings tab', async () =>
   assert.deepEqual(calls, ['reminders', 'settings']);
 });
 
-test('success feedback expires after five seconds while failure stays visible until dismissed', () => {
+test('success feedback expires after three seconds while failure stays visible until dismissed', () => {
   assert.equal(typeof createTeacherSaveFeedback, 'function');
   const rendered = [];
   const timers = [];
@@ -59,7 +59,7 @@ test('success feedback expires after five seconds while failure stays visible un
   assert.deepEqual(rendered.at(-1), {
     visible: true, type: 'success', message: '알림 설정을 저장했습니다.', persistent: false,
   });
-  assert.equal(timers.at(-1).delay, 5000);
+  assert.equal(timers.at(-1).delay, 3000);
   timers.at(-1).callback();
   assert.equal(rendered.at(-1).visible, false);
 
@@ -71,6 +71,24 @@ test('success feedback expires after five seconds while failure stays visible un
   assert.equal(timers.length, timerCount);
   feedback.dismiss();
   assert.equal(rendered.at(-1).visible, false);
+});
+
+test('an expired success callback cannot hide newer loading or error feedback', () => {
+  const rendered = [];
+  const timers = [];
+  const feedback = createTeacherSaveFeedback({
+    render: state => rendered.push(state),
+    setTimer: callback => { timers.push(callback); return timers.length; },
+    clearTimer: () => {},
+  });
+  for (const type of ['loading', 'error', 'success']) {
+    feedback.show('success', 'old');
+    const staleTimer = timers.at(-1);
+    feedback.show(type, 'new');
+    staleTimer();
+    assert.equal(rendered.at(-1).visible, true);
+    assert.equal(rendered.at(-1).message, 'new');
+  }
 });
 
 test('save feedback reports progress and the real success or failure result', async () => {

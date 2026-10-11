@@ -128,23 +128,15 @@ test('unconfirmed sleep edit preserves the previously confirmed record',()=>{
   assert.match(notices[0][1],/저장 여부/);
 });
 
-test('immediate caffeine guidance distinguishes pending from confirmed storage', () => {
-  const elements = new Map();
-  const document = { getElementById(id) {
-    if (!elements.has(id)) elements.set(id, { style: {}, querySelector: () => ({}) });
-    return elements.get(id);
-  } };
+test('pending caffeine guidance does not show an unconfirmed result', () => {
+  const notices = [];
   const logs = [{ amount: 50, time: 'today' }];
-  const context = vm.createContext({ document, caffeineLogs: logs, userLimit: 150,
-    user: { name: '테스트' }, getTodayKST: () => 'today', getLogDateKST: x => x, setTimeout() {} });
+  const context = vm.createContext({ caffeineLogs: logs, userLimit: 150,
+    showSaveCompleteModal: message => notices.push(message),
+    getTodayKST: () => 'today', getLogDateKST: x => x });
   vm.runInContext(extract('showCaffeineWarning') + "\nshowCaffeineWarning(30, 80, 'pending');", context);
-  assert.match(elements.get('warningInfo').innerText, /서버에 저장 중/);
-  assert.match(elements.get('warningInfo').innerText, /예상 합계 80mg/);
-  assert.doesNotMatch(elements.get('warningInfo').innerText, /저장 완료/);
+  assert.equal(notices.length, 0);
   assert.equal(logs.length, 1);
-  vm.runInContext("showCaffeineWarning(30, 80, 'confirmed');", context);
-  assert.match(elements.get('warningInfo').innerText, /서버 저장 완료/);
-  assert.doesNotMatch(elements.get('warningInfo').innerText, /예상 합계/);
 });
 
 test('opening DB search loads the database without a previous cache', () => {
@@ -294,7 +286,7 @@ test('consecutive confirmed caffeine saves include both amounts before history r
   const callback=submit.slice(start,end).trim().slice(0,-1);
   const totals=[];
   const context=vm.createContext({btn:null,pendingCaffeineSave:null,applyConfirmedCaffeineSave:()=>false,renderCaffeineLogs(){},document:{getElementById:()=>({value:'',classList:{add(){}}}),querySelectorAll:()=>[]},selectedDrink:null,time:'today',amount:30,caffeineLogs:[{time:'today',amount:50}],confirmedPendingCaffeine:[],getLogDateKST:x=>x,getTodayKST:()=> 'today',showCaffeineWarning:(_amount,total)=>totals.push(total),loadCaffeineLogs(){},refreshData(){},showSaveCompleteModal(){}});
-  vm.runInContext('const saved='+callback+';saved();saved();',context);
+  vm.runInContext('const saved='+callback+';saved({success:true});saved({success:true});',context);
   assert.deepEqual(totals,[80,110]);
 });
 

@@ -61,6 +61,16 @@ test('teacher reply handles malformed acknowledgment and restores submit button'
   assert.equal(f.fields.replyContent.value,'valid text');assert.equal(f.replyBtn.disabled,false);
   assert.equal(f.fields.replyModal.style.display,'block');
 });
+
+test('student reply shows a completion toast only after confirmed sending',()=>{
+  const f=form(student,'submitStudentReply','replyToTeacherMessage');
+  f.invoke();assert.equal(f.notices.length,0);
+  f.success({success:false});assert.ok(f.notices.length);
+  f.notices.length=0;f.invoke();f.success({success:true});
+  assert.equal(f.fields.studentReplyModal.removed,true);
+  assert.equal(f.notices.length,1);
+  assert.match(f.notices[0][0],/답장.*(전송|수정|보냈)/);
+});
 test('student delete refusal never removes confirmed records',()=>{
   for(const type of ['caffeine','sleep']){
     let success,applied=0;const notices=[];

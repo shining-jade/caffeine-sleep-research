@@ -20,27 +20,31 @@ export function createTeacherSaveFeedback({
   clearTimer = (timer) => clearTimeout(timer),
 } = {}) {
   let hideTimer = null;
+  let revision = 0;
 
   function emit(state) {
     render({ visible: false, type: '', message: '', persistent: false, ...state });
   }
 
   function dismiss() {
+    revision++;
     if (hideTimer !== null) clearTimer(hideTimer);
     hideTimer = null;
     emit({ visible: false });
   }
 
   function show(type, message) {
+    const currentRevision = ++revision;
     if (hideTimer !== null) clearTimer(hideTimer);
     hideTimer = null;
     const persistent = type === 'error';
     emit({ visible: true, type, message, persistent });
     if (type === 'success') {
       hideTimer = setTimer(() => {
+        if (currentRevision !== revision) return;
         hideTimer = null;
         emit({ visible: false });
-      }, 5000);
+      }, 3000);
     }
   }
 
