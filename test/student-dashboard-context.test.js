@@ -27,7 +27,7 @@ function setup() {
     google: { script: { run } }, updateDashboard(data, date) { displayed.push({ data, date }); c.lastDashboardData = { ...data, chartEndDate: date }; },
     cacheStudentRecords() {}, renderCaffeineLogs() {}, renderSleepLogs() {}, renderCharts() {}, applyWeightData() {}, changeSettingsAgeGroup() {}
   });
-  vm.runInContext(['requestDashboardStats', 'applyDateFilter', 'refreshData', 'manualRefresh', 'applyStudentBootstrap'].map(extract).join('\n'), c);
+  vm.runInContext(['setDashboardChartState', 'requestDashboardStats', 'applyDateFilter', 'refreshData', 'manualRefresh', 'applyStudentBootstrap'].map(extract).join('\n'), c);
   return { c, input, range, calls, displayed };
 }
 
