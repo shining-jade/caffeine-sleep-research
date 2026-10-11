@@ -38,7 +38,8 @@ async function callGasReadWithRetry(input) {
   // Only these idempotent snapshots may be executed again for a fresh output URL.
   // Claiming deliveries and recording/sending results must never enter this path.
   const snapshotRead = (input.role === 'teacher' && input.action === 'getTeacherData')
-    || (input.role === 'scheduler' && input.action === 'getReminderDispatchSnapshot');
+    || (input.role === 'scheduler' && input.action === 'getReminderDispatchSnapshot')
+    || (input.role === 'student' && input.action === 'getStudentBootstrap');
   for (let attempt = 0; ; attempt++) {
     try {
       return await callGasOnce({ ...input, timeoutMs: Math.max(1, snapshotRead && attempt === 0 ? Math.min(25000, deadline - Date.now()) : deadline - Date.now()) });

@@ -17,6 +17,64 @@ const request = {
   onDiagnostic() {},
 };
 
+test('student bootstrap recovers once from non-JSON, HTTP and network transport failures', async () => {
+  for (const failure of ['non_json', 'http', 'network', 'timeout']) {
+    let executions = 0;
+    const result = await callGas({ ...request, action: 'getStudentBootstrap', fetchImpl: async () => {
+      executions++;
+      if (executions === 1) {
+        if (failure === 'network') throw new TypeError('private transport detail');
+        if (failure === 'timeout') throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+        return new Response('<html>temporary service response</html>', { status: failure === 'http' ? 503 : 200 });
+      }
+      return new Response(JSON.stringify({ success: true, data: { caffeineLogs: [{ id: 'saved-once' }], sleepLogs: [] } }));
+    } });
+    assert.deepEqual(result.caffeineLogs, [{ id: 'saved-once' }]);
+    assert.equal(executions, 2, failure);
+  }
+});
+
+test('bootstrap transport replay is bounded and excludes mutations and wrong roles', async () => {
+  for (const [role, action, expected] of [
+    ['student', 'getStudentBootstrap', 2],
+    ['teacher', 'getStudentBootstrap', 1],
+    ['scheduler', 'getStudentBootstrap', 1],
+    ['student', 'saveCaffeineData', 1],
+    ['student', 'saveSleepData', 1],
+    ['student', 'saveInitialSetup', 1],
+    ['student', 'deleteCaffeineData', 1],
+  ]) {
+    let executions = 0;
+    await assert.rejects(callGas({ ...request, role, action, fetchImpl: async () => {
+      executions++;
+      return new Response('<html>private service response</html>');
+    } }), { code: 'GAS_UNAVAILABLE' });
+    assert.equal(executions, expected, `${role}/${action}`);
+  }
+});
+
+test('bootstrap transport recovery shares its deadline and reserves half the default budget', async () => {
+  const delays = [];
+  const originalTimeout = globalThis.setTimeout;
+  const originalNow = Date.now;
+  let now = 1000;
+  let executions = 0;
+  globalThis.setTimeout = (callback, delay, ...args) => {
+    delays.push(delay);
+    return originalTimeout(callback, delay, ...args);
+  };
+  Date.now = () => now;
+  try {
+    const result = await callGas({ ...request, action: 'getStudentBootstrap', fetchImpl: async () => {
+      executions++;
+      if (executions === 1) { now += 26000; return new Response('temporary', { status: 503 }); }
+      return new Response(JSON.stringify({ success: true, data: { ok: true } }));
+    } });
+    assert.equal(result.ok, true);
+    assert.deepEqual(delays, [25000, 24000]);
+  } finally { globalThis.setTimeout = originalTimeout; Date.now = originalNow; }
+});
+
 test('upstream rejection diagnostics retain only fixed stage/category metadata', async () => {
   for (const diagnostic of [
     { stage: 'profile_sync', kind: 'rate_limit', privateDetail: 'private-student' },
