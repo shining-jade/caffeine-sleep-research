@@ -1795,7 +1795,7 @@ function saveSettings(){
     let caffeineSettings;
     try{caffeineSettings=readCafSettings();}
     catch(error){showTeacherModal('⚠️','입력 확인',error.message,'error');return;}
-    const action=()=>{
+    const action=async()=>{
         Object.assign(S,caffeineSettings);
         S.sleepSevere=parseFloat(document.getElementById('setting_sleepSevere').value)||7;
         S.sleepWarn=parseFloat(document.getElementById('setting_sleepWarn').value)||8;
@@ -1811,15 +1811,16 @@ function saveSettings(){
         S.challengeStart=document.getElementById('setting_challengeStart')?.value||S.challengeStart||'';
         S.challengeEnd=document.getElementById('setting_challengeEnd')?.value||S.challengeEnd||'';
         localStorage.setItem('monSettings',JSON.stringify(S));
-        saveSleepSettingsToGAS();
-        saveAwardSettings();
+        const saving=Promise.all([saveSleepSettingsToGAS(),saveAwardSettings({silent:true})]);
         updateCafPreview();updateSleepPreview();
         document.getElementById('sleepWarningDetail').textContent=`7일 평균 ${S.sleepSevere}시간 미만`;
         if(studentsData.length){updateDashboard();updateStudentGrid();}
+        const results=await saving;
+        if(!results.every(result=>result===true))throw new Error('서버에 일부 설정을 저장하지 못했습니다.');
     };
     if(window.teacherSaveFeedback)return window.teacherSaveFeedback.runSave('settings',action);
-    try{action();showTeacherModal('💾','설정 저장 완료','설정이 성공적으로 저장되었습니다.','success');}
-    catch(error){showTeacherModal('⚠️','설정 저장 실패','다시 시도해 주세요.','error');throw error;}
+    return action().then(()=>showTeacherModal('💾','설정 저장 완료','설정이 성공적으로 저장되었습니다.','success'))
+        .catch(()=>showTeacherModal('⚠️','설정 저장 실패','서버에 일부 설정을 저장하지 못했습니다. 다시 시도해 주세요.','error'));
 }
 function getCafThresholds(values=S){
     const warn=Number(values?.warn??values?.cafWarn??56),over=Number(values?.over??values?.cafOver??100);
@@ -1888,12 +1889,14 @@ function updateAgeGroupUI(group){
 }
 function saveSleepSettingsToGAS(){
     const settings={ageGroup:S.ageGroup||'teen',sleepSevere:S.sleepSevere||7,sleepWarn:S.sleepWarn||8,sleepGood:S.sleepGood||10,sleepMax:S.sleepMax||11};
-    try{
-        google.script.run
-            .withSuccessHandler(function(){})
-            .withFailureHandler(function(e){console.warn('수면 설정 GAS 저장 실패:',e);})
-            .saveSleepSettings(settings);
-    }catch(e){}
+    return new Promise(resolve=>{
+        try{
+            google.script.run
+                .withSuccessHandler(res=>resolve(res?.success===true))
+                .withFailureHandler(()=>resolve(false))
+                .saveSleepSettings(settings);
+        }catch(e){resolve(false);}
+    });
 }
 
 function getKSTDate(offset=0){const d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Seoul'}));d.setDate(d.getDate()+offset);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -1936,6 +1939,7 @@ function saveStudentVisibility(ids,hidden){
   if(!result?.success||!Array.isArray(result.hiddenStudentIds)){showTeacherModal('⚠️','저장 실패','숨김 설정을 저장하지 못했습니다. 다시 시도해주세요.','warning');return;}
   visibilityRevision++;clearTeacherViewCache();hiddenStudentIds=new Set(result.hiddenStudentIds.map(String));refreshAnalysisVisibility();
   document.getElementById('hiddenStudentsPanel')?.remove();
+  showTeacherModal('✅','저장 완료',hidden?`${ids.length}명 학생을 숨겼습니다.`:`${ids.length}명 학생을 다시 표시했습니다.`,'success');
  }).withFailureHandler(()=>{finish();showTeacherModal('⚠️','저장 실패','서버 연결을 확인하고 다시 시도해주세요. 기존 설정은 유지됩니다.','warning');}).updateTeacherHiddenStudents(ids,hidden);
 }
 function hideSelectedStudents(){saveStudentVisibility([...studentHideSelection],true);}
@@ -5428,7 +5432,7 @@ function confirmDeleteSentMsg(rowIndex, title, messageKey) {
     showTeacherModal('🗑️', '메시지 삭제', `"${escapeHtml(title)}"<br>메시지를 삭제하시겠습니까?`, 'confirm', () => {
         google.script.run
             .withSuccessHandler(res => {
-                if (res && res.success) { loadSentMessages(); }
+                if (res && res.success) { loadSentMessages(); showTeacherModal('✅', '삭제 완료', '메시지를 삭제했습니다.', 'success'); }
                 else { if (res && res.code === 'MESSAGE_TARGET_CHANGED') loadSentMessages(); showTeacherModal('❌', '삭제 실패', (res && res.error) || '알 수 없는 오류', 'error'); }
             })
             .withFailureHandler(() => showTeacherModal('❌', '오류', 'GAS 연결 실패', 'error'))
@@ -5449,6 +5453,7 @@ function confirmBulkDeleteSentMsg() {
                 if (res && res.success) {
                     window._sentMsgSelected = new Set();
                     loadSentMessages();
+                    showTeacherModal('✅', '삭제 완료', `${selected.length}개 메시지를 삭제했습니다.`, 'success');
                 } else {
                     if (res && res.code === 'MESSAGE_TARGET_CHANGED') loadSentMessages();
                     showTeacherModal('❌', '삭제 실패', (res && res.error) || '알 수 없는 오류', 'error');
@@ -5636,6 +5641,12 @@ function showTeacherConfirm(emoji, title, message, onConfirm) {
 function showTeacherModal(emoji, title, message, type, onConfirmCb, opts) {
     const existing = document.getElementById('teacherAlertModal');
     if (existing) existing.remove();
+    if (type === 'success' && window.teacherSaveFeedback) {
+        const text = document.createElement('div');
+        text.innerHTML = sanitizeRichHtml(String(message).replace(/<br\s*\/?>/gi, ' ').replace(/<\/(?:p|div|li)>/gi, ' '));
+        window.teacherSaveFeedback.show('success', text.textContent.replace(/\s+/g, ' ').trim() || title);
+        return;
+    }
     opts = opts || {};
 
     // confirm 타입: 취소/확인 두 버튼 (색상·문구 커스터마이징 가능)
@@ -6310,27 +6321,28 @@ function loadAwardSettings() {
     } catch(e) {}
 }
 
-function saveAwardSettings() {
+function saveAwardSettings({silent=false}={}) {
     syncAwardEditorToSettings();
     try { localStorage.setItem('awardSettings', JSON.stringify(awardSettings)); } catch(e) {}
-    try {
-        google.script.run
-            .withSuccessHandler(function(res) {
-                if (res && res.success) {
-                    // 성공 토스트
-                    const toast = document.getElementById('settingsToast');
-                    if (toast) { toast.textContent = '✅ 뱃지 팔레트가 저장되었습니다!'; toast.style.display = 'block'; setTimeout(() => { toast.style.display = 'none'; }, 2500); }
-                } else {
-                    showTeacherModal('⚠️', '뱃지 설정 저장 실패',
-                        'GAS에 저장하지 못했습니다.\n('+((res&&res.error)||'알 수 없는 오류')+')\n\nLocalStorage에는 저장됐으므로 이 기기에서는 유지됩니다.', 'warning');
-                }
-            })
-            .withFailureHandler(function(err) {
+    return new Promise(resolve=>{
+        const failed=()=>{
+            if(!silent) {
                 showTeacherModal('⚠️', '뱃지 설정 저장 실패',
-                    'GAS 연결 오류로 저장하지 못했습니다.\n('+String(err)+')\n\nLocalStorage에는 저장됐으므로 이 기기에서는 유지됩니다.', 'warning');
-            })
-            .saveAwardSettingsData(awardSettings);
-    } catch(e) {}
+                    '서버에 저장하지 못했습니다. 다시 시도해 주세요.\n\nLocalStorage에는 저장됐으므로 이 기기에서는 유지됩니다.', 'warning');
+            }
+            resolve(false);
+        };
+        try {
+            google.script.run
+                .withSuccessHandler(res=>{
+                    if(res?.success!==true){failed();return;}
+                    if(!silent)showTeacherModal('✅','뱃지 설정 저장 완료','뱃지 팔레트를 저장했습니다.','success');
+                    resolve(true);
+                })
+                .withFailureHandler(failed)
+                .saveAwardSettingsData(awardSettings);
+        } catch(e) {failed();}
+    });
 }
 
 // 자동 뱃지: 오늘 카페인/수면 기록만 (교사 승인 없이 자동 표시)
@@ -6678,7 +6690,7 @@ function retryPendingSyncs() {
                     awards: [{ awardId: bid, name: aw.name, image: aw.image, bg: aw.bg, color: aw.color, grantedAt }],
                     message: aw.message || '',
                     grantedBy: aw.grantedBy || '교사승인',
-                    grantedA
+                    grantedAt
                 });
         } catch(e) {}
     });
@@ -7008,41 +7020,41 @@ function _doBulkApprovePending(items){
     saveManualAwards();
     savePendingBadges();
     pendingSelected.clear();
-    // GAS 일괄 동기화 — 학생별로 묶어 단일 호출 (개별 호출 시 쿼터 초과 방지)
-    try{
-        // 같은 뱃지를 받은 학생들을 badgeId 기준으로 그룹핑
-        const byBadge={};
-        items.forEach(({studentId,badge})=>{
-            if(!byBadge[badge.id])byBadge[badge.id]={badge,studentIds:[]};
-            byBadge[badge.id].studentIds.push(String(studentId));
-        });
-        Object.values(byBadge).forEach(({badge,studentIds})=>{
+    // 같은 뱃지를 받은 학생들을 묶고, 모든 서버 응답을 받은 뒤 한 번만 알림
+    const byBadge={};
+    items.forEach(({studentId,badge})=>{
+        if(!byBadge[badge.id])byBadge[badge.id]={badge,studentIds:[]};
+        byBadge[badge.id].studentIds.push(String(studentId));
+    });
+    const saving=Object.values(byBadge).map(({badge,studentIds})=>new Promise(resolve=>{
+        const failed=()=>resolve({success:false,count:studentIds.length});
+        try{
             google.script.run
                 .withSuccessHandler(res=>{
-                    if(res&&res.success){
-                        studentIds.forEach(id=>{
-                            if(manualAwards[id])manualAwards[id].forEach(aw=>{
-                                if(aw.badgeId===badge.id&&aw.grantedAt===grantedAt)delete aw._pendingSync;
-                            });
-                        });
+                    if(res?.success!==true){failed();return;}
+                    const syncedAwards=studentIds.flatMap(id=>(manualAwards[id]||[]).filter(aw=>aw.badgeId===badge.id&&aw.grantedAt===grantedAt&&aw._pendingSync));
+                    try{
+                        syncedAwards.forEach(aw=>delete aw._pendingSync);
                         saveManualAwards();
-                    } else {
-                        console.warn('[일괄수여] GAS 저장 실패:', res&&res.error);
-                    }
+                        resolve({success:true,count:studentIds.length});
+                    }catch(e){syncedAwards.forEach(aw=>aw._pendingSync=true);failed();}
                 })
-                .withFailureHandler(err=>{
-                    // 로컬에는 저장됨(_pendingSync=true) → 다음 데이터 새로고침 시 자동 재시도
-                    console.warn('[일괄수여] GAS 연결 실패 — 다음 새로고침 시 재동기화:', err);
-                    showTeacherModal('⚠️','시트 저장 실패 (일괄 수여)',
-                        `일괄 수여는 <strong>임시 저장</strong>되었습니다.<br>GAS 연결 오류로 시트에 저장하지 못했습니다.<br><br>🔄 <strong>데이터 새로고침</strong>을 누르면 자동 재시도합니다.`,'warning');
-                })
+                .withFailureHandler(failed)
                 .grantTeacherAwards({studentIds,awards:[{awardId:badge.id,name:badge.name,image:badge.image,bg:badge.bg,color:badge.color,grantedAt,message:''}],message:'',grantedBy:'교사승인',grantedAt});
-        });
-    }catch(e){}
+        }catch(e){failed();}
+    }));
     renderPendingBadges();
     renderAwardsTab();
     updateStudentGrid();
-    showTeacherModal('🏅','일괄 수여 완료',`<strong>${items.length}명</strong>에게 뱃지 수여가 완료되었습니다.`,'success');
+    return Promise.all(saving).then(results=>{
+        const failedCount=results.filter(result=>!result.success).reduce((sum,result)=>sum+result.count,0);
+        if(failedCount){
+            showTeacherModal('⚠️','시트 저장 실패 (일괄 수여)',
+                `${items.length}건 중 ${failedCount}건은 <strong>임시 저장</strong>되었습니다.<br>서버에 저장하지 못한 뱃지는 <strong>데이터 새로고침</strong>을 누르면 자동 재시도합니다.`,'warning');
+        }else if(items.length){
+            showTeacherModal('🏅','일괄 수여 완료',`<strong>${items.length}명</strong>에게 뱃지 수여가 완료되었습니다.`,'success');
+        }
+    });
 }
 function renderDismissedBadges(){
     const listEl=document.getElementById('dismissedBadgeList');
@@ -7088,27 +7100,27 @@ function _doApprovePendingBadge(studentId,badgeId,badge,displayName){
     pendingBadges=pendingBadges.filter(p=>!(p.studentId===studentId&&p.badgeId===badgeId));
     savePendingBadges();
     // GAS 동기화 시도
+    const failed=()=>showTeacherModal('⚠️','시트 저장 실패',
+        `뱃지 수여는 <strong>임시 저장</strong>되었습니다.<br>서버에 저장하지 못했습니다.<br><br>🔄 <strong>데이터 새로고침</strong>을 누르면 자동 재시도합니다.`,'warning');
     try{
         google.script.run
             .withSuccessHandler(res=>{
-                if(res&&res.success){
-                    if(manualAwards[id])manualAwards[id].forEach(aw=>{if(aw.badgeId===badge.id&&aw.grantedAt===grantedAt)delete aw._pendingSync;});
+                if(res?.success!==true){failed();return;}
+                const syncedAwards=(manualAwards[id]||[]).filter(aw=>aw.badgeId===badge.id&&aw.grantedAt===grantedAt&&aw._pendingSync);
+                try{
+                    syncedAwards.forEach(aw=>delete aw._pendingSync);
                     saveManualAwards();
-                } else {
-                    console.warn('[뱃지수여] GAS 저장 실패:', res&&res.error);
-                }
+                    showTeacherModal('🏅','수여 완료',`<strong>${displayName}</strong> (${studentId}) 학생에게<br><strong>"${badge.name}"</strong> 뱃지를 수여했습니다.`,'success');
+                }catch(e){syncedAwards.forEach(aw=>aw._pendingSync=true);failed();}
             })
             .withFailureHandler(err=>{
                 // 로컬에는 저장됨(_pendingSync=true) → 다음 데이터 새로고침 시 자동 재시도
                 console.warn('[뱃지수여] GAS 연결 실패 — 다음 새로고침 시 재동기화:', err);
-                showTeacherModal('⚠️','시트 저장 실패',
-                    `뱃지 수여는 <strong>임시 저장</strong>되었습니다.<br>GAS 연결 오류로 시트에 저장하지 못했습니다.<br><br>🔄 <strong>데이터 새로고침</strong>을 누르면 자동 재시도합니다.`,'warning');
+                failed();
             })
             .grantTeacherAwards({studentIds:[id],awards:[{awardId:badge.id,name:badge.name,image:badge.image,bg:badge.bg,color:badge.color,grantedAt,message:''}],message:'',grantedBy:'교사승인',grantedAt});
-    }catch(e){}
+    }catch(e){failed();}
     renderPendingBadges();renderAwardsTab();updateStudentGrid();
-    // ② 수여 완료 알림 — 이름(학번) 표시
-    showTeacherModal('🏅','수여 완료',`<strong>${displayName}</strong> (${studentId}) 학생에게<br><strong>"${badge.name}"</strong> 뱃지를 수여했습니다.`,'success');
 }
 function dismissPendingBadge(studentId, badgeId){
     dismissedBadges.push({studentId,badgeId,dismissedAt:today});
@@ -7235,10 +7247,21 @@ function saveChallengeBadgeSettings(){
     try{localStorage.setItem('challengeConfigSaved','1');localStorage.setItem('monSettings',JSON.stringify(S));}catch(e){}
     rebuildAwardDropdown();renderChallengeBadgeList();renderJourneyStatus();
     const status=document.getElementById('challengeSaveStatus');
-    google.script.run
-        .withSuccessHandler(()=>{if(status){status.textContent='✅ 서버 저장 완료';setTimeout(()=>status.textContent='',2500);}})
-        .withFailureHandler(()=>{if(status){status.textContent='⚠️ 저장 실패 — 다시 시도해 주세요';setTimeout(()=>status.textContent='',3500);}})
-        .saveChallengeBadgeConfig(journeyConfig);
+    const failed=()=>{
+        if(status)status.textContent='⚠️ 저장 실패 — 다시 시도해 주세요';
+        else showTeacherModal('⚠️','챌린지 설정 저장 실패','서버에 저장하지 못했습니다. 다시 시도해 주세요.','warning');
+    };
+    if(status)status.textContent='저장 중…';
+    try{
+        google.script.run
+            .withSuccessHandler(res=>{
+                if(res?.success!==true){failed();return;}
+                if(status)status.textContent='';
+                showTeacherModal('✅','챌린지 설정 저장 완료','챌린지 설정을 저장했습니다.','success');
+            })
+            .withFailureHandler(failed)
+            .saveChallengeBadgeConfig(journeyConfig);
+    }catch(e){failed();}
 }
 
 function resetChallengeSettings(){

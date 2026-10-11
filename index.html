@@ -35,6 +35,36 @@
       /* GAS iframe 너비 강제 100% */
       min-width: 0;
     }
+    .student-save-toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+      transform: translateX(-50%);
+      width: calc(100% - 32px);
+      max-width: 416px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 15px 18px 18px;
+      border-radius: 14px;
+      background: #1f2937;
+      color: #fff;
+      box-shadow: 0 6px 20px rgba(0,0,0,.16);
+      z-index: 180;
+      overflow: hidden;
+      pointer-events: none;
+    }
+    .student-save-toast[hidden] { display: none; }
+    .student-save-toast-icon { color: #6ee7b7; font-size: 20px; font-weight: 700; }
+    .student-save-toast-message { min-width: 0; font-size: 14px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+    .student-save-toast-progress { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: #6ee7b7; transform-origin: left; }
+    .student-save-toast.is-visible { animation: student-toast-enter .2s ease-out; }
+    .student-save-toast.is-visible .student-save-toast-progress { animation: student-toast-countdown 3s linear forwards; }
+    @keyframes student-toast-enter { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+    @keyframes student-toast-countdown { to { transform: scaleX(0); } }
+    @media (prefers-reduced-motion: reduce) {
+      .student-save-toast.is-visible, .student-save-toast.is-visible .student-save-toast-progress { animation: none; }
+    }
     /* Keep the student app readable on desktop with the same phone-sized flow. */
     #mainApp {
       width: 100%;
@@ -1369,6 +1399,7 @@
     let privateFormDefaults = [];
 
     function resetStudentData() {
+      window.StudentFeedback?.dismissSaved();
       if (window.pushReminders) window.pushReminders.initialize(null);
       _goalSavePending = false;
       if (window.ReadFeedback) window.ReadFeedback.reset();
@@ -1414,7 +1445,7 @@
         if (saved.style !== undefined) saved.element.style.cssText = saved.style;
       });
       ['newMsgModal', 'studentReplyModal', 'updateNotification', 'initialSetupModal', 'newReplyModal',
-        'infoAlertModal', 'overwriteConfirmModal', 'weightConfirmModal'].forEach(id => document.getElementById(id)?.remove());
+        'infoAlertModal', 'overwriteConfirmModal', 'longSleepConfirmModal', 'weightConfirmModal'].forEach(id => document.getElementById(id)?.remove());
       document.getElementById('teacherBadgeModal')?.style.setProperty('display', 'none', 'important');
       ['editModalOverlay', 'caffeineWarningModal', 'deleteConfirmModal'].forEach(id => {
         const element = document.getElementById(id);
@@ -1926,6 +1957,12 @@
       google.script.run
         .withSuccessHandler((response) => {
           pendingCaffeineSave = null;
+          if (!response || response.success !== true) {
+            renderCaffeineLogs();
+            if(btn) { btn.disabled = false; btn.innerText = '카페인 기록 완료'; }
+            showInfoModal('저장 확인 필요', '저장 결과를 확인하지 못했습니다. 입력은 유지됩니다. 기록을 확인한 뒤 다시 시도해주세요.');
+            return;
+          }
           const appliedRecord = applyConfirmedCaffeineSave(response);
           if (!appliedRecord) renderCaffeineLogs();
           if(btn) { btn.disabled = false; btn.innerText = "카페인 기록 완료"; }
@@ -1938,13 +1975,11 @@
           const selectedDrinkEl = document.getElementById('selectedDrink');
           if(selectedDrinkEl) selectedDrinkEl.innerText = '음료를 선택하거나 직접 입력해주세요';
           selectedDrink = { drink: '', mg: 0 };
-          // ⭐ 오늘 날짜 기록일 때만 섭취 경고 모달 표시
-          // 과거 날짜 기록은 저장 완료 모달만 표시
+          // 오늘 기록은 상태 팝업으로, 과거 기록의 단순 저장 완료는 토스트로 안내한다.
           if (!appliedRecord) confirmedPendingCaffeine.push({ time, amount });
           if(getLogDateKST(time) === getTodayKST()) {
             const knownTotal = caffeineLogs.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + Number(log.amount || 0), 0);
-            const warning = document.getElementById('caffeineWarningModal');
-            if (!warning || warning.style?.display !== 'none') showCaffeineWarning(amount, knownTotal + confirmedPendingCaffeine.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + log.amount, 0), response?.localSaved ? 'local' : 'confirmed');
+            showCaffeineWarning(amount, knownTotal + confirmedPendingCaffeine.filter(log => getLogDateKST(log.time) === getTodayKST()).reduce((total, log) => total + log.amount, 0), response?.localSaved ? 'local' : 'confirmed');
             if (!appliedRecord) loadCaffeineLogs();
           } else {
             showSaveCompleteModal(response?.localSaved ? '휴대폰 저장 완료 · 구글시트 전송 대기' : '구글시트 반영 완료');
@@ -2110,7 +2145,57 @@
       };
     }
 
-    // ⭐ 실제 수면 저장 실행 (중복 확인 후 공통으로 호출)
+    function showLongSleepConfirm(sleepStart, sleepEnd, onConfirm) {
+      document.getElementById('longSleepConfirmModal')?.remove();
+      const previousFocus = document.activeElement;
+      const hours = (new Date(sleepEnd) - new Date(sleepStart)) / (1000 * 60 * 60);
+      const modal = document.createElement('div');
+      modal.id = 'longSleepConfirmModal';
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('aria-modal', 'true');
+      modal.setAttribute('aria-labelledby', 'longSleepConfirmTitle');
+      modal.setAttribute('aria-describedby', 'longSleepConfirmDetails');
+      modal.style.cssText = 'position:fixed;inset:0;z-index:350;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:16px;';
+      modal.innerHTML = `
+        <div style="background:white;border-radius:24px;width:100%;max-width:384px;max-height:calc(100dvh - 32px);display:flex;flex-direction:column;overflow:hidden;padding:24px;box-sizing:border-box;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+          <div style="font-size:36px;text-align:center;margin-bottom:10px;flex-shrink:0;" aria-hidden="true">🌙</div>
+          <h3 id="longSleepConfirmTitle" style="font-size:19px;font-weight:800;color:#1f2937;text-align:center;margin:0 0 18px;flex-shrink:0;">취침·기상 날짜가 맞나요?</h3>
+          <div id="longSleepConfirmDetails" style="font-size:14px;color:#4b5563;line-height:1.7;word-break:keep-all;min-height:0;overflow-y:auto;">
+            <p style="margin:0 0 14px;">수면 시간이 <strong style="color:#4338ca;">${Number(hours.toFixed(1))}시간</strong>으로 계산됐어요.</p>
+            <div style="background:#f3f4f6;border-radius:12px;padding:12px;margin-bottom:14px;">
+              <p style="margin:0;">취침: <strong data-sleep-start></strong></p>
+              <p style="margin:6px 0 0;">기상: <strong data-sleep-end></strong></p>
+            </div>
+            <p style="margin:0 0 20px;">혹시 오늘 새벽에 잠들었는데 취침 날짜를 어제로 입력하지 않았나요? 날짜와 시간을 다시 확인해주세요.</p>
+          </div>
+          <div style="display:flex;gap:10px;flex-shrink:0;padding-top:12px;">
+            <button type="button" data-sleep-cancel style="flex:1;min-height:48px;padding:10px 8px;border:0;border-radius:12px;background:#f3f4f6;color:#374151;font-size:14px;font-weight:700;cursor:pointer;">다시 수정</button>
+            <button type="button" data-sleep-confirm style="flex:1;min-height:48px;padding:10px 8px;border:0;border-radius:12px;background:#4f46e5;color:white;font-size:14px;font-weight:700;cursor:pointer;">맞아요, 저장</button>
+          </div>
+        </div>`;
+      modal.querySelector('[data-sleep-start]').textContent = String(sleepStart).replace('T', ' ');
+      modal.querySelector('[data-sleep-end]').textContent = String(sleepEnd).replace('T', ' ');
+      const cancel = modal.querySelector('[data-sleep-cancel]');
+      const confirm = modal.querySelector('[data-sleep-confirm]');
+      let settled = false;
+      const close = confirmed => {
+        if (settled || !modal.isConnected) return;
+        settled = true;
+        modal.remove();
+        previousFocus?.focus();
+        if (confirmed) onConfirm();
+      };
+      cancel.onclick = () => close(false);
+      confirm.onclick = () => close(true);
+      modal.addEventListener('keydown', event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(false); }
+        if (event.key === 'Tab') { event.preventDefault(); (document.activeElement === cancel ? confirm : cancel).focus(); }
+      });
+      document.body.appendChild(modal);
+      cancel.focus();
+    }
+
+    // ⭐ 실제 수면 저장 실행 (날짜 확인·중복 확인 후 공통으로 호출)
     function proceedSaveSleep(date, sleepStart, sleepEnd, memo, hours, btn, choices = {}) {
       if (btn && btn.disabled) return;
       if (btn) btn.disabled = true;
@@ -2140,8 +2225,11 @@
 
       google.script.run
         .withSuccessHandler((response) => {
-
-
+          if (!response || response.success !== true) {
+            if(btn) { btn.disabled = false; btn.innerText = '수면 기록 완료'; }
+            showInfoModal('저장 확인 필요', '저장 결과를 확인하지 못했습니다. 입력은 유지됩니다. 기록을 확인한 뒤 다시 시도해주세요.');
+            return;
+          }
           if(response && response.updated) {
             showSleepCompleteModal(hours, true, response.localSaved);
           } else {
@@ -2210,32 +2298,42 @@
       }
       const hours = ((end - start) / (1000 * 60 * 60)).toFixed(1);
 
-      const existingLog = sleepLogs.find(log => log.date === date);
       const btn = document.getElementById('saveSleepBtn');
+      if (btn?.disabled) return;
+      const choices = {...sleepChoices};
+      const continueSave = () => {
+        const existingLog = sleepLogs.find(log => log.date === date);
 
-      if(existingLog) {
-        // ⭐ confirm() 대신 커스텀 모달 사용 (URL 노출 없음)
-        const confirmMessage =
-          `${date} 날짜의 수면 기록이 이미 있습니다.\n\n` +
-          `[기존 기록]\n` +
-          `수면 시간: ${existingLog.hours}시간 (${existingLog.start} ~ ${existingLog.end})\n` +
-          `컨디션: ${existingLog.condition}\n` +
-          `메모: ${existingLog.memo || '없음'}\n\n` +
-          `[새로운 기록]\n` +
-          `수면 시간: ${hours}시간 (${formatSleepDateTimeRange(sleepStart, sleepEnd)})\n` +
-          `컨디션: ${selectedCondition.emoji}\n` +
-          `메모: ${memo || '없음'}\n\n` +
-          `기존 기록을 덮어쓰시겠습니까?`;
+        if(existingLog) {
+          // ⭐ confirm() 대신 커스텀 모달 사용 (URL 노출 없음)
+          const confirmMessage =
+            `${date} 날짜의 수면 기록이 이미 있습니다.\n\n` +
+            `[기존 기록]\n` +
+            `수면 시간: ${existingLog.hours}시간 (${existingLog.start} ~ ${existingLog.end})\n` +
+            `컨디션: ${existingLog.condition}\n` +
+            `메모: ${existingLog.memo || '없음'}\n\n` +
+            `[새로운 기록]\n` +
+            `수면 시간: ${hours}시간 (${formatSleepDateTimeRange(sleepStart, sleepEnd)})\n` +
+            `컨디션: ${selectedCondition.emoji}\n` +
+            `메모: ${memo || '없음'}\n\n` +
+            `기존 기록을 덮어쓰시겠습니까?`;
 
-        showOverwriteConfirm(confirmMessage, function() {
-          if(btn) btn.innerText = "저장 중...";
-          proceedSaveSleep(date, sleepStart, sleepEnd, memo, hours, btn, {...sleepChoices});
-        });
+          showOverwriteConfirm(confirmMessage, function() {
+            if(btn) btn.innerText = "저장 중...";
+            proceedSaveSleep(date, sleepStart, sleepEnd, memo, hours, btn, choices);
+          });
+          return;
+        }
+
+        if(btn) btn.innerText = "저장 중...";
+        proceedSaveSleep(date, sleepStart, sleepEnd, memo, hours, btn, choices);
+      };
+      // Use the actual duration, not the rounded display value (11h59m is below 12h).
+      if (end - start >= 12 * 60 * 60 * 1000) {
+        showLongSleepConfirm(sleepStart, sleepEnd, continueSave);
         return;
       }
-
-      if(btn) btn.innerText = "저장 중...";
-      proceedSaveSleep(date, sleepStart, sleepEnd, memo, hours, btn, {...sleepChoices});
+      continueSave();
     }
 
     // 오늘 날짜로 설정
@@ -2884,26 +2982,9 @@
       setTimeout(() => { if (overlay.parentNode) overlay.remove(); }, 5000);
     }
 
+    // 기존 호출부도 공통 토스트를 사용한다.
     function showSaveCompleteModal(message) {
-      const overlay = document.createElement('div');
-      overlay.className = 'fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-6 backdrop-blur-sm';
-      overlay.innerHTML = `
-        <div class="bg-white rounded-[2rem] w-full max-w-sm overflow-hidden shadow-2xl transform scale-95 animate-scale-in">
-          <div class="p-8 text-center bg-emerald-500 text-white">
-            <div class="text-6xl mb-4">✅</div>
-            <h2 class="text-3xl font-black mb-2">저장 완료</h2>
-            <p class="text-base font-medium opacity-90 leading-relaxed whitespace-pre-line">${message}</p>
-          </div>
-          <div class="p-6 bg-gray-50">
-            <button onclick="this.closest('.fixed').remove()"
-              class="w-full py-4 bg-white border-2 border-gray-200 text-gray-800 rounded-2xl font-bold shadow-sm active:scale-95 transition-transform">
-              확인했습니다
-            </button>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(overlay);
-      setTimeout(() => { overlay.remove(); }, 3000);
+      window.StudentFeedback.showSaved(message);
     }
 
     // ── 퀵메뉴 localStorage 저장/로드 (학번별) ──────────────────
@@ -3925,25 +4006,21 @@
         const reason = checkedEditReasons.map(v => v === '기타' && editEtcText ? `기타: ${editEtcText}` : v).join(', ');
         const symptom = Array.from(document.querySelectorAll('input[name="editSymptom"]:checked')).map(cb => cb.value).join(', ');
         if(!name || !Number.isFinite(amountValue) || amountValue < 0 || !Number.isFinite(amount) || !time) { showInfoModal('입력 확인', '음료명, 0 이상인 카페인 함량, 섭취 시간을 입력해주세요.'); return; }
-        const oldLog = caffeineLogs.find(l => l.id === editingId);
-        const oldAmount = oldLog ? oldLog.amount : 0;
-        // 편집된 시간이 오늘인지 여부 (경고 모달 표시 결정용)
-        const isEditToday = getLogDateKST(time) === getTodayKST();
 
         setEditSavePending(true);
         google.script.run
-          .withSuccessHandler(() => {
+          .withSuccessHandler((response) => {
             setEditSavePending(false);
-            showSaveCompleteModal('카페인 기록이 수정되었습니다.');
-            closeEditModal(); refreshData();
-            // 오늘 날짜 편집이고 용량이 바뀐 경우만 경고 모달 표시
-            // loadCaffeineLogs(amount)를 사용하면 GAS에서 최신 데이터를 받아
-            // 오늘 총 섭취량을 정확히 계산한 뒤 showCaffeineWarning 호출
-            if(amount !== oldAmount && isEditToday) {
-              loadCaffeineLogs(amount);
+            if (!response || response.success !== true) { showInfoModal('저장 확인 필요', '수정 결과를 확인하지 못했습니다. 입력은 유지됩니다.'); return; }
+            if (getLogDateKST(time) === getTodayKST()) {
+              const todayTotal = caffeineLogs.reduce((total, log) => total +
+                (String(log.id) !== String(editingId) && getLogDateKST(log.time) === getTodayKST() ? Number(log.amount) || 0 : 0), amount);
+              showCaffeineWarning(0, todayTotal, response.localSaved ? 'local' : 'confirmed');
             } else {
-              loadCaffeineLogs();
+              showSaveCompleteModal(response.localSaved ? '기기에 수정 내용을 저장했어요 · 서버 전송 대기' : '카페인 기록이 수정되었습니다.');
             }
+            closeEditModal(); refreshData();
+            loadCaffeineLogs();
           })
           .withFailureHandler(err => {
             setEditSavePending(false);
@@ -3966,11 +4043,23 @@
         const hours = ((endTime - startTime) / (1000 * 60 * 60)).toFixed(1);
         const sleepStartTime = timePartFromDatetime(start);
         const sleepEndTime = timePartFromDatetime(end);
-        setEditSavePending(true);
-        google.script.run
-          .withSuccessHandler(() => { setEditSavePending(false); closeEditModal(); loadSleepLogs(); refreshData(); showSleepCompleteModal(hours, true); })
-          .withFailureHandler(err => { setEditSavePending(false); showInfoModal('저장 여부 확인 필요', '응답을 확인하지 못해 저장 여부를 확정할 수 없습니다. 재접속 후 기록을 확인하고, 변경되지 않았을 때만 다시 수정해주세요.'); })
-          .updateSleepData({ id: editingId, studentId: user.studentId, name: user.name, date, wakeDate, sleepTime: sleepStartTime, wakeTime: sleepEndTime, hours: parseFloat(hours), condition, memo, ...(window.editSleepChoices || {}) });
+        const payload = { id: editingId, studentId: user.studentId, name: user.name, date, wakeDate, sleepTime: sleepStartTime, wakeTime: sleepEndTime, hours: parseFloat(hours), condition, memo, ...(window.editSleepChoices || {}) };
+        const continueSave = () => {
+          setEditSavePending(true);
+          google.script.run
+            .withSuccessHandler((response) => {
+              setEditSavePending(false);
+              if (!response || response.success !== true) { showInfoModal('저장 확인 필요', '수정 결과를 확인하지 못했습니다. 입력은 유지됩니다.'); return; }
+              closeEditModal(); loadSleepLogs(); refreshData(); showSleepCompleteModal(hours, true, response.localSaved);
+            })
+            .withFailureHandler(err => { setEditSavePending(false); showInfoModal('저장 여부 확인 필요', '응답을 확인하지 못해 저장 여부를 확정할 수 없습니다. 재접속 후 기록을 확인하고, 변경되지 않았을 때만 다시 수정해주세요.'); })
+            .updateSleepData(payload);
+        };
+        if (endTime - startTime >= 12 * 60 * 60 * 1000) {
+          showLongSleepConfirm(start, end, continueSave);
+          return;
+        }
+        continueSave();
       }
     }
 
@@ -4174,10 +4263,8 @@
     }
 
     function showCaffeineWarning(addedAmount, totalOverride, saveStatus) {
-      if(saveStatus === 'local' && !(window.studentSyncProfile?.targetCaf > 0)) {
-        showSaveCompleteModal('휴대폰 저장 완료 · 구글시트 전송 대기\n목표 섭취량이 미설정되어 초과 여부를 계산하지 않았습니다.');
-        return;
-      }
+      // 저장 중에는 버튼과 기록 목록의 대기 상태만 표시한다.
+      if (saveStatus === 'pending') return;
 
       const today = getTodayKST();
       let todayTotal = 0;
@@ -4770,7 +4857,7 @@
         link.download = `건강분석_${user.name}_${dateRange}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
-        showSaveCompleteModal('이미지로 저장되었습니다.');
+        showSaveCompleteModal('이미지 다운로드를 시작했어요.');
       } catch (error) { alert('이미지 저장 중 오류가 발생했습니다: ' + error.message); }
     }
 
@@ -4785,8 +4872,16 @@
         // fallback
         const ta = document.createElement('textarea');
         ta.value = `📊 건강 분석 리포트\n👤 ${user.name}\n\n${window.currentAIAnalysis}`;
-        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-        showSaveCompleteModal('📋 클립보드에 복사되었어요!\n친구들과 결과를 공유해보세요 😊');
+        document.body.appendChild(ta);
+        try {
+          ta.select();
+          if (!document.execCommand('copy')) throw new Error('COPY_FAILED');
+          showSaveCompleteModal('클립보드에 복사했어요.');
+        } catch (error) {
+          showInfoModal('복사 실패', '클립보드에 복사하지 못했습니다. 분석 내용을 직접 선택해 복사해주세요.');
+        } finally {
+          document.body.removeChild(ta);
+        }
       }
     }
 
@@ -4802,7 +4897,7 @@
         link.href = URL.createObjectURL(blob);
         link.click();
         URL.revokeObjectURL(link.href);
-        showSaveCompleteModal('텍스트 파일로 저장되었습니다.');
+        showSaveCompleteModal('텍스트 파일 다운로드를 시작했어요.');
       } catch (error) { alert('파일 저장 중 오류가 발생했습니다: ' + error.message); }
     }
 
@@ -5522,6 +5617,7 @@
           if (res && res.success === true) {
             if (modal) modal.remove();
             loadTeacherMessages();
+            showSaveCompleteModal(label.includes('수정') ? '답장을 수정했어요.' : '답장을 보냈어요.');
           } else {
             btn.disabled = false; btn.textContent = label;
             if (res && res.code === 'MESSAGE_TARGET_CHANGED') {
