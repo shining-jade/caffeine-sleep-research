@@ -2466,6 +2466,7 @@
     // 차트 렌더링
     function renderCharts(data) {
       const labels = data.labels || [];
+      const datesChanged = JSON.stringify(caffeineChart?.data?.labels || null) !== JSON.stringify(labels);
       const caffeineData = data.caffeineData || [];
       const rawSleepData = data.sleepData || [];
       const sleepData = buildSleepDataByLifeDate(labels, rawSleepData, data.chartEndDate);
@@ -2527,11 +2528,11 @@
       const cafLegendEl = document.getElementById('caffeineLegend');
       if (ctx1Element) {
         const ctx1 = ctx1Element.getContext('2d');
-        if (caffeineChart) caffeineChart.destroy();
+        const caffeineKey = JSON.stringify([labels, caffeineData, caffeineHasData, userLimit]);
 
         const cafColors = caffeineData.map((mg, i) => getCafColor(mg, caffeineHasData[i]));
 
-        caffeineChart = new Chart(ctx1, {
+        const caffeineConfig = {
           type: 'bar',
           data: {
             labels: labels,
@@ -2582,7 +2583,14 @@
               x: { grid: { display: false }, ticks: { font: { size: 10 } } }
             }
           }
-        });
+        };
+        if (!caffeineChart) caffeineChart = new Chart(ctx1, caffeineConfig);
+        else if (caffeineChart.$studentDataKey !== caffeineKey) {
+          caffeineChart.data = caffeineConfig.data;
+          caffeineChart.options = caffeineConfig.options;
+          caffeineChart.update('none');
+        }
+        caffeineChart.$studentDataKey = caffeineKey;
 
         // 카페인 범례 렌더링
         if (cafLegendEl) {
@@ -2604,7 +2612,7 @@
       const sleepLegendEl = document.getElementById('sleepLegend');
       if (ctx2Element) {
         const ctx2 = ctx2Element.getContext('2d');
-        if (sleepChart) sleepChart.destroy();
+        const sleepKey = JSON.stringify([labels, sleepData, sleepSevere, sleepWarn, sleepGood, sleepMax]);
 
         const sleepColors = sleepData.map(h => getSleepColor(h));
         const validSleepVals = sleepData.filter(h => h > 0);
@@ -2614,7 +2622,7 @@
         const sleepPeak = Math.max(sleepGood, ...validSleepVals.filter(Number.isFinite));
         const sleepChartMax = Math.max(12, Math.ceil(sleepPeak / 2) * 2 + 2);
 
-        sleepChart = new Chart(ctx2, {
+        const sleepConfig = {
           type: 'bar',
           data: {
             labels: labels,
@@ -2685,7 +2693,14 @@
               x: { grid: { display: false }, ticks: { font: { size: 10 } } }
             }
           }
-        });
+        };
+        if (!sleepChart) sleepChart = new Chart(ctx2, sleepConfig);
+        else if (sleepChart.$studentDataKey !== sleepKey) {
+          sleepChart.data = sleepConfig.data;
+          sleepChart.options = sleepConfig.options;
+          sleepChart.update('none');
+        }
+        sleepChart.$studentDataKey = sleepKey;
 
         // 수면 범례 렌더링
         if (sleepLegendEl) {
@@ -2703,7 +2718,7 @@
         }
       }
 
-      setTimeout(() => {
+      if (datesChanged) setTimeout(() => {
         document.querySelectorAll('.overflow-x-auto').forEach(el => { el.scrollLeft = el.scrollWidth; });
       }, 100);
     }
