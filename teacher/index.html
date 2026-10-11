@@ -2360,7 +2360,7 @@ function loadDataFromSheet(onReady,onError){
     const applyResult=function(result,isCached=false){
             try{
                 if(!result.success)throw new Error(result.error||'데이터 로드 실패');
-                if(onReady)window.teacherLoadingProgress?.(70,'학생·카페인·수면 데이터를 불러왔습니다');
+                if(onReady)window.teacherLoadingProgress?.(70,isCached?'최근 조회 자료를 준비하고 있습니다':'학생·카페인·수면 데이터를 불러왔습니다');
                 if(visibilityAtLoad===visibilityRevision)hiddenStudentIds=new Set((result.hiddenStudentIds||[]).map(String));
                 studentHideSelection.clear();updateVisibilityControls();
                 studentsData=(result.students||[]).map(s=>({학번:String(s.학번),이름:String(s.이름),학년:String(s.학년),반:String(s.반),번호:String(s.번호)}));
