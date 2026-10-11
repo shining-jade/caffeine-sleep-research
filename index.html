@@ -1446,6 +1446,7 @@
       teacherAwards = [];
       lastDashboardData = null;
       window.studentDashboardEndDate = null;
+      window.studentBootstrapPending = null;
       window.studentCalendarDetailDate = null;
       window.studentAgeGroup = null;
       window.studentDashboardRequestId = (window.studentDashboardRequestId || 0) + 1;
@@ -1689,7 +1690,12 @@
       // Bootstrap statistics describe today; a later bootstrap must not replace a queried range.
       if (data.dashboardRequestId === (window.studentDashboardRequestId || 0)) {
         if (window.studentDashboardEndDate) refreshData();
-        else updateDashboard(data.stats || {});
+        else {
+          updateDashboard(data.stats || {});
+          const rangeText = document.getElementById('dateRangeText');
+          if (rangeText) rangeText.textContent = data.stats?.localStats
+            ? '기기 저장본 표시 중 · 서버 연결 후 갱신됩니다.' : '최신 데이터 표시 중';
+        }
       }
       if (lastDashboardData) renderCharts(lastDashboardData);
     }
@@ -1703,17 +1709,57 @@
       loadSleepSettingsLegacy();
     }
 
+    function restoreCachedStudentDashboard() {
+      if (!user || !window.studentSync || lastDashboardData) return Promise.resolve(false);
+      const studentId = user.studentId, studentName = user.name;
+      const requestId = window.studentDashboardRequestId || 0;
+      const endDate = window.studentDashboardEndDate || getTodayKST();
+      const initialCaffeineLogs = caffeineLogs, initialSleepLogs = sleepLogs;
+      const initialCaffeineCount = caffeineLogs.length, initialSleepCount = sleepLogs.length;
+      const initialProfile = window.studentSyncProfile;
+      // Snapshots are partitioned by the signed-in ID/name and filtered full date.
+      return Promise.all([
+        window.studentSync.read('getStudentBootstrap').catch(() => null),
+        window.studentSync.read('getFilteredStats', undefined, [studentId, endDate]).catch(() => null)
+      ]).then(([bundle, filtered]) => {
+        if (!user || user.studentId !== studentId || user.name !== studentName
+            || (window.studentDashboardRequestId || 0) !== requestId || lastDashboardData
+            || (window.studentDashboardEndDate || getTodayKST()) !== endDate) return false;
+        const stats = filtered || (bundle?.stats?.localStats && bundle.stats.chartEndDate === endDate ? bundle.stats : null);
+        if (!stats || !Array.isArray(stats.labels)) return false;
+        if (bundle) {
+          if (window.studentSyncProfile === initialProfile && bundle.sleepSettings?.success && bundle.sleepSettings.settings) {
+            SLEEP_CFG = { ...bundle.sleepSettings.settings };
+            changeSettingsAgeGroup(bundle.weight?.ageGroup || window.studentAgeGroup || SLEEP_CFG.ageGroup || 'teen', true);
+          }
+          if (bundle.weight?.success && window.studentSyncProfile === initialProfile) applyWeightData(bundle.weight);
+          if (caffeineLogs === initialCaffeineLogs && caffeineLogs.length === initialCaffeineCount && Array.isArray(bundle.caffeineLogs)) caffeineLogs = bundle.caffeineLogs;
+          if (sleepLogs === initialSleepLogs && sleepLogs.length === initialSleepCount && Array.isArray(bundle.sleepLogs)) sleepLogs = bundle.sleepLogs;
+        }
+        updateDashboard({ ...stats, localStats: true }, endDate);
+        const rangeText = document.getElementById('dateRangeText');
+        if (rangeText) rangeText.textContent = `${endDate} 기준 기기 저장본 표시 중 · 최신 데이터 확인 중...`;
+        return true;
+      }).catch(() => false);
+    }
+
     function loadInitialStudentData() {
+      if (window.studentBootstrapPending) return window.studentBootstrapPending;
       setDashboardChartState('loading');
+      restoreCachedStudentDashboard();
       if (!window.studentStartup) {
         loadLegacyStudentData();
         return Promise.resolve(false);
       }
-      return window.studentStartup.loadStudentBootstrap({
+      const pending = window.studentStartup.loadStudentBootstrap({
         requestBootstrap: requestStudentBootstrap,
         applyBootstrap: applyStudentBootstrap,
         fallback: loadLegacyStudentData
+      }).finally(() => {
+        if (window.studentBootstrapPending === pending) window.studentBootstrapPending = null;
       });
+      window.studentBootstrapPending = pending;
+      return pending;
     }
 
     function loadStudentDataOnResume() {
@@ -1890,7 +1936,8 @@
       const top = section ? Math.max(0, window.scrollY + section.getBoundingClientRect().top - headerHeight - 16) : 0;
       window.scrollTo({ top, behavior: 'instant' });
 
-      if(id === 'dashboard') refreshData();
+      // Startup already includes today statistics; avoid a competing read.
+      if(id === 'dashboard' && !(window.studentBootstrapPending && !window.studentDashboardEndDate)) refreshData();
       if(id === 'caffeine') {
         setCurrentTime();
         loadCaffeineLogs();

@@ -47,7 +47,9 @@
       const result = window.StudentFeedback.evaluate({ caffeine: caf, profile: profile || {}, today, sleep: recentSleep?.payload, sleepSettings: typeof SLEEP_CFG !== 'undefined' ? SLEEP_CFG : {} });
       feedback.textContent = [result.caffeineExceeded ? `오늘 카페인 ${result.caffeineTotal}mg · 설정한 목표에 도달했습니다.` : '', result.sleepInsufficient ? '입력한 수면 시간이 수면 부족 기준보다 짧습니다.' : ''].filter(Boolean).join(' ');
       // Update local dashboard totals even when the network is unavailable.
-      if (typeof syncConfirmedCaffeineStats === 'function') syncConfirmedCaffeineStats();
+      // Initial/bootstrap snapshots already provide stats; do not feed read events back into another read.
+      if (typeof syncConfirmedCaffeineStats === 'function' && typeof caffeineHistoryLoaded !== 'undefined'
+          && caffeineHistoryLoaded && typeof lastDashboardData !== 'undefined' && lastDashboardData) syncConfirmedCaffeineStats();
       if (typeof updateCaffeineBadge === 'function') updateCaffeineBadge();
     } catch (_) { /* A first-time device may not have any cached server records yet. */ }
   }
