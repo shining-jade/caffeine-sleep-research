@@ -57,18 +57,27 @@ test('repeated attempts remain limited per student and network without blocking 
   assert.equal(otherNetwork.statusCode, 200);
 });
 
-test('rotating student IDs still encounters an aggregate network cap before roster access', async () => {
+test('a shared school network does not block other students after 120 total logins', async () => {
   let calls = 0;
   const login = createLoginHandler({ callGas: async input => { calls++; return { success:true, studentId:input.params[0], name:input.params[1] }; } });
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 240; i++) {
     const res = response();
     await login(request('synthetic-rotation-' + i, '192.0.2.144'), res);
     assert.equal(res.statusCode, 200);
   }
-  const blocked = response();
-  await login(request('synthetic-rotation-next', '192.0.2.144'), blocked);
-  assert.equal(blocked.statusCode, 429);
-  assert.equal(calls, 120);
+  assert.equal(calls, 240);
+});
+
+test('many blocked attempts by one account never block a classmate on the same Wi-Fi', async () => {
+  const login = handler();
+  for (let i = 0; i < 140; i++) {
+    const res = response();
+    await login(request('synthetic-noisy-account', '192.0.2.146'), res);
+    assert.equal(res.statusCode, i < 12 ? 200 : 429);
+  }
+  const classmate = response();
+  await login(request('synthetic-unaffected-classmate', '192.0.2.146'), classmate);
+  assert.equal(classmate.statusCode, 200);
 });
 
 test('spreadsheet-compatible ID aliases share one repeated-account budget', async () => {

@@ -24,10 +24,8 @@ export function checkLoginRateLimit(req, scope, { max = 10, windowMs = 10 * 60 *
 }
 
 export function checkStudentLoginRateLimit(req, studentId) {
-  // A classroom shares one public IP. Keep the small repeated-account budget
-  // separate from the aggregate network budget, which also bounds ID rotation.
-  const network = checkLoginRateLimit(req, 'student-login-network', { max: 120 });
-  if (!network.allowed) return network;
+  // Students on shared school Wi-Fi must not consume one network-wide budget.
+  // Keep repeated attempts limited only for the same account on that network.
   // Match Apps Script normalizeId: spreadsheet IDs such as 1101.0 are 1101.
   const identity = typeof studentId === 'string' ? studentId.trim().replace(/\.0+$/, '').trim() : '';
   return checkLoginRateLimit(req, 'student-login-account', { max: 12, identity });
