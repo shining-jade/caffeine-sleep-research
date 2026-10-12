@@ -28,5 +28,7 @@ export function checkStudentLoginRateLimit(req, studentId) {
   // separate from the aggregate network budget, which also bounds ID rotation.
   const network = checkLoginRateLimit(req, 'student-login-network', { max: 120 });
   if (!network.allowed) return network;
-  return checkLoginRateLimit(req, 'student-login-account', { max: 12, identity: studentId });
+  // Match Apps Script normalizeId: spreadsheet IDs such as 1101.0 are 1101.
+  const identity = typeof studentId === 'string' ? studentId.trim().replace(/\.0+$/, '').trim() : '';
+  return checkLoginRateLimit(req, 'student-login-account', { max: 12, identity });
 }

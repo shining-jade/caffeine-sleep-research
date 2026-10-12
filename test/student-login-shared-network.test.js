@@ -71,6 +71,20 @@ test('rotating student IDs still encounters an aggregate network cap before rost
   assert.equal(calls, 120);
 });
 
+test('spreadsheet-compatible ID aliases share one repeated-account budget', async () => {
+  const login = createLoginHandler({ callGas: async input => ({ success:true,
+    studentId:input.params[0].replace(/\.0+$/, '').trim(), name:input.params[1] }) });
+  for (let i = 0; i < 13; i++) {
+    const alias = 'synthetic-alias' + (i ? '.' + '0'.repeat(i) : '');
+    const res = response();
+    await login(request('  ' + alias + '  ', '192.0.2.145'), res);
+    assert.equal(res.statusCode, i < 12 ? 200 : 429);
+  }
+  const spacedAlias = response();
+  await login(request('synthetic-alias  .00', '192.0.2.145'), spacedAlias);
+  assert.equal(spacedAlias.statusCode, 429);
+});
+
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const loginStart = html.indexOf('    async function login()');
 const loginEnd = html.indexOf('\n    }', loginStart) + 6;
