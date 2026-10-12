@@ -1586,9 +1586,14 @@
         const res = await window.appAuth.loginStudent(id, name);
         enterApp(res, false);
       } catch(err) {
-        if(msg) msg.innerText = err && err.code === 'INVALID_CREDENTIALS'
-          ? '등록되지 않은 정보입니다.'
-          : '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.';
+        if(msg) {
+          if (err && err.code === 'INVALID_CREDENTIALS') msg.innerText = '등록되지 않은 정보입니다.';
+          else if (err && err.code === 'TOO_MANY_REQUESTS') {
+            const wait = Number.isInteger(err.retryAfter) && err.retryAfter > 0 && err.retryAfter <= 600
+              ? '약 ' + Math.ceil(err.retryAfter / 60) + '분 후' : '잠시 후';
+            msg.innerText = '로그인 시도가 많아 잠시 제한되었습니다. ' + wait + ' 다시 시도해 주세요.';
+          } else msg.innerText = '서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.';
+        }
         if(btn) btn.innerText = "로그인";
       } finally {
         if(btn) btn.disabled = false;

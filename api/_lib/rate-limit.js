@@ -2,14 +2,14 @@ import { createHash } from 'node:crypto';
 
 const buckets = new Map();
 
-function clientKey(req, scope) {
+function clientKey(req, scope, identity = '') {
   const forwarded = String(req.headers?.['x-forwarded-for'] || '').split(',')[0].trim();
   const address = forwarded || String(req.socket?.remoteAddress || 'unknown');
-  return createHash('sha256').update(`${scope}:${address}`).digest('hex');
+  return createHash('sha256').update(JSON.stringify([scope, address, identity])).digest('hex');
 }
 
-export function checkLoginRateLimit(req, scope, { max = 10, windowMs = 10 * 60 * 1000, now = Date.now() } = {}) {
-  const key = clientKey(req, scope);
+export function checkLoginRateLimit(req, scope, { max = 10, windowMs = 10 * 60 * 1000, now = Date.now(), identity = '' } = {}) {
+  const key = clientKey(req, scope, identity);
   for (const [storedKey, stored] of buckets) if (stored.resetAt <= now) buckets.delete(storedKey);
   while (!buckets.has(key) && buckets.size >= 1000) buckets.delete(buckets.keys().next().value);
   const current = buckets.get(key);
@@ -21,4 +21,14 @@ export function checkLoginRateLimit(req, scope, { max = 10, windowMs = 10 * 60 *
     allowed: bucket.count <= max,
     retryAfter: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
   };
+}
+
+export function checkStudentLoginRateLimit(req, studentId) {
+  // A classroom shares one public IP. Keep the small repeated-account budget
+  // separate from the aggregate network budget, which also bounds ID rotation.
+  const network = checkLoginRateLimit(req, 'student-login-network', { max: 120 });
+  if (!network.allowed) return network;
+  // Match Apps Script normalizeId: spreadsheet IDs such as 1101.0 are 1101.
+  const identity = typeof studentId === 'string' ? studentId.trim().replace(/\.0+$/, '').trim() : '';
+  return checkLoginRateLimit(req, 'student-login-account', { max: 12, identity });
 }

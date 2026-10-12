@@ -1,7 +1,7 @@
 import { callGas as defaultCallGas } from '../_lib/gas.js';
 import { readJson, sendJson } from '../_lib/http.js';
 import { createSession, setSessionCookie, STUDENT_SESSION_SECONDS } from '../_lib/session.js';
-import { checkLoginRateLimit } from '../_lib/rate-limit.js';
+import { checkStudentLoginRateLimit } from '../_lib/rate-limit.js';
 
 function sendKnownError(res, error) {
   const status = Number.isInteger(error?.status) ? error.status : 500;
@@ -11,19 +11,12 @@ function sendKnownError(res, error) {
 
 export function createLoginHandler({
   callGas = defaultCallGas,
-  checkRateLimit = (req) => checkLoginRateLimit(req, 'student-login', { max: 12 }),
+  checkRateLimit = checkStudentLoginRateLimit,
   now = () => Math.floor(Date.now() / 1000),
 } = {}) {
   return async function loginHandler(req, res) {
     if (req.method !== 'POST') {
       sendJson(res, 405, { success: false, error: 'METHOD_NOT_ALLOWED' });
-      return;
-    }
-
-    const rate = checkRateLimit(req);
-    if (!rate.allowed) {
-      res.setHeader('Retry-After', String(rate.retryAfter));
-      sendJson(res, 429, { success: false, error: 'TOO_MANY_REQUESTS' });
       return;
     }
 
@@ -37,6 +30,12 @@ export function createLoginHandler({
 
     const studentId = typeof body?.studentId === 'string' ? body.studentId.trim() : '';
     const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    const rate = checkRateLimit(req, studentId);
+    if (!rate.allowed) {
+      res.setHeader('Retry-After', String(rate.retryAfter));
+      sendJson(res, 429, { success: false, error: 'TOO_MANY_REQUESTS' });
+      return;
+    }
     if (!studentId || !name) {
       sendJson(res, 401, { success: false, error: 'INVALID_CREDENTIALS' });
       return;
