@@ -5,6 +5,22 @@ import vm from 'node:vm';
 
 const SOURCE = fs.readFileSync(new URL('../public/js/api-bridge.js', import.meta.url), 'utf8');
 
+test('login rate-limit error exposes bounded Retry-After without retrying authentication', async () => {
+  for (const [header, expected] of [['125',125], ['-1',undefined], ['Infinity',undefined], ['garbage',undefined]]) {
+    let calls=0;
+    const {window}=loadBridge({fetchImpl:async()=>{
+      calls++;
+      return {...response({success:false,error:'TOO_MANY_REQUESTS'},429),headers:{get:key=>key==='Retry-After'?header:null}};
+    }});
+    await assert.rejects(window.appAuth.loginStudent('0','테스트'), error=>{
+      assert.equal(error.code,'TOO_MANY_REQUESTS');
+      assert.equal(error.retryAfter,expected);
+      return true;
+    });
+    assert.equal(calls,1);
+  }
+});
+
 function response(body, status = 200) {
   return {
     ok: status >= 200 && status < 300,
