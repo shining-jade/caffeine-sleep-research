@@ -16,7 +16,7 @@ function setup({sufficient=true}={}){
   document:{getElementById:id=>elements[id]||null,createElement:()=>({innerHTML:'',className:''})},
   getTodayKST:()=> '2000-01-07',getLogDateKST:t=>t.slice(0,10),escapeHtml:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'),
   google:{script:{run:chain}}});
- vm.runInContext(['resetStudentAnalysis','generateAIReport','displayAIReport','getErrorDisplayInfo','showErrorReport','showFallbackNotice'].map(extract).join('\n'),c);
+ vm.runInContext(['shiftDateString','getSleepLifeDate','sleepLogEndKey','compareSleepLogsByEndDesc','resetStudentAnalysis','generateAIReport','displayAIReport','getErrorDisplayInfo','showErrorReport','showFallbackNotice'].map(extract).join('\n'),c);
  return{c,btn,input,container,calls,succeed:r=>success(r),fail:e=>failure(e)};
 }
 test('student sends selected dates and recorded-day mean',async()=>{
@@ -31,8 +31,8 @@ test('student changed period ignores delayed report and clears shareable analysi
  x.input.value='2000-01-14';x.c.resetStudentAnalysis();const before=x.container.innerHTML;
  x.succeed({success:true,source:'AI',analysis:'늦게 온 결과'});assert.equal(x.container.innerHTML,before);assert.equal(x.c.window.currentAIAnalysis,null);assert.equal(x.btn.disabled,false);
 });
-test('student insufficient local history avoids server request',async()=>{
- const x=setup({sufficient:false});await x.c.generateAIReport();assert.equal(x.calls.length,0);assert.match(x.container.innerHTML,/기록이 조금 부족/);assert.equal(x.btn.disabled,false);
+test('student missing local history requests authoritative feedback without blocking other metrics',async()=>{
+ const x=setup({sufficient:false});await x.c.generateAIReport();assert.equal(x.calls.length,1);x.succeed({success:true,source:'Rule',analysis:'기록 기반 건강 피드백\n☕ 카페인\n카페인 미기록\n😴 수면\n수면 미기록'});assert.match(x.container.innerHTML,/미기록/);assert.equal(x.btn.disabled,false);
 });
 test('student analysis escapes provider text instead of injecting markup',()=>{
  const x=setup();x.c.displayAIReport('<img src=x onerror=bad()>\n☕ 카페인\n- <b>50mg</b>','1/1 ~ 1/7','');assert.doesNotMatch(x.container.innerHTML,/<img src=x|<b>50mg<\/b>/);assert.match(x.container.innerHTML,/&lt;img/);

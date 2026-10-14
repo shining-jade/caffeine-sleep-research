@@ -82,10 +82,10 @@ test('sleep status remains a popup for both recommended and excessive duration',
   context.showSleepCompleteModal('8.0', false, false);
   context.showSleepCompleteModal('12.0', true, true);
   assert.equal(popups.length, 2);
-  assert.match(popups[0].innerHTML, /권장 수면/);
+  assert.match(popups[0].innerHTML, /권장 범위/);
   assert.match(popups[0].innerHTML, /8시간/);
   assert.doesNotMatch(popups[0].innerHTML, /전송 대기/);
-  assert.match(popups[1].innerHTML, /수면 과다/);
+  assert.match(popups[1].innerHTML, /권장보다 김/);
   assert.match(popups[1].innerHTML, /12시간/);
   assert.match(popups[1].innerHTML, /전송 대기/);
   assert.equal(notices.length, 0);

@@ -17,9 +17,9 @@ test('analysis diagnostic exercises production analysis with fixed fictional dat
   c.getSleepSettings = () => ({settings:{sleepSevere:7,sleepWarn:8,sleepGood:10,sleepMax:11}});
   const result = c.testAIAnalysis();
   assert.equal(result.results.length,2);
-  assert.match(result.results[0].source,/Fallback/);
-  assert.equal(result.results[1].source,'AI_Teacher');
-  assert.equal(calls.length,2);
+  assert.equal(result.results[0].source,'Rule');
+  assert.equal(result.results[1].source,'Rule');
+  assert.equal(calls.length,0);
   assert.deepEqual(openedIds,[]);
   for(const call of calls){
     assert.equal(call.retries,1);
@@ -27,5 +27,5 @@ test('analysis diagnostic exercises production analysis with fixed fictional dat
   }
   assert.equal(JSON.stringify({result,logs}).includes('SYNTHETIC_KEY'),false);
   assert.match(result.results[0].analysis,/50mg/);
-  assert.match(result.results[0].analysis,/8\.2시간/);
+  assert.match(result.results[0].analysis,/8\.2(?:h|시간)/);
 });

@@ -37,13 +37,13 @@ test('changed caffeine values update in place without animation and preserve sle
  assert.equal(x.instances[1].updates.length,0);
 });
 
-test('goal and sleep threshold changes update reference lines and tooltip labels in place',()=>{
+test('goal changes update in place while research sleep references stay fixed',()=>{
  const x=setup();x.c.renderCharts(x.data);x.c.userLimit=100;x.c.SLEEP_CFG.sleepWarn=9;
  x.c.renderCharts(x.data);assert.equal(x.instances.length,2);
  assert.deepEqual(Array.from(x.instances[0].data.datasets[1].data),[100,100]);
- assert.deepEqual(Array.from(x.instances[1].data.datasets[2].data),[9,9]);
- assert.match(x.instances[1].options.plugins.tooltip.callbacks.label({datasetIndex:2}),/9/);
- assert.deepEqual(x.instances[0].updates,['none']);assert.deepEqual(x.instances[1].updates,['none']);
+ assert.deepEqual(Array.from(x.instances[1].data.datasets[2].data),[8,8]);
+ assert.match(x.instances[1].options.plugins.tooltip.callbacks.label({datasetIndex:2}),/8/);
+ assert.deepEqual(x.instances[0].updates,['none']);assert.deepEqual(x.instances[1].updates,[]);
 });
 
 test('recorded zero remains distinct from missing caffeine and changed dates still update chart labels',()=>{
