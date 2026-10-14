@@ -50,8 +50,15 @@ function fixture() {
   ].map(extract).join('\n'), c);
   return {c, fields, field, requests};
 }
-const saved = text => ({success: true, content: text.repeat(10), savedAt: '검증'});
+const saved = text => ({success: true, policyVersion:'2026-10-14', content: text.repeat(10), savedAt: '검증'});
 const completed = text => ({success: true, analysis: text.repeat(20), source: 'AI_Teacher'});
+
+test('legacy saved health reports stay out of the current report and PDF context',()=>{
+  const {c,field,requests}=fixture();c.openStudentModal('A');
+  requests.at(-1).success({success:true,content:'이전 기준 분석'.repeat(10),savedAt:'과거'});
+  assert.match(field('aiContent').textContent,/이전 기준/);
+  assert.equal(c.aiReportContextKey,'');
+});
 
 test('late saved analysis for A cannot overwrite the B modal', () => {
   const {c, field, requests} = fixture();
@@ -62,6 +69,22 @@ test('late saved analysis for A cannot overwrite the B modal', () => {
   old.success(saved('학생A의 이전 분석'));
   assert.match(field('aiContent').innerHTML, /학생B/);
   assert.doesNotMatch(field('aiContent').innerHTML, /학생A/);
+});
+
+test('modal shows recorded sleep days separately from the selected period', () => {
+  const {c, field} = fixture();
+  vm.runInContext(['avgSleepForDates', 'countSleepDays'].map(extract).join('\n'), c);
+  c.findSleepForLifeDate = (id, date) => id === 'A' && date === '2026-10-08' ? {시간: 7.5,컨디션:'😊'} : null;
+  c.openStudentModal('A');
+  assert.equal(field('modalAvgSleep').textContent, '7.5h');
+  assert.equal(field('modalSleepRecordBasis').textContent, '수면 기록 1일 / 조회 7일');
+  assert.equal(field('modalAvgCondition').textContent, '5.0점 · 기록 1/7일');
+  c.setModalPeriod('14');
+  assert.equal(field('modalAvgSleep').textContent, '7.5h');
+  assert.equal(field('modalSleepRecordBasis').textContent, '수면 기록 1일 / 조회 14일');
+  c.openStudentModal('B');
+  assert.equal(field('modalAvgSleep').textContent, '-');
+  assert.equal(field('modalSleepRecordBasis').textContent, '수면 기록 0일 / 조회 7일');
 });
 
 test('period change clears old analysis and loads the selected period', () => {

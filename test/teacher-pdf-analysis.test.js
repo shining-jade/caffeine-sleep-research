@@ -27,7 +27,7 @@ function exportReport(status, {includeAi = true, contextMatches = true, content 
     getTargetCafLimit: () => 150, getTargetSleepHours: () => 8, getCafBarColor: () => '#aaa',
     Chart: function () {}, setTimeout() {}
   });
-  vm.runInContext(['getDefaultPDFOptions', 'normalizePDFOptions', 'compactPDFAIHTML', 'getSleepChartMax', 'compareSleepRecordsDesc', 'setPDFSectionVisible', 'exportPDF'].map(extract).join('\n'), c);
+  vm.runInContext(['countSleepDays', 'getDefaultPDFOptions', 'normalizePDFOptions', 'compactPDFAIHTML', 'getSleepChartMax', 'compareSleepRecordsDesc', 'setPDFSectionVisible', 'exportPDF'].map(extract).join('\n'), c);
   c.exportPDF({pdfOptions: {includeAi}});
   return fields;
 }
@@ -36,6 +36,10 @@ test('PDF includes a saved analysis reloaded from the server', () => {
   const fields = exportReport('(저장된 분석 ✓)');
   assert.equal(fields.pdf_aiBox.style.display, 'block');
   assert.match(fields.pdf_aiContent.innerHTML, /평균 카페인 52mg/);
+});
+
+test('PDF shows the number of recorded sleep days even when none were recorded', () => {
+  assert.equal(exportReport('(분석 전)').pdf_sleepRecordBasis.textContent, '수면 기록 0일 / 조회 2일');
 });
 
 test('PDF includes freshly completed analysis', () => {

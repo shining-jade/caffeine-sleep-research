@@ -243,25 +243,31 @@
         const records = await read(history);
         if (g !== generation) throw error('SESSION_CHANGED');
         if (kind === 'Caffeine') {
-          const totals = new Map();
+          const totals = new Map(), invalid = new Set();
           records.forEach(record => {
             const time = String(record.time || '');
             const stamp = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(time) ? Date.parse(time) : NaN;
             const date = Number.isFinite(stamp) ? new Date(stamp + 9 * 3600000).toISOString().slice(0, 10) : time.slice(0, 10);
-            totals.set(date, (totals.get(date) || 0) + (Number(record.amount) || 0));
+            const amount=record.amount;
+            if(amount===null||amount===undefined||amount===''||!Number.isFinite(Number(amount))||Number(amount)<0)invalid.add(date);
+            else totals.set(date, (totals.get(date) || 0) + Number(amount));
           });
+          invalid.forEach(date=>totals.delete(date));
           result.todayTotal = totals.get(endDate) || 0;
           result.todayHasRecord = totals.has(endDate);
-          result.caffeineData = dates.map(date => totals.get(date) || 0);
+          result.caffeineData = dates.map(date => totals.has(date)?totals.get(date):null);
           result.caffeineHasData = dates.map(date => totals.has(date));
         } else {
           const byDate = new Map();
           records.forEach(record => {
-            const previous = byDate.get(record.date);
-            const endKey = log => String(log.wakeDate || log.date || '') + ' ' + String(log.end || '');
-            if (!previous || endKey(record) >= endKey(previous)) byDate.set(record.date, record);
+            let date=String(record.date||'');
+            const hour=Number(String(record.start||record.sleepTime||'').split(':')[0]);
+            if(/^\d{4}-\d{2}-\d{2}$/.test(date)&&String(record.start||record.sleepTime||'')&&hour<4)date=new Date(Date.parse(date+'T00:00:00Z')-86400000).toISOString().slice(0,10);
+            const previous = byDate.get(date);
+            const stamp=log=>String(log.savedAt||log.timestamp||'').replace('T',' ');
+            if(!previous||(!!record.localPending!==!!previous.localPending?!!record.localPending:!stamp(record)||!stamp(previous)||(stamp(record)!==stamp(previous)?stamp(record)>stamp(previous):Number(record.sourceRow||0)>=Number(previous.sourceRow||0))))byDate.set(date,record);
           });
-          result.sleepData = dates.map(date => Number(byDate.get(date)?.hours) || 0);
+          result.sleepData = dates.map(date => {const hours=byDate.get(date)?.hours;return hours===null||hours===undefined||hours===''||!Number.isFinite(Number(hours))?null:Number(hours);});
         }
         rebuilt = true;
       }
@@ -329,7 +335,7 @@
     const p = row.payload;
     const common = { id: row.receipt?.recordId || 'local_' + row.mutationId, localMutationId: row.mutationId, localPending: row.state !== 'synced', syncState: row.state };
     if (row.action === 'saveCaffeineData') return { ...common, name: p.drink, company: p.company || '', foodName: p.foodName || '', amount: Number(p.mg), time: p.time, reason: p.reason || '', symptom: p.symptom || '' };
-    if (row.action === 'saveSleepData') return { ...p, ...common, date: p.date, start: p.sleepTime, end: p.wakeTime, wakeDate: p.wakeDate, hours: p.hours, condition: p.condition, memo: p.memo };
+    if (row.action === 'saveSleepData') return { ...p, ...common, savedAt:new Date((Number(row.createdAt)||Date.now())+9*3600000).toISOString().replace('T',' ').slice(0,19), sourceRow:Number.MAX_SAFE_INTEGER, date: p.date, start: p.sleepTime, end: p.wakeTime, wakeDate: p.wakeDate, hours: p.hours, condition: p.condition, memo: p.memo };
     return null;
   }
   window.StudentSync = { create, indexedStore, localRecord, actions };

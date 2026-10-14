@@ -37,11 +37,11 @@ test('student missing sleep is not described as observed short sleep',async()=>{
  const x=await setup({key:false,sleep:false});const report=x.run().analysis;assert.match(report,/수면 미기록/);assert.doesNotMatch(report,/평균 0\.0h|취침 시간을.*앞당겨/);
 });
 test('student insufficient history avoids provider calls',async()=>{
- const x=await setup({caffeine:false,sleep:false});const result=x.run();assert.equal(result.source,'InsufficientData');assert.match(result.analysis,/__INSUFFICIENT__/);assert.equal(x.calls.length,0);
+ const x=await setup({caffeine:false,sleep:false});const result=x.run();assert.equal(result.source,'Rule');assert.match(result.analysis,/미기록/);assert.equal(x.calls.length,0);
 });
-for(const missing of ['caffeine','sleep'])test(`student AI prompt does not infer a zero average for missing ${missing}`,async()=>{
- const x=await setup({[missing]:false});x.run();assert.equal(x.calls.length,1);
- const prompt=x.calls[0].prompt;
+for(const missing of ['caffeine','sleep'])test(`student rule feedback does not infer a zero average for missing ${missing}`,async()=>{
+ const x=await setup({[missing]:false});const result=x.run();assert.equal(x.calls.length,0);
+ const prompt=result.analysis;
  if(missing==='caffeine'){assert.match(prompt,/카페인 미기록/);assert.doesNotMatch(prompt,/카페인 평균: 0mg|평균 0mg과/);}
  else {assert.match(prompt,/수면 미기록/);assert.doesNotMatch(prompt,/수면 평균: 0\.0h|평균 0\.0h와/);}
 });

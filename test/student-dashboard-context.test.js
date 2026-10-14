@@ -102,5 +102,5 @@ test('sleep graph uses committed chart year across New Year and ignores picker d
     getSleepLifeDate: log => log.date, compareSleepLogsByEndDesc: () => 0
   });
   vm.runInContext(['labelToISODate', 'buildSleepDataByLifeDate'].map(extract).join('\n'), c);
-  assert.deepEqual(Array.from(c.buildSleepDataByLifeDate(['12/31', '01/01', '01/02'], [], '2026-01-02')), [16, 8, 0]);
+  assert.deepEqual(Array.from(c.buildSleepDataByLifeDate(['12/31', '01/01', '01/02'], [], '2026-01-02')), [16, 8, null]);
 });

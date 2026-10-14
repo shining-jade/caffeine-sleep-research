@@ -392,7 +392,7 @@
               <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z"/>
               </svg>
-              건강분석
+              기록 기반 건강 피드백
             </p>
             <button onclick="generateAIReport()" id="aiAnalysisBtn"
               class="px-3 py-1.5 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl text-xs font-bold hover:shadow-lg active:scale-95 transition-all flex items-center gap-1.5">
@@ -401,7 +401,7 @@
           </div>
           <div id="aiReportContainer">
             <p id="symptomText" class="text-sm text-gray-600 leading-relaxed">
-              <span class="italic">📊 3일 이상 데이터를 기록하면 건강분석이 가능합니다 ✨</span>
+              <span class="italic">📊 기록한 날의 평균을 확인해요 · 3일 미만은 경향 해석에 주의해 주세요 ✨</span>
             </p>
           </div>
         </div>
@@ -2593,24 +2593,15 @@
       // Use the same saved thresholds as the sleep-completion guidance.
       const sleepCfg = typeof SLEEP_CFG === 'undefined' ? {} : SLEEP_CFG;
       const sleepSevere = Number(sleepCfg.sleepSevere) || 7;
-      const sleepWarn = Number(sleepCfg.sleepWarn) || 8;
-      const sleepGood = Number(sleepCfg.sleepGood) || 10;
+      const sleepWarn = sleepCfg.ageGroup==='adult'?7:8;
+      const sleepGood = sleepCfg.ageGroup==='adult'?9:10;
       const sleepMax = Number(sleepCfg.sleepMax) || 11;
       function getSleepColor(h) {
-        if (h === 0)   return 'rgba(209,213,219,0.4)'; // 미기록: 연회색
-        if (h < sleepSevere) return '#ef4444';
-        if (h < sleepWarn) return '#f97316';
-        if (h <= sleepGood) return '#22c55e';
-        if (h < sleepMax) return '#eab308';
-        return '#a855f7';
+        if(h===null||h===undefined)return 'rgba(209,213,219,0.4)';
+        return h<sleepWarn?'#f97316':h<=sleepGood?'#22c55e':'#eab308';
       }
       function getSleepStageName(h) {
-        if (h === 0)   return '미기록';
-        if (h < sleepSevere) return '수면 부족';
-        if (h < sleepWarn) return '적당한 수면 (권장 미만)';
-        if (h <= sleepGood) return '권장 수면';
-        if (h < sleepMax) return '적당한 수면 (권장 초과)';
-        return '수면 과다';
+        return h===null||h===undefined?'미기록':h<sleepWarn?'권장보다 짧음':h<=sleepGood?'권장 범위':'권장보다 김';
       }
 
       // ── ☕ 카페인 차트 ───────────────────────────────
@@ -2705,7 +2696,7 @@
         const sleepKey = JSON.stringify([labels, sleepData, sleepSevere, sleepWarn, sleepGood, sleepMax]);
 
         const sleepColors = sleepData.map(h => getSleepColor(h));
-        const validSleepVals = sleepData.filter(h => h > 0);
+        const validSleepVals = sleepData.filter(h => h!==null&&h!==undefined&&Number.isFinite(Number(h)));
         const sleepAvg = validSleepVals.length > 0
           ? parseFloat((validSleepVals.reduce((a, b) => a + b, 0) / validSleepVals.length).toFixed(1))
           : 0;
@@ -2725,7 +2716,7 @@
               },
               {
                 type: 'line',
-                data: labels.map(() => sleepAvg),
+                data: labels.map(() => validSleepVals.length?sleepAvg:null),
                 borderColor: 'rgba(99,102,241,0.7)',
                 borderWidth: 2,
                 borderDash: [6, 4],
@@ -2772,7 +2763,7 @@
                     if (context.datasetIndex === 2) return `권장 하한: ${sleepWarn}시간`;
                     if (context.datasetIndex === 3) return `권장 상한: ${sleepGood}시간`;
                     const h = sleepData[context.dataIndex];
-                    if (h === 0) return '미기록';
+                    if (h === null || h === undefined) return '미기록';
                     return `${h}시간 / ${getSleepStageName(h)}`;
                   }
                 }
@@ -2796,11 +2787,9 @@
         if (sleepLegendEl) {
           sleepLegendEl.innerHTML = `
             <div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:11px;color:#6b7280;">
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#ef4444;margin-right:3px;"></span>수면 부족(&lt;${sleepSevere}h)</span>
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f97316;margin-right:3px;"></span>적당(${sleepSevere}~${sleepWarn}h 미만)</span>
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#22c55e;margin-right:3px;"></span>권장(${sleepWarn}~${sleepGood}h)</span>
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#eab308;margin-right:3px;"></span>적당(${sleepGood}h 초과~${sleepMax}h 미만)</span>
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#a855f7;margin-right:3px;"></span>과다(${sleepMax}h 이상)</span>
+              <span>🟠 권장보다 짧음 (&lt;${sleepWarn}h)</span>
+              <span>🟢 권장 범위 (${sleepWarn}~${sleepGood}h)</span>
+              <span>🟡 권장보다 김 (&gt;${sleepGood}h)</span>
               <span><span style="display:inline-block;width:22px;height:3px;border-top:2px dashed rgba(99,102,241,0.7);margin-right:3px;vertical-align:middle;"></span>주간 평균</span>
               <span><span style="display:inline-block;width:22px;height:3px;border-top:2px dashed rgba(34,197,94,0.6);margin-right:3px;vertical-align:middle;"></span>권장 하한(${sleepWarn}h)</span>
               <span><span style="display:inline-block;width:22px;height:3px;border-top:2px dashed rgba(168,85,247,0.6);margin-right:3px;vertical-align:middle;"></span>권장 상한(${sleepGood}h)</span>
@@ -2900,7 +2889,7 @@
 
       const aiReportContainer = document.getElementById('aiReportContainer');
       if(aiReportContainer) {
-        aiReportContainer.innerHTML = `<p id="symptomText" class="text-sm text-gray-600 leading-relaxed"><span class="italic">📊 3일 이상 데이터를 기록하면 건강분석이 가능합니다 ✨</span></p>`;
+        aiReportContainer.innerHTML = `<p id="symptomText" class="text-sm text-gray-600 leading-relaxed"><span class="italic">📊 기록한 날의 평균을 확인해요 · 3일 미만은 경향 해석에 주의해 주세요 ✨</span></p>`;
       }
 
       window.currentAnalysisPeriod = null;
@@ -3052,37 +3041,10 @@
       const _scMax    = _sc.sleepMax    || 11;
       const _scAgeLabel = _sc.ageGroup === 'adult' ? '성인' : '청소년';
 
-      if (h < _scSevere) {
-        statusEmoji = '😵'; statusLabel = '수면 부족 🔴'; headerColor = '#ef4444';
-        statusBody =
-          `<p style="text-align:center;font-size:15px;font-weight:800;color:#111827;margin-bottom:10px;">수면이 많이 부족해요!</p>` +
-          box('#fef2f2','#fecaca', label('#ef4444','⚠️ 수면 부족 시 나타날 수 있는 증상') + tags('😔 우울감','😤 예민함','😩 피로감')) +
-          `<p style="text-align:center;font-size:13px;color:#6b7280;">💡 오늘은 일찍 잠자리에 들어보세요.</p>`;
-      } else if (h < _scWarn) {
-        statusEmoji = '🟠'; statusLabel = '적당한 수면 🟠'; headerColor = '#f97316';
-        statusBody =
-          `<p style="text-align:center;font-size:15px;font-weight:800;color:#111827;margin-bottom:10px;">개인차 범위, 조금 더 자면 좋아요!</p>` +
-          box('#fff7ed','#fed7aa', label('#f97316',`💤 ${_scAgeLabel} 권장 수면: ${_scWarn}~${_scGood}시간`) + tags('개인차 범위예요','조금 더 늘려보세요')) +
-          `<p style="text-align:center;font-size:13px;color:#6b7280;">💡 조금 더 일찍 잠자리에 들어보세요.</p>`;
-      } else if (h <= _scGood) {
-        statusEmoji = '😊'; statusLabel = '권장 수면 🟢'; headerColor = '#10b981';
-        statusBody =
-          `<p style="text-align:center;font-size:15px;font-weight:800;color:#111827;margin-bottom:10px;">권장 수면 시간이에요! 👏</p>` +
-          info('#ecfdf5','#a7f3d0','#065f46','집중력·기억력 향상에 도움이 되고<br>건강한 하루를 만들어줘요. 🌟') +
-          `<p style="text-align:center;font-size:13px;color:#6b7280;">💡 오늘도 건강하게 지내세요!</p>`;
-      } else if (h < _scMax) {
-        statusEmoji = '🟡'; statusLabel = '적당한 수면 🟡'; headerColor = '#eab308';
-        statusBody =
-          `<p style="text-align:center;font-size:15px;font-weight:800;color:#111827;margin-bottom:10px;">개인차 범위, 조금 줄여도 좋아요!</p>` +
-          box('#fffbeb','#fde68a', label('#b45309',`💤 ${_scAgeLabel} 권장 수면: ${_scWarn}~${_scGood}시간`) + tags('개인차 범위예요','일정한 기상 시각 유지')) +
-          `<p style="text-align:center;font-size:13px;color:#6b7280;">💡 규칙적인 기상 시각을 유지해보세요.</p>`;
-      } else {
-        statusEmoji = '😴'; statusLabel = '수면 과다 🟣'; headerColor = '#8b5cf6';
-        statusBody =
-          `<p style="text-align:center;font-size:15px;font-weight:800;color:#111827;margin-bottom:10px;">수면 시간이 좀 길었네요!</p>` +
-          info('#f5f3ff','#ddd6fe','#4c1d95','너무 긴 수면은 피로감이 남고<br>생체 리듬을 흐트러뜨릴 수 있어요.') +
-          `<p style="text-align:center;font-size:13px;color:#6b7280;">💡 규칙적인 수면 패턴을 유지해보세요.</p>`;
-      }
+      statusEmoji=h<8?'🟠':h<=10?'🟢':'🟡';
+      statusLabel=h<8?'권장보다 짧음':h<=10?'권장 범위':'권장보다 김';
+      headerColor=h<8?'#f97316':h<=10?'#10b981':'#eab308';
+      statusBody=info('#f9fafb','#e5e7eb','#374151','수면시간은 8~10시간 범위와 비교한 안내입니다.<br>기상 후 컨디션과 생활 맥락은 별도로 살펴보세요.');
       const savedText = localSaved ? '휴대폰 저장 완료 · 구글시트 전송 대기' : (isUpdated ? '기존 기록이 업데이트되었습니다' : '구글시트 반영 완료');
       const overlay = document.createElement('div');
       overlay.className = 'fixed inset-0 bg-black/60 z-[200] flex items-center justify-center p-4 backdrop-blur-sm';
@@ -3873,6 +3835,8 @@
     }
 
     function compareSleepLogsByEndDesc(a, b) {
+      const at=String(a?.savedAt||a?.timestamp||''),bt=String(b?.savedAt||b?.timestamp||'');
+      if(at&&bt&&at!==bt)return bt.localeCompare(at);
       const ak = sleepLogEndKey(a);
       const bk = sleepLogEndKey(b);
       if(ak !== bk) return bk.localeCompare(ak);
@@ -3895,7 +3859,7 @@
       const startTime = String(log?.start || log?.sleepTime || '').slice(0, 5);
       if(!sleepDate) return '';
       const hour = parseInt(startTime.split(':')[0], 10);
-      if(!isNaN(hour) && hour < 12) return shiftDateString(sleepDate, -1);
+      if(!isNaN(hour) && hour < 4) return shiftDateString(sleepDate, -1);
       return sleepDate;
     }
 
@@ -3917,7 +3881,7 @@
       const startTime = String(log?.start || log?.sleepTime || '').slice(0, 5);
       const hour = parseInt(startTime.split(':')[0], 10);
       const lifeDate = getSleepLifeDate(log);
-      const isDawn = !isNaN(hour) && hour < 12;
+      const isDawn = !isNaN(hour) && hour < 4;
       const wakeDate = String(log?.wakeDate || '');
       const wakeText = wakeDate && wakeDate !== log?.date ? `${shortDate(wakeDate)} 기상` : '';
       return {
@@ -3937,7 +3901,7 @@
         const lifeDate = getSleepLifeDate(log);
         if(!lifeDate) return;
         const existing = byLifeDate[lifeDate];
-        if(!existing || compareSleepLogsByEndDesc(log, existing) < 0) {
+        if(!existing || (!!log.localPending!==!!existing.localPending?!!log.localPending:(!log.savedAt||!existing.savedAt||log.savedAt===existing.savedAt?Number(log.sourceRow||0)>=Number(existing.sourceRow||0):String(log.savedAt)>String(existing.savedAt)))) {
           byLifeDate[lifeDate] = log;
         }
       });
@@ -3945,8 +3909,8 @@
       return labels.map((label, i) => {
         const iso = labelToISODate(label, chartEndDate);
         const log = iso ? byLifeDate[iso] : null;
-        if(log) return Number(log.hours) || 0;
-        return hasLocalSleepLogs ? 0 : Number(fallbackSleepData?.[i] || 0);
+        if(log) return log.hours===null||log.hours===undefined||log.hours===''?null:Number(log.hours);
+        return hasLocalSleepLogs ? null : (fallbackSleepData?.[i] ?? null);
       });
     }
 
@@ -4241,11 +4205,13 @@
     function syncConfirmedCaffeineStats() {
       if (!caffeineHistoryLoaded) { refreshData(); return; }
       const today = getTodayKST();
-      const totals = new Map();
+      const totals = new Map(), invalid = new Set();
       caffeineLogs.forEach(log => {
         const date = getLogDateKST(log.time);
-        totals.set(date, (totals.get(date) || 0) + Number(log.amount || 0));
+        if(log.amount===null||log.amount===undefined||log.amount===''||!Number.isFinite(Number(log.amount))||Number(log.amount)<0)invalid.add(date);
+        else totals.set(date,(totals.get(date)||0)+Number(log.amount));
       });
+      invalid.forEach(date=>totals.delete(date));
       const endDate = lastDashboardData?.chartEndDate || today;
       const data = { ...(lastDashboardData || {}), todayTotal: totals.get(endDate) || 0, todayHasRecord: totals.has(endDate) };
       const labels = data.labels || [];
@@ -4379,7 +4345,7 @@
       if(koMatch) {
         let [, year, month, day, ampm, hour, min] = koMatch;
         hour = parseInt(hour);
-        if(ampm === '오후' && hour < 12) hour += 12;
+        if(ampm === '오후' && hour < 4) hour += 12;
         if(ampm === '오전' && hour === 12) hour = 0;
         return `${year}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
       }
@@ -4517,60 +4483,28 @@
         });
         const caffeineDays = caffeineDates.size;
         const sleepByDate = new Map();
-        sleepLogs.forEach(log => { if(log.date >= startDateStr && log.date <= endDateStr) sleepByDate.set(log.date, Number(log.hours) || 0); });
+        const selectedSleep = new Map();
+        sleepLogs.forEach(log => {
+          const day=getSleepLifeDate(log);
+          if(day<startDateStr||day>endDateStr)return;
+          const old=selectedSleep.get(day);
+          if(!old||(!!log.localPending!==!!old.localPending?!!log.localPending:(!log.savedAt||!old.savedAt||log.savedAt===old.savedAt?Number(log.sourceRow||0)>=Number(old.sourceRow||0):String(log.savedAt)>String(old.savedAt))))selectedSleep.set(day,log);
+        });
+        selectedSleep.forEach((log,day)=>{if(log.hours!==null&&log.hours!==undefined&&log.hours!==''&&Number.isFinite(Number(log.hours)))sleepByDate.set(day,Number(log.hours));});
         sleepDays = sleepByDate.size;
         sleepByDate.forEach(hours => { weekSleepTotal += hours; });
         const avgSleep = sleepDays > 0 ? (weekSleepTotal / sleepDays).toFixed(1) : 0;
         const avgCaffeine = caffeineDays > 0 ? (weekCaffeineTotal / caffeineDays).toFixed(0) : 0;
 
-        // ⭐ 카페인·수면 둘 다 3일 미만일 때만 분석 불가
-        if(caffeineDays < 3 && sleepDays < 3) {
-          const cafNeed = Math.max(0, 3 - caffeineDays);
-          const slpNeed = Math.max(0, 3 - sleepDays);
-          const avgCafDisplay = caffeineDays > 0 ? Math.round(weekCaffeineTotal / caffeineDays) : null;
-          const avgSlpDisplay = sleepDays > 0 ? (weekSleepTotal / sleepDays).toFixed(1) : null;
-          const cafOk = caffeineDays >= 3;
-          const slpOk = sleepDays >= 3;
-
-          container.innerHTML = `
-            <div class="space-y-3 py-2">
-              <div class="text-center">
-                <div class="text-4xl mb-1">📊</div>
-                <p class="font-bold text-gray-700 text-sm">아직 기록이 조금 부족해요</p>
-                <p class="text-xs text-gray-400 mt-0.5">하나라도 3일 이상 기록하면 분석이 시작돼요!</p>
-              </div>
-              <div class="grid grid-cols-2 gap-2">
-                <div class="p-3 rounded-2xl border text-center ${cafOk ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}">
-                  <p class="text-lg font-black ${cafOk ? 'text-green-600' : 'text-gray-600'}">☕</p>
-                  <p class="text-2xl font-black ${cafOk ? 'text-green-600' : 'text-gray-700'} leading-none mt-1">${caffeineDays}<span class="text-xs font-normal text-gray-400">/7일</span></p>
-                  <p class="text-xs mt-1 font-bold ${cafOk ? 'text-green-600' : 'text-gray-400'}">${cafOk ? '충분 ✅' : cafNeed + '일 더 필요'}</p>
-                  ${avgCafDisplay !== null ? `<p class="text-xs text-gray-400 mt-0.5">평균 ${avgCafDisplay}mg</p>` : ''}
-                </div>
-                <div class="p-3 rounded-2xl border text-center ${slpOk ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'}">
-                  <p class="text-lg font-black ${slpOk ? 'text-green-600' : 'text-gray-600'}">😴</p>
-                  <p class="text-2xl font-black ${slpOk ? 'text-green-600' : 'text-gray-700'} leading-none mt-1">${sleepDays}<span class="text-xs font-normal text-gray-400">/7일</span></p>
-                  <p class="text-xs mt-1 font-bold ${slpOk ? 'text-green-600' : 'text-gray-400'}">${slpOk ? '충분 ✅' : slpNeed + '일 더 필요'}</p>
-                  ${avgSlpDisplay !== null ? `<p class="text-xs text-gray-400 mt-0.5">평균 ${avgSlpDisplay}시간</p>` : ''}
-                </div>
-              </div>
-              <div class="p-3 bg-indigo-50 border border-indigo-100 rounded-2xl text-center">
-                <p class="text-xs font-bold text-indigo-700">💡 기록할수록 더 정확한 분석이 가능해요!</p>
-              </div>
-            </div>`;
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fa-solid fa-sparkles"></i> 분석하기';
-          return;
-        }
-
         // ⭐ 한쪽 데이터가 부족한 경우: 분석은 진행하되 안내 배너 표시
         let lackingNotice = '';
         if(caffeineDays < 3) {
           lackingNotice = `<div class="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2">
-            <span class="text-sm">☕</span><p class="text-xs text-amber-700"><b>카페인 기록이 ${caffeineDays}일</b> — 더 기록할수록 정확해져요!</p>
+            <span class="text-sm">☕</span><p class="text-xs text-amber-700"><b>카페인 기록이 ${caffeineDays}일</b> — 기록이 적어 경향 해석에 주의해 주세요.</p>
           </div>`;
         } else if(sleepDays < 3) {
           lackingNotice = `<div class="mb-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2">
-            <span class="text-sm">😴</span><p class="text-xs text-amber-700"><b>수면 기록이 ${sleepDays}일</b> — 더 기록할수록 정확해져요!</p>
+            <span class="text-sm">😴</span><p class="text-xs text-amber-700"><b>수면 기록이 ${sleepDays}일</b> — 기록이 적어 경향 해석에 주의해 주세요.</p>
           </div>`;
         }
         if(lackingNotice) {
@@ -4898,7 +4832,7 @@
             wrapLine(tc, line, MAX_W-16, F_BODY).forEach((w,i) =>
               segs.push({type:'dash', text: i===0? w:'   '+w, h:LH}));
           } else {
-            const isMain = /님의 건강 분석/.test(line);
+            const isMain = /님의 기록 기반 건강 피드백/.test(line);
             wrapLine(tc, line, MAX_W, isMain? F_SECT:F_BODY).forEach(w =>
               segs.push({type: isMain?'maintitle':'body', text:w, h: isMain?LH+6:LH}));
           }
@@ -4927,7 +4861,7 @@
 
         ctx.fillStyle = '#ffffff';
         ctx.font = F_TITLE;
-        ctx.fillText('건강 분석 리포트', PADDING, 52);
+        ctx.fillText('기록 기반 건강 피드백 리포트', PADDING, 52);
         ctx.font = F_SUB;
         ctx.fillStyle = 'rgba(255,255,255,0.85)';
         ctx.fillText(`${user.name}  ·  ${periodText}  ·  목표 섭취량 ${userLimit}mg`, PADDING, 82);
@@ -4974,14 +4908,14 @@
         ctx.beginPath(); ctx.moveTo(0, totalH-FOOTER_H); ctx.lineTo(W, totalH-FOOTER_H); ctx.stroke();
         ctx.fillStyle = '#9ca3af'; ctx.font = F_SMALL;
         ctx.textAlign = 'center';
-        ctx.fillText('건강분석 · 참고용 자료입니다', W/2, totalH-16);
+        ctx.fillText('기록 기반 건강 피드백 · 참고용 자료입니다', W/2, totalH-16);
         ctx.textAlign = 'left';
 
         const link = document.createElement('a');
         const dateRange = window.currentAnalysisPeriod
           ? `${window.currentAnalysisPeriod.start}_${window.currentAnalysisPeriod.end}`
           : new Date().toISOString().split('T')[0];
-        link.download = `건강분석_${user.name}_${dateRange}.png`;
+        link.download = `기록 기반 건강 피드백_${user.name}_${dateRange}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
         showSaveCompleteModal('이미지 다운로드를 시작했어요.');
@@ -4992,13 +4926,13 @@
       if(!window.currentAIAnalysis || !user) { showInfoModal('알림', '복사할 분석 결과가 없습니다.'); return; }
       try {
         const periodText = window.currentAnalysisPeriod?.text || '최근 7일';
-        const text = `📊 건강 분석 리포트\n👤 ${user.name} | ${periodText}\n\n${window.currentAIAnalysis}\n\n— 분석 (참고용)`;
+        const text = `📊 기록 기반 건강 피드백 리포트\n👤 ${user.name} | ${periodText}\n\n${window.currentAIAnalysis}\n\n— 분석 (참고용)`;
         await navigator.clipboard.writeText(text);
         showSaveCompleteModal('📋 클립보드에 복사되었어요!\n친구들과 결과를 공유해보세요 😊');
       } catch(e) {
         // fallback
         const ta = document.createElement('textarea');
-        ta.value = `📊 건강 분석 리포트\n👤 ${user.name}\n\n${window.currentAIAnalysis}`;
+        ta.value = `📊 기록 기반 건강 피드백 리포트\n👤 ${user.name}\n\n${window.currentAIAnalysis}`;
         document.body.appendChild(ta);
         try {
           ta.select();
@@ -5016,11 +4950,11 @@
       if(!window.currentAIAnalysis || !user) { showInfoModal('알림', '저장할 분석 결과가 없습니다.'); return; }
       try {
         const periodText = window.currentAnalysisPeriod?.text || '최근 7일';
-        const reportContent = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n        건강분석 리포트\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n📋 학생 정보\n────────────────────────────────────────────────\n• 이름: ${user.name}\n• 분석 기간: ${periodText}\n• 체중: ${userWeight}kg\n• 목표 섭취량: ${userLimit}mg\n\n📊 분석 결과\n────────────────────────────────────────────────\n${window.currentAIAnalysis}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nℹ️  본 분석은 제공한 참고 자료입니다.\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+        const reportContent = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n        기록 기반 건강 피드백 리포트\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n📋 학생 정보\n────────────────────────────────────────────────\n• 이름: ${user.name}\n• 분석 기간: ${periodText}\n• 체중: ${userWeight}kg\n• 목표 섭취량: ${userLimit}mg\n\n📊 분석 결과\n────────────────────────────────────────────────\n${window.currentAIAnalysis}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nℹ️  본 분석은 제공한 참고 자료입니다.\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
         const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
         const link = document.createElement('a');
         const dateRange = window.currentAnalysisPeriod ? `${window.currentAnalysisPeriod.start}_${window.currentAnalysisPeriod.end}` : new Date().toISOString().split('T')[0];
-        link.download = `건강분석_${user.name}_${dateRange}.txt`;
+        link.download = `기록 기반 건강 피드백_${user.name}_${dateRange}.txt`;
         link.href = URL.createObjectURL(blob);
         link.click();
         URL.revokeObjectURL(link.href);
@@ -6288,8 +6222,8 @@ document.addEventListener('click', function(e) {
         <div class="demo-card" style="background:linear-gradient(135deg,#eff6ff,#f5f3ff);border:2px solid #dbeafe;">
           <div style="display:flex;align-items:center;justify-content:space-between;">
             <div>
-              <p style="font-size:11px;font-weight:700;color:#3730a3;margin:0 0 4px;">✦ 건강분석</p>
-              <p style="font-size:11px;color:#6b7280;margin:0;">3일 이상 기록 후 분석 가능해요</p>
+              <p style="font-size:11px;font-weight:700;color:#3730a3;margin:0 0 4px;">✦ 기록 기반 건강 피드백</p>
+              <p style="font-size:11px;color:#6b7280;margin:0;">기록한 날의 평균을 확인하고 생활과 비교해요</p>
             </div>
             <button id="dAiBtn" style="padding:8px 14px;background:linear-gradient(135deg,#4f46e5,#7c3aed);color:white;border:none;border-radius:10px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">✦ 분석하기</button>
           </div>

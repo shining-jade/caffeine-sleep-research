@@ -3,6 +3,28 @@ const code=fs.readFileSync('public/js/student-sync.js','utf8');
 function setup(send){const c=vm.createContext({window:{},crypto:{randomUUID:()=>String(++seq),subtle:webcrypto.subtle},TextEncoder,structuredClone,Date,JSON,setTimeout:()=>0,clearTimeout(){}});let seq=0;vm.runInContext(code,c);const rows=new Map();const store={put:async r=>rows.set(r.mutationId,structuredClone(r)),list:async owner=>[...rows.values()].filter(r=>r.owner===owner),lease:async()=>true,release:async()=>{},snapshot:async()=>null};const sync=c.window.StudentSync.create({store,send});sync.setSubject({studentId:'2101',name:'합성'});return {sync,rows};}
 const payload={drink:'합성',mg:0,time:'2026-10-08 12:00:00'};
 
+test('offline sleep uses the analysis day, latest saved record and missing values as gaps',async()=>{
+ const x=setup(async()=>{}),snapshots=new Map();
+ x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};
+ await x.sync.capture('getSleepLogs',[
+  {id:'new',date:'2026-10-14',start:'01:00',hours:7.5,savedAt:'2026-10-14 10:00'},
+  {id:'old',date:'2026-10-13',start:'23:00',hours:2,savedAt:'2026-10-14 09:00'},
+  {id:'missing',date:'2026-10-14',start:'05:00',hours:null,savedAt:'2026-10-14 11:00'}]);
+ await x.sync.capture('getFilteredStats',{todayTotal:0},['2101','2026-10-14']);
+ const result=await x.sync.read('getFilteredStats',undefined,['2101','2026-10-14']);
+ assert.equal(result.sleepData[5],7.5);assert.equal(result.sleepData[6],null);
+});
+
+test('pending dawn sleep retains a save timestamp and wins over an older night record',async()=>{
+ const x=setup(async()=>{}),snapshots=new Map();
+ x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};
+ await x.sync.capture('getSleepLogs',[{id:'old',date:'2026-10-14',start:'23:00',hours:2,savedAt:'2026-10-15 08:00',sourceRow:42}]);
+ await x.sync.capture('getFilteredStats',{todayTotal:0},['2101','2026-10-14']);
+ await x.sync.enqueue('saveSleepData',{date:'2026-10-15',sleepTime:'01:00',wakeTime:'08:00',hours:7});
+ const records=await x.sync.read('getSleepLogs');assert.ok(records.find(r=>String(r.id).startsWith('local_')).savedAt);
+ const stats=await x.sync.read('getFilteredStats',undefined,['2101','2026-10-14']);assert.equal(stats.sleepData.at(-1),7);
+});
+
 test('lost save acknowledgment does not duplicate a matching mutation in refreshed history or offline totals',async()=>{
  const x=setup(async()=>{throw Object.assign(new Error('lost acknowledgment'),{code:'NETWORK_ERROR'});}),snapshots=new Map();
  x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};
@@ -28,7 +50,7 @@ test('offline statistics follow pending and confirmed record changes instead of 
  await x.sync.enqueue('saveCaffeineData',{...payload,mg:25,time:'2026-10-09T13:00'});await x.sync.flush();
  let stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,75);assert.equal(stats.caffeineData.at(-1),75);
  await x.sync.confirmRecordMutation('deleteCaffeineData',['a']);await x.sync.confirmRecordMutation('deleteSleepData',['s']);
- stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,25);assert.equal(stats.sleepData.at(-1),0);
+ stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,25);assert.equal(stats.sleepData.at(-1),null);
  const pending=[...x.rows.values()][0];pending.attempts=0;pending.state='pending';await x.sync.store.put(pending);await x.sync.cancelPending(pending.mutationId);
  stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,0);assert.equal(stats.caffeineHasData.at(-1),false);
 });

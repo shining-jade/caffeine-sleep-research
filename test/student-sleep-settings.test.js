@@ -19,8 +19,8 @@ function setup(settings=teen){
 }
 test('teen sleep graph stages and threshold lines match configured save feedback',()=>{
  const x=setup();x.c.renderCharts({labels:['1','2','3','4','5','6'],sleepData:[6.5,7.5,8,10.5,11,0]});
- const chart=x.configs[1];assert.deepEqual(Array.from(chart.data.datasets[0].backgroundColor),['#ef4444','#f97316','#22c55e','#eab308','#a855f7','rgba(209,213,219,0.4)']);
- assert.match(chart.options.plugins.tooltip.callbacks.label({datasetIndex:0,dataIndex:3}),/적당한 수면/);
+ const chart=x.configs[1];assert.deepEqual(Array.from(chart.data.datasets[0].backgroundColor),['#f97316','#f97316','#22c55e','#eab308','#eab308','#f97316']);
+ assert.match(chart.options.plugins.tooltip.callbacks.label({datasetIndex:0,dataIndex:3}),/권장보다 김/);
 });
 test('adult graph recommendations, tooltip and legend use adult settings',()=>{
  const x=setup(adult);x.c.renderCharts({labels:['1'],sleepData:[7.5]});const chart=x.configs[1];
