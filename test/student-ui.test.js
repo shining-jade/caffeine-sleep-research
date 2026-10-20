@@ -285,7 +285,7 @@ test('consecutive confirmed caffeine saves include both amounts before history r
   const end=submit.indexOf('\n        .withFailureHandler',start);
   const callback=submit.slice(start,end).trim().slice(0,-1);
   const totals=[];
-  const context=vm.createContext({btn:null,pendingCaffeineSave:null,applyConfirmedCaffeineSave:()=>false,renderCaffeineLogs(){},document:{getElementById:()=>({value:'',classList:{add(){}}}),querySelectorAll:()=>[]},selectedDrink:null,time:'today',amount:30,caffeineLogs:[{time:'today',amount:50}],confirmedPendingCaffeine:[],getLogDateKST:x=>x,getTodayKST:()=> 'today',showCaffeineWarning:(_amount,total)=>totals.push(total),loadCaffeineLogs(){},refreshData(){},showSaveCompleteModal(){}});
+  const context=vm.createContext({zeroEntry:false,btn:null,pendingCaffeineSave:null,applyConfirmedCaffeineSave:()=>false,renderCaffeineLogs(){},document:{getElementById:()=>({value:'',classList:{add(){}}}),querySelectorAll:()=>[]},selectedDrink:null,time:'today',amount:30,caffeineLogs:[{time:'today',amount:50}],confirmedPendingCaffeine:[],getLogDateKST:x=>x,getTodayKST:()=> 'today',showCaffeineWarning:(_amount,total)=>totals.push(total),loadCaffeineLogs(){},refreshData(){},showSaveCompleteModal(){}});
   vm.runInContext('const saved='+callback+';saved({success:true});saved({success:true});',context);
   assert.deepEqual(totals,[80,110]);
 });
