@@ -1,3 +1,4 @@
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
@@ -10,13 +11,13 @@ function setup({sufficient=true}={}){
  const elements={aiReportContainer:container,aiAnalysisBtn:btn,filterEndDate:input};
  const calls=[];let success,failure;
  const chain={withSuccessHandler(h){success=h;return chain;},withFailureHandler(h){failure=h;return chain;},generateAIHealthReport(...params){calls.push(params);}};
- const c=vm.createContext({Date,Math,Set,Map,Number,window:{},user:{studentId:'fictional',name:'가상'},userWeight:60,userLimit:120,
+ const c=vm.createContext({SleepRecordPolicy,Date,Math,Set,Map,Number,window:{},user:{studentId:'fictional',name:'가상'},userWeight:60,userLimit:120,
   caffeineLogs:sufficient?[0,50,100].map((amount,i)=>({amount,time:`2000-01-0${i+1}T12:00:00+09:00`})) : [],
-  sleepLogs:sufficient?[8,8,8.5].map((hours,i)=>({hours,date:`2000-01-0${i+1}`})):[],
+  sleepLogs:sufficient?[8,8,8.5].map((hours,i)=>({id:'s-'+i,hours,date:`2000-01-0${i+1}`,start:'23:00',wakeDate:`2000-01-0${i+2}`,end:hours===8.5?'07:30':'07:00'})):[],
   document:{getElementById:id=>elements[id]||null,createElement:()=>({innerHTML:'',className:''})},
   getTodayKST:()=> '2000-01-07',getLogDateKST:t=>t.slice(0,10),escapeHtml:s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'),
   google:{script:{run:chain}}});
- vm.runInContext(['shiftDateString','getSleepLifeDate','sleepLogEndKey','compareSleepLogsByEndDesc','resetStudentAnalysis','generateAIReport','displayAIReport','getErrorDisplayInfo','showErrorReport','showFallbackNotice'].map(extract).join('\n'),c);
+ vm.runInContext(fs.readFileSync('public/js/sleep-comparison-chart.js','utf8'),c);vm.runInContext(['shiftDateString','getSleepLifeDate','sleepLogEndKey','compareSleepLogsByEndDesc','resetStudentAnalysis','generateAIReport','displayAIReport','getErrorDisplayInfo','showErrorReport','showFallbackNotice'].map(extract).join('\n'),c);
  return{c,btn,input,container,calls,succeed:r=>success(r),fail:e=>failure(e)};
 }
 test('student sends selected dates and recorded-day mean',async()=>{

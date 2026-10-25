@@ -46,3 +46,10 @@ test('PDF sleep chart keeps missing days as gaps', () => {
   assert.equal([...html.matchAll(/<circle /g)].length, 2);
   assert.equal([...html.matchAll(/<polyline /g)].length, 2);
 });
+
+test('static PDF supports midpoint object points and preserves missing caffeine',()=>{
+ const c=vm.createContext({currentStudentId:'synthetic',getLimit:()=>150,getCafBarColor:()=> '#abc',charts:{pdfDual:{data:{labels:['10-18','10-19'],comparisonDates:['2026-10-18','2026-10-19'],datasets:[{data:[{x:0,y:null},{x:1,y:0}]},{data:[{x:0,y:150},{x:2,y:150}]},{data:[{x:.5,y:10},{x:1.5,y:12}]},{data:[{x:0,y:8}]}]}}}});
+ vm.runInContext(['getSleepChartMax','buildStaticPdfDualChartHTML'].map(extract).join('\n'),c);
+ const html=c.buildStaticPdfDualChartHTML(),pts=[...html.matchAll(/<circle cx="([\d.]+)" cy="([\d.]+)"/g)].map(m=>[Number(m[1]),Number(m[2])]);
+ assert.equal(pts.length,2);assert.ok(pts[0][0]<pts[1][0]);assert.ok(pts[0][1]>pts[1][1]);assert.ok(!html.includes('NaN'));assert.match(html,/10-20/);assert.match(html,/경계/);assert.match(html,/미기록|미확인/);assert.equal([...html.matchAll(/data-caffeine-bar=/g)].length,1);
+});

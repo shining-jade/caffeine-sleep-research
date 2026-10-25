@@ -259,7 +259,56 @@
     },
   };
 
+  // Entry review must distinguish a verified empty inventory from a missing cache.
+  async function readSleepHistoryForReview() {
+    if (role !== 'student' || !studentIdentity) throw publicError('SESSION_REQUIRED', '로그인 정보를 확인해주세요.', 401);
+    var generation = sessionGeneration;
+    var subject = { studentId: studentIdentity.studentId, name: studentIdentity.name };
+    function assertCurrent() {
+      if (generation !== sessionGeneration || !studentIdentity || studentIdentity.studentId !== subject.studentId || studentIdentity.name !== subject.name) {
+        throw publicError('STALE_SESSION', '로그인 정보가 변경되었습니다.', 409);
+      }
+    }
+    var records, source = 'server';
+    if (navigator.onLine === false) {
+      source = 'device';
+      var key = JSON.stringify([subject.studentId, subject.name]) + ':getStudentBootstrap';
+      var cached = sync && await sync.store.snapshot(key);
+      assertCurrent();
+      var policy = window.SleepRecordPolicy && window.SleepRecordPolicy.version;
+      if (!cached || !Array.isArray(cached.sleepLogs) || !policy || cached.sleepPolicyVersion !== policy) {
+        throw publicError('SLEEP_HISTORY_UNAVAILABLE', '저장된 수면 이력을 확인할 수 없습니다.', 503);
+      }
+      var historyKey = JSON.stringify([subject.studentId, subject.name]) + ':getSleepLogs';
+      var history = await sync.store.snapshot(historyKey);
+      assertCurrent();
+      if (history === undefined) {
+        await sync.store.snapshot(historyKey, cached.sleepLogs);
+        assertCurrent();
+      } else if (!Array.isArray(history)) {
+        throw publicError('SLEEP_HISTORY_UNAVAILABLE', '저장된 수면 이력을 확인할 수 없습니다.', 503);
+      }
+      records = await sync.read('getSleepLogs');
+    } else {
+      records = await callAction('getSleepLogs', [subject.studentId]);
+      assertCurrent();
+      if (!Array.isArray(records)) throw publicError('SLEEP_HISTORY_UNAVAILABLE', '수면 이력을 확인할 수 없습니다.', 503);
+      if (sync) {
+        await sync.capture('getSleepLogs', records, [subject.studentId]);
+        assertCurrent();
+        var stored = await sync.store.snapshot(JSON.stringify([subject.studentId, subject.name]) + ':getSleepLogs');
+        assertCurrent();
+        if (!Array.isArray(stored) || JSON.stringify(stored) !== JSON.stringify(records)) throw publicError('SLEEP_HISTORY_UNAVAILABLE', '최신 수면 이력 저장을 확인할 수 없습니다.', 503);
+        records = await sync.read('getSleepLogs');
+      }
+    }
+    assertCurrent();
+    if (!Array.isArray(records)) throw publicError('SLEEP_HISTORY_UNAVAILABLE', '수면 이력을 확인할 수 없습니다.', 503);
+    return { records: records, subject: subject, source: source };
+  }
+
   window.appAuth = {
+    readSleepHistoryForReview: readSleepHistoryForReview,
     loginStudent: function loginStudent(studentId, name) {
       invalidateSession();
       return authenticate('/api/student/login', {

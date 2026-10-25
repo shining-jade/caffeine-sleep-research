@@ -1,3 +1,4 @@
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -17,7 +18,7 @@ function form(records = [], oldDefaults = new Map()) {
   }]));
   let success;
   let savedTab = 'dashboard';
-  const context = vm.createContext({ sleepLogs:records, sleepTimeDraftEdited:false, sleepReminderDate:null, user:{studentId:'0',name:'테스트'},
+  const context = vm.createContext({SleepRecordPolicy, sleepLogs:records, sleepTimeDraftEdited:false, sleepReminderDate:null, user:{studentId:'0',name:'테스트'},
     window:{scrollTo(){}}, selectedCondition:{}, lastDashboardData:null,
     document:{getElementById:id=>fields[id] || null,querySelectorAll:selector=>selector==='.tab-content'?Object.entries(fields).filter(([id])=>id.startsWith('tab-')).map(([,el])=>el):[],createElement:()=>({querySelector:()=>({})})},
     escapeHtml:v=>String(v??''),

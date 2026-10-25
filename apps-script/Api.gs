@@ -171,7 +171,13 @@ function dispatchStudentAction_(action, params, subject, diagnostic) {
       safeParams[0].foodName = String(safeParams[0].foodName || '').trim().slice(0, 240);
     }
   }
-  if (action === 'saveCaffeineData' || action === 'saveSleepData') safeParams[0].id = Utilities.getUuid();
+  if (action === 'saveCaffeineData') safeParams[0].id = Utilities.getUuid();
+  if (action === 'saveSleepData') {
+    var clientRequestId = safeParams[0].id;
+    if (!safeParams[0]._sync && (clientRequestId === undefined || clientRequestId === null || String(clientRequestId) === '')) return {success:false,error:'SLEEP_REQUEST_ID_REQUIRED'};
+    safeParams[0].id = safeParams[0]._sync ? Utilities.getUuid()
+      : 'sleep_' + syncHash_([subject.studentId, subject.name, String(clientRequestId)]);
+  }
   var execute = function(syncConfirmation) {
     if (rule === 'caffeineRecord') requireOwnedRecord_('caffeine', safeParams[0], subject);
     if (rule === 'sleepRecord') requireOwnedRecord_('sleep', safeParams[0], subject);

@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   createTeacherReminders,
   normalizeTeacherReminderForm,
-  wholeHourOptions,
+  reminderTimeOptions,
 } from '../public/js/teacher-reminders.js';
 
 function config(overrides = {}) {
@@ -75,8 +75,10 @@ function harness() {
   return { controller, calls, states };
 }
 
-test('teacher reminder UI offers exactly 24 whole-hour choices', () => {
-  assert.deepEqual(wholeHourOptions(), Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, '0')}:00`));
+test('teacher reminder UI offers only its scheduled KST time for each kind', () => {
+  assert.deepEqual(reminderTimeOptions('sleep'), ['08:00']);
+  assert.deepEqual(reminderTimeOptions('caffeine'), ['20:00']);
+  assert.deepEqual(reminderTimeOptions('unknown'), []);
 });
 
 test('teacher reminder form accepts four classes and rejects missing reversed or non-hour values', () => {
@@ -231,8 +233,8 @@ test('a late refresh from an earlier save cannot overwrite a newer saved config'
   let reads = 0;
   let finishFirstRefresh;
   const firstRefresh = new Promise((resolve) => { finishFirstRefresh = resolve; });
-  const firstDraft = config({ enabled: true, caffeineTime: '19:00' });
-  const secondDraft = config({ enabled: true, caffeineTime: '21:00' });
+  const firstDraft = config({ enabled: true, includeWeekends: false });
+  const secondDraft = config({ enabled: true, includeWeekends: true });
   let draft = firstDraft;
   const controller = createTeacherReminders({
     api: {
@@ -253,11 +255,11 @@ test('a late refresh from an earlier save cannot overwrite a newer saved config'
   draft = secondDraft;
   await controller.saveConfig();
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(controller.getState().config.caffeineTime, '21:00');
+  assert.equal(controller.getState().config.includeWeekends, true);
 
   finishFirstRefresh({ config: firstDraft });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(controller.getState().config.caffeineTime, '21:00');
+  assert.equal(controller.getState().config.includeWeekends, true);
 });
 
 test('teacher test notification registers and sends only to the current browser', async () => {

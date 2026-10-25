@@ -145,6 +145,9 @@ export async function loadAppsScript({
     ...globals,
   });
 
+  for (const extra of ['../../public/js/sleep-record-policy.js','../SleepEpisodeGuard.gs','../SleepEpisodeMetadata.gs']) {
+    try { vm.runInContext(await readFile(new URL(extra, import.meta.url), 'utf8'), context, { filename: extra }); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+  }
   for (const file of files) {
     const source = await readFile(new URL(`../${file}`, import.meta.url), 'utf8');
     vm.runInContext(source, context, { filename: file });

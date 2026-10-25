@@ -1,3 +1,5 @@
+import {installComparisonDisplay} from './support/comparison-display.js';
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -13,7 +15,7 @@ function extract(name) {
 function fixture() {
   const fields = {}, requests = [];
   const field = id => fields[id] ||= {
-    style: {}, innerHTML: '', textContent: '', value: '', contentEditable: 'false',
+    style: {}, innerHTML: '', textContent: '', value: '', contentEditable: 'false', dataset:{}, querySelector(){return null;},
     classList: {add() {}, remove() {}, toggle() {}}, getContext() {return {};}
   };
   field('studentDateFilter').value = '2026-10-09';
@@ -22,8 +24,8 @@ function fixture() {
   for (const action of ['getAIReport', 'handleAIReportForTeacher', 'saveAIReport']) runner[action] = function (...args) {
     requests.push({action, args, success: this.success, failure: this.failure});
   };
-  const c = vm.createContext({
-    document: {getElementById: field, createElement: () => ({innerHTML: '', querySelectorAll: () => [], get textContent() {return this.innerHTML;}})}, window: {}, google: {script: {run: runner}},
+  const c = vm.createContext({SleepRecordPolicy,
+    document: {getElementById: field, createElement: () => ({innerHTML: '', querySelectorAll: () => [], get textContent() {return this.innerHTML;}})}, window: {}, escapeHtml:String, google: {script: {run: runner}},
     studentsData: [{학번: 'A', 이름: '학생A'}, {학번: 'B', 이름: '학생B'}],
     infoData: [], caffeineData: [], sleepData: [], charts: {}, today: '2026-10-09',
     currentStudentId: '', studentPeriodMode: '7', modalPeriodMode: '7',
@@ -42,8 +44,8 @@ function fixture() {
     getCafThresholds: () => ({over: 100}), sanitizeRichHtml: s => s, formatAIReportHTML: s => s,
     generateFallbackAnalysis: () => '기본 분석 내용'.repeat(15)
   });
-  vm.runInContext([
-    'getLastNDates', 'getPeriodN', 'getModalDates', 'getSleepChartMax', 'compareSleepRecordsDesc',
+  installComparisonDisplay(c);vm.runInContext([
+    'renderSleepComparisonDetails','getSleepTimingInfo','shortDate','formatSleepTime','sleepBehaviorLabel','chartSleepRowsForSummary','getSleepLifeDate','getSleepWakeDate','compareSleepDisplayTimesDesc','getSleepRecordEndKey','getLastNDates', 'getPeriodN', 'getModalDates', 'getSleepChartMax', 'compareSleepRecordsDesc',
     'getAIContextKey', 'isCurrentAIRequest', 'resetAIReportContext',
     'openStudentModal', 'closeModal', 'refreshModalData', 'setModalPeriod',
     'showAITools', 'loadSavedAIReport', 'requestAIAnalysis', 'saveAIEdit'
@@ -73,18 +75,19 @@ test('late saved analysis for A cannot overwrite the B modal', () => {
 
 test('modal shows recorded sleep days separately from the selected period', () => {
   const {c, field} = fixture();
-  vm.runInContext(['avgSleepForDates', 'countSleepDays'].map(extract).join('\n'), c);
+  installComparisonDisplay(c);vm.runInContext(['avgSleepForDates', 'countSleepDays'].map(extract).join('\n'), c);
+  c.chartSleepRowsForSummary=id=>id==='A'?[{id:'a'}]:[];
   c.findSleepForLifeDate = (id, date) => id === 'A' && date === '2026-10-08' ? {시간: 7.5,컨디션:'😊'} : null;
   c.openStudentModal('A');
   assert.equal(field('modalAvgSleep').textContent, '7.5h');
-  assert.equal(field('modalSleepRecordBasis').textContent, '수면 기록 1일 / 조회 7일');
+  assert.equal(field('modalSleepRecordBasis').textContent, '수면 1건 · 유효 1일 / 비교 7일 (기상일 전날)');
   assert.equal(field('modalAvgCondition').textContent, '5.0점 · 기록 1/7일');
   c.setModalPeriod('14');
   assert.equal(field('modalAvgSleep').textContent, '7.5h');
-  assert.equal(field('modalSleepRecordBasis').textContent, '수면 기록 1일 / 조회 14일');
+  assert.equal(field('modalSleepRecordBasis').textContent, '수면 1건 · 유효 1일 / 비교 14일 (기상일 전날)');
   c.openStudentModal('B');
   assert.equal(field('modalAvgSleep').textContent, '-');
-  assert.equal(field('modalSleepRecordBasis').textContent, '수면 기록 0일 / 조회 7일');
+  assert.equal(field('modalSleepRecordBasis').textContent, '수면 0건 · 유효 0일 / 비교 7일 (기상일 전날)');
 });
 
 test('period change clears old analysis and loads the selected period', () => {
@@ -158,3 +161,5 @@ test('late save completion does not mark another student report as saved', () =>
   old.failure(new Error('late failure'));
   assert.equal(field('aiSavedBadge').style.display, 'none');
 });
+
+for(const [value,expected]of [[7.166666666666667,'7.2h'],[7.04,'7.0h'],[7.05,'7.1h'],[0,'0.0h'],[null,'-']])test('teacher actual modal/tooltip display keeps raw average '+String(value),()=>{const {c,field}=fixture();c.avgSleepForDates=()=>value;c.findSleepForLifeDate=()=>value===null?null:{시간:value};c.Chart=function(_,config){Object.assign(this,config);this.destroy=()=>{};};c.openStudentModal('A');assert.equal(field('modalAvgSleep').textContent,expected);const chart=c.charts.dual;assert.equal(chart.data.datasets[2].data[0].y,value);const label=chart.options.plugins.tooltip.callbacks.label({datasetIndex:2,dataset:{label:'수면'},raw:{y:value}});assert.ok(value===null?label.includes('미기록'):label.includes(expected));});

@@ -179,149 +179,9 @@ function getWakeDateFromSleepPayload(payload) {
 }
 
 function saveSleepData(payload, syncConfirmation) {
-  try {
-    // payload 검증
-    if (!payload) {
-      safeLog_('❌ saveSleepData: payload가 undefined입니다');
-      throw new Error("데이터가 전달되지 않았습니다.");
-    }
-
-    safeLog_('=== saveSleepData 시작 ===');
-    safeLog_('받은 데이터: ' + JSON.stringify(payload));
-
-    const ss = getSpreadsheet_();
-    const sheet = ss.getSheetByName("sleep") || (() => {
-      const s = ss.insertSheet("sleep");
-      appendRecordRow_(s, [
-        "타임스탬프", "학년", "반", "번호", "전체학번", "성명",
-        "날짜", "취침시간", "기상날짜", "기상시간", "수면시간",
-        "컨디션", "메모", "고유ID",
-        "취침전스마트폰", "취침전활동", "잠들기소요시간", "수면중각성", "낮졸림"
-      ]);
-      s.setFrozenRows(1);
-      safeLog_("✅ sleep 시트 자동 생성 완료");
-      return s;
-    })();
-
-    // 필수 필드 확인
-    if (!payload.studentId) {
-      safeLog_('❌ payload.studentId가 없습니다: ' + JSON.stringify(payload));
-      throw new Error("학번이 전달되지 않았습니다.");
-    }
-
-    if (!payload.date) {
-      safeLog_('❌ payload.date가 없습니다');
-      throw new Error("날짜가 전달되지 않았습니다.");
-    }
-
-    const kstTimestamp = getKSTTimestamp();
-    const p = parseStudentId(normalizeId(payload.studentId));
-    const resolvedWakeDate = payload.wakeDate || getWakeDateFromSleepPayload(payload);
-
-    safeLog_(`학번: ${payload.studentId}, 날짜: ${payload.date}`);
-
-    // 기존 데이터 확인 - 같은 날짜에 같은 학생의 데이터가 있는지 체크
-    const data = sheet.getDataRange().getValues();
-    let existingRowIndex = -1;
-
-    safeLog_(`기존 데이터 검색 시작: 총 ${data.length - 1}행 확인`);
-    safeLog_(`검색 조건 - 학번: "${payload.studentId}", 날짜: "${payload.date}"`);
-
-    for (let i = 1; i < data.length; i++) {
-      const rowStudentId = normalizeId(data[i][4]); // E열
-      const rowDateRaw = data[i][6];                  // G열
-
-      // 날짜 형식 통일 (Date 객체든 문자열이든 YYYY-MM-DD 형식으로)
-      let rowDate = '';
-      if (rowDateRaw instanceof Date) {
-        rowDate = Utilities.formatDate(rowDateRaw, "Asia/Seoul", "yyyy-MM-dd");
-      } else if (rowDateRaw) {
-        rowDate = String(rowDateRaw).trim();
-        // YYYY-MM-DD 형식이 아니면 변환 시도
-        if (rowDate.includes('/')) {
-          const parts = rowDate.split('/');
-          if (parts.length === 3) {
-            rowDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-          }
-        }
-      }
-
-      // 디버깅 로그 (처음 3개만)
-      if (i <= 3) {
-        safeLog_(`Row ${i + 1}: 학번="${rowStudentId}", 날짜="${rowDate}" (원본: ${rowDateRaw})`);
-      }
-
-      // 같은 학생의 같은 날짜 기록이 있는 경우
-      // 비수치 학번(교직원·교생)은 이름(F열)까지 함께 비교해 개인 구분
-      const payloadNormId = normalizeId(payload.studentId);
-      const isNumericPayloadId = /^\d+$/.test(payloadNormId);
-      const rowName = String(data[i][5] || '').trim(); // F열: 성명
-      const nameMatch = isNumericPayloadId || rowName === String(payload.name || '').trim();
-      if (rowStudentId === payloadNormId &&
-          rowDate === String(payload.date).trim() &&
-          nameMatch) {
-        existingRowIndex = i + 1; // 시트는 1-based index
-        safeLog_(`✅ 기존 데이터 발견: Row ${existingRowIndex}`);
-        safeLog_(`   학번 일치: "${rowStudentId}" === "${payload.studentId}"`);
-        safeLog_(`   날짜 일치: "${rowDate}" === "${payload.date}"`);
-        break;
-      }
-    }
-
-    if (existingRowIndex === -1) {
-      safeLog_(`기존 데이터 없음 - 새로 추가됨`);
-    }
-
-    let wasUpdated = false;
-
-    if (existingRowIndex > 0) {
-      // 기존 데이터가 있으면 해당 행 삭제
-      safeLog_(`⚠️ Row ${existingRowIndex} 삭제 시작...`);
-      // Replace this row atomically below; failed saves retain the old record.
-      safeLog_(`✅ 기존 수면 기록 삭제 완료: 학번=${payload.studentId}, 날짜=${payload.date}`);
-      wasUpdated = true;
-    }
-
-    // 새로운 데이터 추가 (항상)
-    safeLog_(`새 데이터 추가 중...`);
-    appendRecordRow_(sheet, [
-      kstTimestamp,           // A: 타임스탬프
-      p.grade,                // B: 학년
-      p.class,                // C: 반
-      p.number,               // D: 번호
-      normalizeId(payload.studentId),      // E: 전체학번
-      payload.name,           // F: 성명
-      payload.date,           // G: 날짜
-      payload.sleepTime,      // H: 취침 시간
-      resolvedWakeDate,       // I: wake date
-      payload.wakeTime,       // I: 기상 시간
-      payload.hours,          // J: 수면 시간
-      payload.condition,      // K: 컨디션 (이모지)
-      payload.memo || '',     // L: 메모
-      payload.id || '',       // M: 고유ID
-      payload.smartphone || '',  // N: 취침 전 스마트폰
-      payload.activity || '',    // O: 취침 전 활동
-      payload.latency || '',     // P: 수면 잠들기 소요시간
-      payload.awakenings || '',  // Q: 수면 중 각성
-      payload.daytime || ''      // R: 낮 졸림
-    ], existingRowIndex > 0 ? existingRowIndex : null, syncConfirmation);
-
-    safeLog_(`✅ 수면 기록 저장 완료: 학번=${payload.studentId}, 날짜=${payload.date}, 덮어쓰기=${wasUpdated}`);
-    safeLog_('=== saveSleepData 종료 ===');
-
-    return {
-      success: true,
-      updated: wasUpdated,
-      message: wasUpdated ? '같은 날짜의 기존 데이터가 수정되었습니다.' : '수면 기록이 저장되었습니다.'
-    };
-  } catch (error) {
-    safeLog_('❌ 수면 저장 오류: ' + error);
-    safeLog_('오류 스택: ' + error.stack);
-    throw error;
-  }
+  return savePreservedSleep_(payload, syncConfirmation);
 }
 
-// 체중 데이터 저장
 function saveWeightData(payload) {
   try {
     const ss = getSpreadsheet_();
@@ -435,6 +295,7 @@ function getStudentBootstrap(studentId) {
     stats: getStats(studentId, true),
     caffeineLogs: getCaffeineLogs(studentId, null, null, true),
     sleepLogs: getSleepLogs(studentId, null, null, true),
+    sleepPolicyVersion: SleepRecordPolicy.version,
     sleepSettings: getSleepSettings(true)
   };
 }
@@ -537,53 +398,9 @@ function updateCaffeineData(payload) {
 
 // 수면 데이터 업데이트
 function updateSleepData(payload) {
-  try {
-    const ss = getSpreadsheet_();
-    const sheet = ss.getSheetByName("sleep");
-
-    if (!sheet) {
-      throw new Error("수면 시트를 찾을 수 없습니다.");
-    }
-
-    const kstTimestamp = getKSTTimestamp();
-    const resolvedWakeDate = payload.wakeDate || getWakeDateFromSleepPayload(payload);
-
-    let rowIndex = -1;
-    if (payload.id) {
-      const data = sheet.getDataRange().getValues();
-      for (let i = 1; i < data.length; i++) {
-        if (String(data[i][13]) === String(payload.id)) { // M열: 고유ID
-          rowIndex = i + 1;
-          break;
-        }
-      }
-    }
-
-    if (rowIndex > 0) {
-      sheet.getRange(rowIndex, 1).setValue(kstTimestamp);              // A: 타임스탬프
-      sheet.getRange(rowIndex, 7).setValue(payload.date);              // G: 날짜
-      sheet.getRange(rowIndex, 8).setValue(payload.sleepTime);         // H: 취침
-      sheet.getRange(rowIndex, 9).setValue(resolvedWakeDate);            // I: wake date
-      sheet.getRange(rowIndex, 10).setValue(payload.wakeTime);          // J: wake time
-      sheet.getRange(rowIndex, 11).setValue(payload.hours);            // J: 시간
-      sheet.getRange(rowIndex, 12).setValue(payload.condition);        // K: 컨디션
-      sheet.getRange(rowIndex, 13).setValue(payload.memo || '');       // L: 메모
-      if (payload.smartphone !== undefined) sheet.getRange(rowIndex, 15).setValue(payload.smartphone || ''); // N
-      if (payload.activity   !== undefined) sheet.getRange(rowIndex, 16).setValue(payload.activity   || ''); // O
-      if (payload.latency    !== undefined) sheet.getRange(rowIndex, 17).setValue(payload.latency    || ''); // P
-      if (payload.awakenings !== undefined) sheet.getRange(rowIndex, 18).setValue(payload.awakenings || ''); // Q
-      if (payload.daytime    !== undefined) sheet.getRange(rowIndex, 19).setValue(payload.daytime    || ''); // R
-      return { success: true };
-    }
-
-    throw new Error("수정할 기록을 찾을 수 없습니다.");
-  } catch (error) {
-    safeLog_('수면 수정 오류: ' + error);
-    throw error;
-  }
+  return updatePreservedSleep_(payload);
 }
 
-// 카페인 데이터 삭제 (실제 행 삭제)
 function deleteCaffeineData(id) {
   try {
     const ss = getSpreadsheet_();
@@ -613,33 +430,9 @@ function deleteCaffeineData(id) {
 
 // 수면 데이터 삭제 (실제 행 삭제)
 function deleteSleepData(id) {
-  try {
-    const ss = getSpreadsheet_();
-    const sheet = ss.getSheetByName("sleep");
-
-    if (!sheet) {
-      throw new Error("수면 시트를 찾을 수 없습니다.");
-    }
-
-    const data = sheet.getDataRange().getValues();
-
-    for (let i = 1; i < data.length; i++) {
-      if (String(data[i][13]) === String(id)) { // N열: 고유ID
-        const rowIndex = i + 1;
-        sheet.deleteRow(rowIndex);
-        safeLog_(`수면 기록 삭제 완료: ID=${id}, Row=${rowIndex}`);
-        return { success: true };
-      }
-    }
-
-    throw new Error("삭제할 기록을 찾을 수 없습니다.");
-  } catch (error) {
-    safeLog_('수면 삭제 오류: ' + error);
-    throw error;
-  }
+  return deletePreservedSleep_(id);
 }
 
-// 카페인 로그 조회
 function getCaffeineLogs(studentId, startDate, endDate, strictRead) {
   try {
     const ss = getSpreadsheet_();
@@ -740,6 +533,7 @@ function getSleepLogs(studentId, startDate, endDate, strictRead) {
     safeLog_(`✓ 읽어온 데이터 행 수: ${data.length}`);
 
     const logs = [];
+    const sleepMetadataIndex = preservedSleepMetadataIndex_();
     let matchCount = 0;
     let skipCount = 0;
 
@@ -805,8 +599,10 @@ function getSleepLogs(studentId, startDate, endDate, strictRead) {
         }
 
         // 로그 객체 생성
+        const sleepMeta = preservedSleepMetadataForRow_(row, sleepMetadataIndex);
         const log = {
           id: String(row[13] || ''),           // N: id
+          editVersion: typeof preservedSleepVersion_ === 'function' ? preservedSleepVersion_(row, sleepMeta) : undefined,
           date: dateStr,                       // G열: 날짜
           start: startTime,                    // H열: 취침
           wakeDate: wakeDateStr,
@@ -824,6 +620,8 @@ function getSleepLogs(studentId, startDate, endDate, strictRead) {
         };
 
         safeLog_(`    로그 생성: ${JSON.stringify(log)}`);
+        Object.assign(log, preservedSleepMetadataView_(row, sleepMeta));
+        if (data.filter(function(other) { return SleepRecordPolicy.id(other[13]) === SleepRecordPolicy.id(row[13]); }).length > 1) log.identityConflict = true;
         logs.push(log);
       }
     }
@@ -944,10 +742,10 @@ function getFilteredStats(studentId, endDateStr) {
   if(!end)throw new Error('분석 기간을 다시 선택해주세요.');
   const data=getWeeklyDetailedData(studentId,shiftRecordDate_(end,-6),end);
   const last=data.dailyRecords[data.dailyRecords.length-1];
-  return {todayTotal:last?.caffeine||0,todayHasRecord:last?.caffeine!==null,chartEndDate:end,
+  return {todayTotal:last?.caffeine ?? null,todayHasRecord:!!last && last.caffeineStatus!=='missing',todayCaffeineStatus:last?.caffeineStatus || 'missing',chartEndDate:end,
     labels:data.dailyRecords.map(r=>r.date.slice(5).replace('-','/')),
-    caffeineData:data.dailyRecords.map(r=>r.caffeine),caffeineHasData:data.dailyRecords.map(r=>r.caffeine!==null),sleepData:data.dailyRecords.map(r=>r.sleep),
-    sleepRecordedDays:data.sleepRecordedDays,conditionRecordedDays:data.conditionRecordedDays};
+    caffeineData:data.dailyRecords.map(r=>r.caffeine),caffeineHasData:data.dailyRecords.map(r=>r.caffeineStatus!=='missing'),sleepData:data.dailyRecords.map(r=>r.sleep),
+    sleepRecordedDays:data.sleepRecordedDays,conditionRecordedDays:data.conditionRecordedDays,sleepDayStatuses:data.dailyRecords.map(r=>r.sleepStatus),sleepEpisodeCounts:data.dailyRecords.map(r=>r.sleepRecordCount),sleepEpisodes:data.sleepEpisodes,sleepHeldDays:data.sleepHeldDays,sleepHeldRecordCount:data.sleepHeldRecordCount,sleepUnassignedRecordCount:data.sleepUnassignedRecordCount,caffeineStatuses:data.dailyRecords.map(r=>r.caffeineStatus),sleepPolicyVersion:SleepRecordPolicy.version};
 }
 
 function debugCurrentCode() {
@@ -1007,45 +805,37 @@ function debugCurrentCode() {
 // ============================================
 
 function getWeeklyDetailedData(studentId, startDate, endDate) {
-  const ss=getSpreadsheet_(), dates=[];
-  const end=endDate||Utilities.formatDate(new Date(),'Asia/Seoul','yyyy-MM-dd');
-  const start=startDate||shiftRecordDate_(end,-6);
+  const ss=getSpreadsheet_(),dates=[];
+  const end=endDate||Utilities.formatDate(new Date(),'Asia/Seoul','yyyy-MM-dd'),start=startDate||shiftRecordDate_(end,-6);
   const startTime=Date.parse(start+'T00:00:00Z'),endTime=Date.parse(end+'T00:00:00Z');
   if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!/^\d{4}-\d{2}-\d{2}$/.test(end)||!Number.isFinite(startTime)||!Number.isFinite(endTime)||new Date(startTime).toISOString().slice(0,10)!==start||new Date(endTime).toISOString().slice(0,10)!==end||endTime<startTime||endTime-startTime>3660*86400000)throw new Error('분석 기간을 다시 선택해주세요.');
-  for(let day=start;day<=end;day=shiftRecordDate_(day,1)) dates.push(day);
-  const caffeine=new Map(), sleep=new Map();
-  const read=name=>{const sheet=ss.getSheetByName(name);return sheet?sheet.getDataRange().getValues().slice(1):[];};
-  read('caffeine').forEach(row=>{
-    if(String(row[4]).trim()!==String(studentId).trim())return;
-    const day=recordDateText_(row[8]); if(!dates.includes(day))return;
-    const item=caffeine.get(day)||{total:0,valid:true};
-    const amount=recordNumber_(row[7]);
-    if(amount===null)item.valid=false;else item.total+=amount;
-    caffeine.set(day,item);
+  for(let day=start;day<=end;day=shiftRecordDate_(day,1))dates.push(day);
+  const caffeineSheet=ss.getSheetByName('caffeine');
+  // Load actual intake instants before applying the calendar-day analysis filter.
+  const caffeineRows=(caffeineSheet?caffeineSheet.getDataRange().getValues().slice(1):[]).filter(row=>normalizeOwnerId_(row[4])===normalizeOwnerId_(studentId)).map(row=>({id:String(row[9]||''),time:row[8],amount:row[7]}));
+  const caffeine=SleepRecordPolicy.caffeineDays(caffeineRows),allSleep=getSleepLogs(studentId,null,null,true),sleep=SleepRecordPolicy.days(allSleep);
+  const selection=SleepRecordPolicy.selectPeriod(allSleep,{basis:'target',start:start,end:end});
+  const summarizeIds=rows=>new Set(rows.map((r,i)=>SleepRecordPolicy.id(r.id)||'unassigned-source-row:'+i)).size;
+  const sleepEpisodes=selection.records.map(record=>{
+    const d=SleepRecordPolicy.describe(record),group=sleep.get(d.analysisDate),window=SleepRecordPolicy.caffeineWindow(record,caffeineRows,24);
+    return Object.assign({},record,{analysisDate:d.analysisDate,wakeDate:d.wakeDate,intervalHours:d.intervalHours,analysisStatus:d.type==='nap'?'excluded':group?group.status:'held',analysisHoldReason:d.type==='nap'?'nap':group?group.holdReason:'unknown_date',exposure24h:{total:window.total,status:window.status,knownSubtotal:window.knownSubtotal,recordCount:window.records.length,unplacedRecordCount:window.unplacedRecords.length,boundary:'[bed-24h,bed)'}});
   });
-  read('sleep').forEach((row,index)=>{
-    if(String(row[4]).trim()!==String(studentId).trim())return;
-    const rawDay=recordDateText_(row[6]),time=recordTimeText_(row[7]);
-    const day=time&&Number(time.slice(0,2))<4?shiftRecordDate_(rawDay,-1):rawDay;
-    if(!dates.includes(day))return;
-    const previous=sleep.get(day),stamp=recordTimestampText_(row[0]);
-    if(!previous||!previous.stamp||!stamp||stamp>=previous.stamp) sleep.set(day,{row,stamp,index});
-  });
-  let caffeineTotal=0,sleepTotal=0,conditionTotal=0,caffeineRecordedDays=0,sleepRecordedDays=0,conditionRecordedDays=0,caffeineMissingDays=0,recordedDays=0;
+  let caffeineTotal=0,sleepTotal=0,conditionTotal=0,caffeineRecordedDays=0,sleepRecordedDays=0,conditionRecordedDays=0,caffeineMissingDays=0,recordedDays=0,sleepHeldDays=0,sleepHeldRecordCount=0,caffeineNoRecordDays=0;
   const overCaffeineDays=[],details=[],dailyRecords=[];
   dates.forEach(day=>{
-    const caf=caffeine.get(day),slp=sleep.get(day);
-    const hours=slp?recordNumber_(slp.row[10]):null;
-    const condition=slp?conditionScore_(slp.row[11]):null;
-    if(caf?.valid){caffeineRecordedDays++;caffeineTotal+=caf.total;overCaffeineDays.push({date:day,mg:caf.total});}
-    if(caf&&!caf.valid)caffeineMissingDays++;
-    if(hours!==null){sleepRecordedDays++;sleepTotal+=hours;}
-    if(condition!==null){conditionRecordedDays++;conditionTotal+=condition;}
-    if(caf||slp)recordedDays++;
-    dailyRecords.push({date:day,caffeine:caf?.valid?caf.total:null,sleep:hours,condition});
-    details.push(day+': '+(caf?.valid?'카페인 '+caf.total+'mg':caf?'카페인 함량 누락':'카페인 미기록')+', '+(hours!==null?'수면 '+hours+'h':'수면 미기록')+', '+(condition!==null?'기상 후 컨디션 '+condition+'점':'컨디션 미기록'));
+    const caf=caffeine.get(day),group=sleep.get(day),ready=group&&group.status==='ready';
+    const hours=ready?group.record.intervalHours:null,condition=ready?group.record.condition:null;
+    const cafStatus=!caf?'missing':caf.status;
+    if(cafStatus==='known'){caffeineRecordedDays++;caffeineTotal+=caf.total;overCaffeineDays.push({date:day,mg:caf.total});}
+    if(cafStatus==='unknown')caffeineMissingDays++;if(cafStatus==='missing')caffeineNoRecordDays++;
+    if(hours!==null){sleepRecordedDays++;sleepTotal+=hours;}if(condition!==null){conditionRecordedDays++;conditionTotal+=condition;}
+    if(group&&group.status==='held'){sleepHeldDays++;sleepHeldRecordCount+=new Set(group.records.map((r,i)=>r.id||'source:'+i)).size;}
+    if(caf||group)recordedDays++;
+    const sleepStatus=group?group.status:'missing',episodeCount=group?new Set(group.records.map((r,i)=>r.id||'source:'+i)).size:0;
+    dailyRecords.push({date:day,caffeine:cafStatus==='known'?caf.total:null,caffeineStatus:cafStatus,caffeineKnownSubtotal:caf?caf.knownSubtotal:null,sleep:hours,condition:condition,sleepStatus:sleepStatus,sleepHoldReason:group?group.holdReason:'',sleepRecordCount:episodeCount,sleepSourceRowCount:group?group.records.length:0});
+    details.push(day+': '+(cafStatus==='known'?'카페인 '+caf.total+'mg':cafStatus==='unknown'?'카페인 함량 미상':'카페인 미기록')+', '+(sleepStatus==='held'?'수면 기록 '+episodeCount+'건 · 분석 확인 필요':hours!==null?'자가보고 취침·기상 구간 '+hours+'h':'수면 미기록')+', '+(condition!==null?'기상 후 컨디션 '+condition+'점':'컨디션 평균 제외'));
   });
-  return {details:details.join('\n'),dailyRecords,recordedDays,caffeineRecordedDays,sleepRecordedDays,conditionRecordedDays,caffeineMissingDays,totalDays:dates.length,caffeineTotal,sleepTotal,conditionTotal,overCaffeineDays};
+  return {details:details.join('\n'),dailyRecords:dailyRecords,recordedDays:recordedDays,caffeineRecordedDays:caffeineRecordedDays,sleepRecordedDays:sleepRecordedDays,conditionRecordedDays:conditionRecordedDays,caffeineMissingDays:caffeineMissingDays,caffeineUnknownDays:caffeineMissingDays,caffeineNoRecordDays:caffeineNoRecordDays,totalDays:dates.length,caffeineTotal:caffeineTotal,sleepTotal:sleepTotal,conditionTotal:conditionTotal,overCaffeineDays:overCaffeineDays,sleepRecordCount:summarizeIds(selection.records),sleepSourceRowCount:selection.records.length,sleepHeldDays:sleepHeldDays,sleepHeldRecordCount:sleepHeldRecordCount,sleepEpisodes:sleepEpisodes,sleepUnassignedRecordCount:summarizeIds(selection.unassigned),sleepUnassignedEpisodes:selection.unassigned,sleepInventoryRecordCount:summarizeIds(allSleep),policyVersion:SleepRecordPolicy.version,sleepDateBasis:'actual_wake_date_minus_one',caffeineDateBasis:'actual_intake_calendar_day'};
 }
 function recordNumber_(value) {
   if(value===null||value===undefined||String(value).trim()==='')return null;
@@ -2721,6 +2511,7 @@ function getTeacherData() {
     if (!sleepSheet) throw new Error('sleep 시트를 찾을 수 없습니다');
     const sleepLastRow = sleepSheet.getLastRow();
     const sleep = [];
+    const sleepMetadataIndex=preservedSleepMetadataIndex_();
 
     if (sleepLastRow > 1) {
       const sleepRaw = sleepSheet.getRange(2, 1, sleepLastRow - 1, 19).getValues();
@@ -2756,7 +2547,8 @@ function getTeacherData() {
           return m ? m[1].padStart(2, '0') + ':' + m[2] : String(val);
         }
 
-        sleep.push({
+        sleep.push(Object.assign({
+          id:             String(r[13] || ''),
           학번:           id,
           날짜:           dateStr,
           wakeDate:       wakeDateStr,
@@ -2772,7 +2564,7 @@ function getTeacherData() {
           잠들기:          String(r[16] || ''),   // P열
           각성:           String(r[17] || ''),   // Q열
           낮졸림:          String(r[18] || '')    // R열
-        });
+        },preservedSleepMetadataView_(r,preservedSleepMetadataForRow_(r,sleepMetadataIndex))));
       }
     }
 

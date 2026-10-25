@@ -3,6 +3,7 @@ import { callGas as defaultCallGas } from '../../gas.js';
 import { readJson, sendJson } from '../../http.js';
 import {
   getNextReminderTimes,
+  REMINDER_TIMES,
   normalizeReminderConfig,
   normalizeStoredReminderConfig,
 } from '../../reminder-policy.js';
@@ -47,7 +48,12 @@ export function createReminderConfigHandler({
 
     if (req.method === 'POST') {
       let normalized;
-      try { normalized = normalizeReminderConfig(await readJson(req)); } catch (error) {
+      try {
+        normalized = normalizeReminderConfig(await readJson(req));
+        if (normalized.sleepTime !== REMINDER_TIMES.sleep || normalized.caffeineTime !== REMINDER_TIMES.caffeine) {
+          throw new Error('Invalid reminder config.');
+        }
+      } catch (error) {
         sendReminderError(res, error, Number.isInteger(error?.status) ? error.status : 400);
         return;
       }

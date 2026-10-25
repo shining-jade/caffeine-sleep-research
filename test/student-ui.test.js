@@ -1,3 +1,4 @@
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -6,14 +7,14 @@ import test from 'node:test';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 test('incomplete history cannot replace authoritative dashboard totals', () => {
   let refreshes = 0;
-  const context = vm.createContext({ caffeineHistoryLoaded:false, refreshData(){refreshes++;},
+  const context = vm.createContext({SleepRecordPolicy, caffeineHistoryLoaded:false, refreshData(){refreshes++;},
     updateDashboard(){assert.fail('incomplete totals must not render');} });
   vm.runInContext(extract('syncConfirmedCaffeineStats')+'\nsyncConfirmedCaffeineStats();',context);
   assert.equal(refreshes,1);
 });
 test('confirmed caffeine deletion synchronizes totals and chart while preserving sleep', () => {
   let updated;
-  const context = vm.createContext({ caffeineHistoryLoaded:true, caffeineLogs: [{time:'2026-10-06',amount:0},{time:'2025-10-06',amount:900}],
+  const context = vm.createContext({SleepRecordPolicy, caffeineHistoryLoaded:true, caffeineLogs: [{time:'2026-10-06',amount:0},{time:'2025-10-06',amount:900}],
     lastDashboardData: {chartEndDate:'2026-10-06',todayTotal:150,labels:['10/05','10/06'],sleepData:[7,8]},
     getTodayKST:()=> '2026-10-06',getLogDateKST:x=>x,
     document:{getElementById:()=>({value:'2025-10-06'})},
@@ -33,7 +34,7 @@ function extract(name) {
 
 test('background synchronization preserves the queried day total instead of replacing it with today', () => {
   let updated;
-  const context = vm.createContext({ caffeineHistoryLoaded:true,
+  const context = vm.createContext({SleepRecordPolicy, caffeineHistoryLoaded:true,
     caffeineLogs:[{time:'2026-10-06',amount:150},{time:'2026-10-09',amount:6}],
     lastDashboardData:{chartEndDate:'2026-10-06',todayTotal:150,labels:['10/05','10/06'],sleepData:[7,8]},
     getTodayKST:()=> '2026-10-09', getLogDateKST:x=>x, updateDashboard:x=>updated=x });
@@ -47,7 +48,7 @@ test('background synchronization preserves the queried day total instead of repl
 for (const [endDate, expected] of [['2026-10-06',150],[undefined,6]]) {
   test(`caffeine badge uses ${endDate || 'today before a dashboard query'}`, () => {
     const badge = {};
-    const context = vm.createContext({
+    const context = vm.createContext({SleepRecordPolicy,
       caffeineLogs:[{time:'2026-10-06',amount:150},{time:'2026-10-09',amount:6}],
       lastDashboardData:endDate ? {chartEndDate:endDate} : null, userLimit:150,
       getTodayKST:()=> '2026-10-09', getLogDateKST:x=>x,
@@ -73,7 +74,7 @@ function runCaffeineEdit(amount) {
     withFailureHandler(fn) { failure=fn; return this; },
     updateCaffeineData(payload) { requests.push(JSON.parse(JSON.stringify(payload))); },
   };
-  const context = vm.createContext({
+  const context = vm.createContext({SleepRecordPolicy,
     editingType: 'caffeine', editingId: 'existing-record',
     user: { studentId: '0', name: '테스트' },
     caffeineLogs: [{ id: 'existing-record', amount: 0 }],
@@ -120,7 +121,7 @@ test('unconfirmed sleep edit preserves the previously confirmed record',()=>{
   const fields={editSleepStart:{value:'2026-10-04T22:30'},editSleepEnd:{value:'2026-10-05T07:00'},editMemo:{value:'수정'},editSaveBtn:{disabled:false,innerText:'저장하기'}};
   let failure; const notices=[];
   const runner={withSuccessHandler(){return this;},withFailureHandler(fn){failure=fn;return this;},updateSleepData(){}};
-  const context=vm.createContext({editingType:'sleep',editingId:'sleep-id',user:{studentId:'0',name:'테스트'},sleepLogs:[{...original}],window:{editCondition:'😐',editSleepChoices:{}},document:{getElementById:id=>fields[id]},google:{script:{run:runner}},datePartFromDatetime:v=>v.slice(0,10),timePartFromDatetime:v=>v.slice(11),showInfoModal:(...args)=>notices.push(args)});
+  const context=vm.createContext({SleepRecordPolicy,withSleepHistoryReview:cb=>cb(),editingType:'sleep',editingId:'sleep-id',user:{studentId:'0',name:'테스트'},sleepLogs:[{...original}],window:{editCondition:'😐',editSleepChoices:{}},document:{getElementById:id=>fields[id]},google:{script:{run:runner}},datePartFromDatetime:v=>v.slice(0,10),timePartFromDatetime:v=>v.slice(11),showInfoModal:(...args)=>notices.push(args)});
   vm.runInContext(extract('setEditSavePending')+'\n'+extract('saveEdit')+'\nsaveEdit();',context);
   assert.deepEqual(JSON.parse(JSON.stringify(context.sleepLogs[0])),original);
   failure(new Error('GAS_UNAVAILABLE'));
@@ -131,7 +132,7 @@ test('unconfirmed sleep edit preserves the previously confirmed record',()=>{
 test('pending caffeine guidance does not show an unconfirmed result', () => {
   const notices = [];
   const logs = [{ amount: 50, time: 'today' }];
-  const context = vm.createContext({ caffeineLogs: logs, userLimit: 150,
+  const context = vm.createContext({SleepRecordPolicy, caffeineLogs: logs, userLimit: 150,
     showSaveCompleteModal: message => notices.push(message),
     getTodayKST: () => 'today', getLogDateKST: x => x });
   vm.runInContext(extract('showCaffeineWarning') + "\nshowCaffeineWarning(30, 80, 'pending');", context);
@@ -142,7 +143,7 @@ test('pending caffeine guidance does not show an unconfirmed result', () => {
 test('opening DB search loads the database without a previous cache', () => {
   let loads = 0;
   const panel = { classList: { contains: () => true, toggle() {} } };
-  const context = vm.createContext({
+  const context = vm.createContext({SleepRecordPolicy,
     document: { getElementById: id => id === 'dbSearchPanel' ? panel : null },
     loadCaffeineDbFromGAS: () => loads++,
   });
@@ -164,7 +165,7 @@ test('DB load completion reruns the current query', () => {
     withSuccessHandler(fn) { success = fn; return this; },
     withFailureHandler() { return this; }, getCaffeineDB() {},
   };
-  const context = vm.createContext({
+  const context = vm.createContext({SleepRecordPolicy,
     document: { getElementById: id => elements[id] },
     localStorage: { getItem: () => null, setItem() {} },
     google: { script: { run: runner } }, console,
@@ -184,7 +185,7 @@ test('public DB remains searchable when the live Google request fails', async ()
     withFailureHandler(handler) { fail = handler; return this; }, getCaffeineDB() {},
   };
   const queries = [];
-  const context = vm.createContext({
+  const context = vm.createContext({SleepRecordPolicy,
     document: { getElementById: id => elements[id] },
     localStorage: { getItem: () => null, setItem() {} },
     google: { script: { run: runner } }, console: { error() {} },
@@ -205,7 +206,7 @@ test('session reset clears previous student records, settings and rendered priva
   const container = { innerHTML: 'previous student inquiry', className: 'changed', style: { cssText: 'display:block' } };
   const field = { value: 'previous student weight', checked: true, disabled: false };
   const saveBtn = {disabled:true,innerText:'저장 결과 확인 중...'};
-  const context = vm.createContext({
+  const context = vm.createContext({SleepRecordPolicy,
     window: { _weightLoaded: true, currentAIAnalysis: 'private report' },
     document: { getElementById: id => id === 'myInquiriesContainer' ? container : id === 'editSaveBtn' ? saveBtn : null },
     privateUiDefaults: [{ id: 'myInquiriesContainer', html: '', className: 'initial', style: '' }],
@@ -233,7 +234,7 @@ for (const kind of ['Caffeine', 'Sleep']) {
   test(`${kind} read failure preserves records instead of reporting an empty history`, () => {
     let fail;
     const runner = { withSuccessHandler() { return this; }, withFailureHandler(fn) { fail = fn; return this; }, getCaffeineLogs() {}, getSleepLogs() {} };
-    const context = vm.createContext({ user: { studentId: '0', name: '테스트' }, caffeineLogs: [{ id: 'saved' }], sleepLogs: [{ id: 'saved' }], google: { script: { run: runner } }, renderCaffeineLogs() {}, renderSleepLogs() {}, lastDashboardData: null, showRecordConnectionError() {}, cacheStudentRecords() {}, showCaffeineWarning() {} });
+    const context = vm.createContext({SleepRecordPolicy, user: { studentId: '0', name: '테스트' }, caffeineLogs: [{ id: 'saved' }], sleepLogs: [{ id: 'saved' }], google: { script: { run: runner } }, renderCaffeineLogs() {}, renderSleepLogs() {}, lastDashboardData: null, showRecordConnectionError() {}, cacheStudentRecords() {}, showCaffeineWarning() {} });
     vm.runInContext(extract(`load${kind}Logs`) + `\nload${kind}Logs();`, context);
     fail(new Error('GAS_UNAVAILABLE'));
     assert.equal(context[kind === 'Caffeine' ? 'caffeineLogs' : 'sleepLogs'].length, 1);
@@ -242,7 +243,7 @@ for (const kind of ['Caffeine', 'Sleep']) {
 
 test('automatic refresh waits two minutes and skips hidden pages', () => {
   let callback, period, reads=0;
-  const context=vm.createContext({stopAutoRefresh(){},setInterval(fn,ms){callback=fn;period=ms;return 1;},silentRefresh(){reads++;},document:{hidden:true},autoRefreshInterval:null});
+  const context=vm.createContext({SleepRecordPolicy,stopAutoRefresh(){},setInterval(fn,ms){callback=fn;period=ms;return 1;},silentRefresh(){reads++;},document:{hidden:true},autoRefreshInterval:null});
   vm.runInContext(extract('startAutoRefresh')+'\nstartAutoRefresh();',context);
   assert.equal(period,120000);
   callback(); assert.equal(reads,0);
@@ -254,7 +255,7 @@ test('app version checks never create an update announcement', () => {
 
 test('confirmed deletion removes only the matching record and renders without waiting for a read', () => {
   let rendered=0,cached=0;
-  const context=vm.createContext({caffeineLogs:[{id:'a'},{id:'b'}],sleepLogs:[{id:'a'}],renderCaffeineLogs(){rendered++;},renderSleepLogs(){},cacheStudentRecords(){cached++;},updateCaffeineBadge(){},syncConfirmedCaffeineStats(){}});
+  const context=vm.createContext({SleepRecordPolicy,caffeineLogs:[{id:'a'},{id:'b'}],sleepLogs:[{id:'a'}],renderCaffeineLogs(){rendered++;},renderSleepLogs(){},cacheStudentRecords(){cached++;},updateCaffeineBadge(){},syncConfirmedCaffeineStats(){}});
   vm.runInContext(extract('applyConfirmedDeletion')+"\napplyConfirmedDeletion('caffeine','a');",context);
   assert.equal(context.caffeineLogs.length,1); assert.equal(context.caffeineLogs[0].id,'b'); assert.equal(context.sleepLogs.length,1);
   assert.equal(rendered,1); assert.equal(cached,1);
@@ -268,7 +269,7 @@ test('caffeine save feedback does not wait for a second history request', () => 
 
 test('background polling checks notifications without reloading record histories', () => {
   const calls=[];
-  const context=vm.createContext({user:{studentId:'0'},document:{hidden:false},lastRefreshTime:0,Date,checkReplyBubble(){calls.push('reply');},checkTeacherAwards(){calls.push('badge');},checkMsgBubble(){calls.push('message');}});
+  const context=vm.createContext({SleepRecordPolicy,user:{studentId:'0'},document:{hidden:false},lastRefreshTime:0,Date,checkReplyBubble(){calls.push('reply');},checkTeacherAwards(){calls.push('badge');},checkMsgBubble(){calls.push('message');}});
   vm.runInContext(extract('silentRefresh')+'\nsilentRefresh();',context);
   assert.deepEqual(calls,['reply','badge','message']);
 });
@@ -285,14 +286,14 @@ test('consecutive confirmed caffeine saves include both amounts before history r
   const end=submit.indexOf('\n        .withFailureHandler',start);
   const callback=submit.slice(start,end).trim().slice(0,-1);
   const totals=[];
-  const context=vm.createContext({zeroEntry:false,btn:null,pendingCaffeineSave:null,applyConfirmedCaffeineSave:()=>false,renderCaffeineLogs(){},document:{getElementById:()=>({value:'',classList:{add(){}}}),querySelectorAll:()=>[]},selectedDrink:null,time:'today',amount:30,caffeineLogs:[{time:'today',amount:50}],confirmedPendingCaffeine:[],getLogDateKST:x=>x,getTodayKST:()=> 'today',showCaffeineWarning:(_amount,total)=>totals.push(total),loadCaffeineLogs(){},refreshData(){},showSaveCompleteModal(){}});
+  const context=vm.createContext({SleepRecordPolicy,zeroEntry:false,btn:null,pendingCaffeineSave:null,applyConfirmedCaffeineSave:()=>false,renderCaffeineLogs(){},document:{getElementById:()=>({value:'',classList:{add(){}}}),querySelectorAll:()=>[]},selectedDrink:null,time:'today',amount:30,caffeineLogs:[{time:'today',amount:50}],confirmedPendingCaffeine:[],getLogDateKST:x=>x,getTodayKST:()=> 'today',showCaffeineWarning:(_amount,total)=>totals.push(total),loadCaffeineLogs(){},refreshData(){},showSaveCompleteModal(){}});
   vm.runInContext('const saved='+callback+';saved({success:true});saved({success:true});',context);
   assert.deepEqual(totals,[80,110]);
 });
 
 test('confirmed save renders the trusted record immediately without needing a history request', () => {
   let rendered=0,cached=0;
-  const context=vm.createContext({caffeineLogs:[],cacheStudentRecords(){cached++;},renderCaffeineLogs(){rendered++;},syncConfirmedCaffeineStats(){}});
+  const context=vm.createContext({SleepRecordPolicy,caffeineLogs:[],cacheStudentRecords(){cached++;},renderCaffeineLogs(){rendered++;},syncConfirmedCaffeineStats(){}});
   vm.runInContext(extract('applyConfirmedCaffeineSave'),context);
   assert.equal(context.applyConfirmedCaffeineSave({record:{id:'server-id',name:'커피',amount:40,time:'2026-10-06T13:00'}}),true);
   assert.equal(context.caffeineLogs[0].id,'server-id');assert.equal(rendered,1);assert.equal(cached,1);
@@ -300,14 +301,14 @@ test('confirmed save renders the trusted record immediately without needing a hi
 });
 
 test('caffeine badge updates independently of save warning state',()=>{
- const badge={};const context=vm.createContext({document:{getElementById:()=>badge},lastDashboardData:null,caffeineLogs:[{time:'today',amount:160}],getTodayKST:()=> 'today',getLogDateKST:x=>x,userLimit:150});
+ const badge={};const context=vm.createContext({SleepRecordPolicy,document:{getElementById:()=>badge},lastDashboardData:null,caffeineLogs:[{time:'today',amount:160}],getTodayKST:()=> 'today',getLogDateKST:x=>x,userLimit:150});
  vm.runInContext(extract('updateCaffeineBadge')+'\nupdateCaffeineBadge();',context);assert.match(badge.innerText,/160mg/);
 });
 
 test('expired DB cache remains searchable offline without a network request', () => {
   const elements = {dbTotalCount:{},dbSearchInput:{value:'메가'}};
   const queries=[];
-  const context=vm.createContext({document:{getElementById:id=>elements[id]},navigator:{onLine:false},
+  const context=vm.createContext({SleepRecordPolicy,document:{getElementById:id=>elements[id]},navigator:{onLine:false},
     localStorage:{getItem:key=>key==='caffeine_db_cache'?JSON.stringify([{f:'아메리카노',c:'메가커피',mg:100}]):'1'},
     google:{script:{run:{withSuccessHandler(){assert.fail('offline must use saved DB');}}}},console,
     CAFFEINE_DB:[],caffeineDbLoading:false,searchCaffeineDb:q=>queries.push(q)});
@@ -318,7 +319,7 @@ test('expired DB cache remains searchable offline without a network request', ()
 
 test('DB selection retains company and original food name separately from display label', () => {
   let selected;
-  const context=vm.createContext({_dbSearchSelected:{f:'커피_아메리카노',c:'메가커피',s:'100ml',mg:30,_displayName:'아메리카노'},
+  const context=vm.createContext({SleepRecordPolicy,_dbSearchSelected:{f:'커피_아메리카노',c:'메가커피',s:'100ml',mg:30,_displayName:'아메리카노'},
     document:{getElementById:id=>id==='dbVolumeInput'?{value:'300'}:null},
     setDrink:(...args)=>selected=args,cancelDbVolume(){},clearDbSearch(){}});
   vm.runInContext(extract('applyDbDrink')+'\napplyDbDrink();',context);
@@ -329,7 +330,7 @@ test('DB selection retains company and original food name separately from displa
 
 test('resume notifications skip offline and duplicate lifecycle events', () => {
   let reads=0, now=30000;
-  const context=vm.createContext({user:{studentId:'0'},document:{hidden:false},navigator:{onLine:false},lastRefreshTime:0,Date:{now:()=>now},silentRefresh(){reads++;context.lastRefreshTime=now;}});
+  const context=vm.createContext({SleepRecordPolicy,user:{studentId:'0'},document:{hidden:false},navigator:{onLine:false},lastRefreshTime:0,Date:{now:()=>now},silentRefresh(){reads++;context.lastRefreshTime=now;}});
   vm.runInContext(extract('refreshNotificationsOnResume'),context);
   vm.runInContext('refreshNotificationsOnResume();',context); assert.equal(reads,0);
   context.navigator.onLine=true;

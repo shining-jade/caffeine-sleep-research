@@ -1,3 +1,4 @@
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -24,7 +25,7 @@ function form(html,name,action,indent='    '){
   const replyBtn={disabled:false,textContent:'응답 제출'},messageBtn={disabled:false,textContent:'전송'};
   let success,failure;const requests=[],notices=[];
   const runner={withSuccessHandler(fn){success=fn;return this;},withFailureHandler(fn){failure=fn;return this;},[action](...args){requests.push(args);}};
-  const context=vm.createContext({user:{studentId:'0',name:'테스트'},window:{},
+  const context=vm.createContext({SleepRecordPolicy,window:{},window:{},user:{studentId:'0',name:'테스트'},window:{},
     document:{getElementById:id=>fields[id]||null,querySelector:s=>s.includes('replyModal')?replyBtn:messageBtn},
     google:{script:{run:runner}},alert:m=>notices.push(m),showInfoModal:(...x)=>notices.push(x),showSaveCompleteModal:(...x)=>notices.push(x),showTeacherModal:(...x)=>notices.push(x),
     loadMyInquiries(){},loadTeacherMessages(){},loadInquiries(){},loadSentMessages(){},
@@ -75,25 +76,25 @@ test('student delete refusal never removes confirmed records',()=>{
   for(const type of ['caffeine','sleep']){
     let success,applied=0;const notices=[];
     const runner={withSuccessHandler(fn){success=fn;return this;},withFailureHandler(){return this;},deleteCaffeineData(){},deleteSleepData(){}};
-    const context=vm.createContext({google:{script:{run:runner}},applyConfirmedDeletion(){applied++;},showSaveCompleteModal:m=>notices.push(m),showInfoModal:(...x)=>notices.push(x),refreshData(){}});
+    const context=vm.createContext({SleepRecordPolicy,window:{},google:{script:{run:runner}},applyConfirmedDeletion(){applied++;},showSaveCompleteModal:m=>notices.push(m),showInfoModal:(...x)=>notices.push(x),refreshData(){}});
     vm.runInContext(extract(student,'deleteLog'),context);context.deleteLog(type,'saved');
     success({success:false});assert.equal(applied,0);success({success:true});assert.equal(applied,1);
   }
 });
 test('canceling student deletion clears pending action and does not send a delete',()=>{
   const modal={style:{display:'flex'}};let writes=0;
-  const context=vm.createContext({document:{getElementById:()=>modal},pendingDelete:{type:'caffeine',id:'saved'},deleteLog(){writes++;}});
+  const context=vm.createContext({SleepRecordPolicy,window:{},document:{getElementById:()=>modal},pendingDelete:{type:'caffeine',id:'saved'},deleteLog(){writes++;}});
   vm.runInContext(extract(student,'closeDeleteConfirm')+'\n'+extract(student,'confirmDelete'),context);
   context.closeDeleteConfirm();context.confirmDelete();assert.equal(writes,0);assert.equal(context.pendingDelete.id,null);
 });
 test('canceling teacher inquiry deletion does not call the API',()=>{
-  const context=vm.createContext({confirm:()=>false,google:{script:{run:{get withSuccessHandler(){assert.fail('cancelled delete');}}}}});
+  const context=vm.createContext({SleepRecordPolicy,window:{},confirm:()=>false,google:{script:{run:{get withSuccessHandler(){assert.fail('cancelled delete');}}}}});
   vm.runInContext(extract(teacher,'confirmDeleteInquiry',''),context);context.confirmDeleteInquiry(2,'test');
 });
 test('canceling teacher single and bulk message deletion does not call the API',()=>{
   for(const name of ['confirmDeleteSentMsg','confirmBulkDeleteSentMsg']){
     let confirms=0;
-    const context=vm.createContext({window:{_sentMsgSelected:new Set([2]),_sentMsgTargets:new Map([[2,{rowIndex:2,messageKey:'a'.repeat(64)}]])},escapeHtml:x=>x,showTeacherModal(_e,_t,_m,type){assert.equal(type,'confirm');confirms++;},
+    const context=vm.createContext({SleepRecordPolicy,window:{},window:{_sentMsgSelected:new Set([2]),_sentMsgTargets:new Map([[2,{rowIndex:2,messageKey:'a'.repeat(64)}]])},escapeHtml:x=>x,showTeacherModal(_e,_t,_m,type){assert.equal(type,'confirm');confirms++;},
       google:{script:{run:{get withSuccessHandler(){assert.fail('cancelled delete');}}}}});
     vm.runInContext(extract(teacher,name,''),context);context[name](2,'test');assert.equal(confirms,1);
   }
@@ -144,7 +145,7 @@ test('student and teacher API routes return 400 for invalid messages without cal
 test('caffeine required name, amount, reason and symptom failures do not submit',()=>{
   for(const [name,amount,reasons,symptoms] of [['','0',[],[]],['음료','',[],[]],['음료','-1',[],[]],['음료','10',[],[]],['음료','10',[{value:'피로'}],[]]]){
     const fields={drinkName:{value:name},customAmount:{value:amount},caffeineTime:{value:'2026-10-09T06:00'},caffeineReasonEtc:{value:''}};let notices=0;
-    const context=vm.createContext({document:{getElementById:id=>fields[id]||null,querySelectorAll:query=>query.includes('Reason')?reasons:symptoms},
+    const context=vm.createContext({SleepRecordPolicy,window:{},document:{getElementById:id=>fields[id]||null,querySelectorAll:query=>query.includes('Reason')?reasons:symptoms},
       showInfoModal(){notices++;},google:{script:{run:{get withSuccessHandler(){assert.fail('invalid caffeine submitted');}}}}});
     vm.runInContext(extract(student,'submitCaffeine'),context);context.submitCaffeine();assert.equal(notices,1);
   }
@@ -153,7 +154,7 @@ test('caffeine required name, amount, reason and symptom failures do not submit'
 test('sleep missing choices and reversed date-time fail before any write',()=>{
   for(const [start,end,choices] of [['','',''],['2026-10-09T23:00','2026-10-09T07:00','all'],['2026-10-09T23:00','2026-10-10T07:00','']]){
     const fields={sleepStart:{value:start},sleepEnd:{value:end},sleepMemo:{value:''},sleepDate:{}};let notices=0;
-    const context=vm.createContext({user:{studentId:'0',name:'테스트'},selectedCondition:{emoji:'😐'},sleepChoices:choices?{smartphone:'안 함',activity:'안 함',latency:'15분 이내',awakenings:'없음',daytime:'없음'}:{},
+    const context=vm.createContext({SleepRecordPolicy,window:{},user:{studentId:'0',name:'테스트'},selectedCondition:{emoji:'😐'},sleepChoices:choices?{smartphone:'안 함',activity:'안 함',latency:'15분 이내',awakenings:'없음',daytime:'없음'}:{},
       document:{getElementById:id=>fields[id]||null},console:{log(){}},datePartFromDatetime:v=>v.slice(0,10),showInfoModal(){notices++;},
       proceedSaveSleep(){assert.fail('invalid sleep submitted');}});
     vm.runInContext(extract(student,'getMissingSleepFields')+'\n'+extract(student,'submitSleep'),context);context.submitSleep();assert.equal(notices,1);
@@ -163,7 +164,7 @@ test('sleep missing choices and reversed date-time fail before any write',()=>{
 test('pending message and reply forms cannot be closed or replaced before acknowledgment',()=>{
   for(const [html,name,indent] of [[student,'closeStudentReplyModal','    '],[student,'openReplyModal','    '],[teacher,'closeReplyModal',''],[teacher,'openReplyModal',''],[teacher,'closeMsgSendModal',''],[teacher,'openMsgSendModal','']]){
     const btn={disabled:true};
-    const context=vm.createContext({document:{getElementById:id=>id==='studentReplySendBtn'?btn:null,querySelector:()=>btn}});
+    const context=vm.createContext({SleepRecordPolicy,window:{},document:{getElementById:id=>id==='studentReplySendBtn'?btn:null,querySelector:()=>btn}});
     vm.runInContext(extract(html,name,indent),context);context[name](2,'title','content');
   }
 });
@@ -190,7 +191,7 @@ test('popup acknowledgment rejection refreshes the inquiry list and alerts once 
   const overlay={style:{},querySelectorAll:()=>[],remove(){}};let reads=0;const notices=[],callbacks=[];
   const runner={withSuccessHandler(fn){this.success=fn;return this;},withFailureHandler(fn){this.failure=fn;return this;},
     markInquiryNotified(row,key){assert.equal(key,'a'.repeat(64));callbacks.push({success:this.success,failure:this.failure});}};
-  const context=vm.createContext({document:{getElementById:id=>fields[id]||null,createElement:()=>overlay,body:{appendChild(){}}},
+  const context=vm.createContext({SleepRecordPolicy,window:{},document:{getElementById:id=>fields[id]||null,createElement:()=>overlay,body:{appendChild(){}}},
     google:{script:{run:runner}},escapeHtml:x=>x,formatTimestamp:x=>x,loadInquiries(){reads++;},showTeacherModal:(...x)=>notices.push(x)});
   vm.runInContext(extract(teacher,'showInquiryPopup',''),context);
   context.showInquiryPopup([{rowIndex:2,inquiryKey:'a'.repeat(64)},{rowIndex:3,inquiryKey:'a'.repeat(64)}]);fields.inquiryPopupClose.onclick();

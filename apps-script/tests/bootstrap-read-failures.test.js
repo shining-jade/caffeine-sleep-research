@@ -12,7 +12,7 @@ function fixture() {
 
 async function setup(sheet, globals = {}) {
   const loaded = await loadAppsScript({
-    files: ['Code.gs', 'Security.gs', 'Ownership.gs', 'Api.gs'],
+    files: ['Code.gs', 'Security.gs', 'Ownership.gs', 'Sync.gs', 'Api.gs'],
     properties: { GAS_SHARED_SECRET: 'synthetic-secret' },
     globals: { getSpreadsheet_: () => sheet, syncProfileState_: () => ({ version: 'test-version' }), ...globals },
   });

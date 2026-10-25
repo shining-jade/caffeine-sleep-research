@@ -1,0 +1,19 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import {webcrypto} from 'node:crypto';
+function client(){
+ const snapshots=new Map(), rows=new Map(), c=vm.createContext({window:{},crypto:webcrypto,TextEncoder,Date,JSON,setTimeout:()=>0,clearTimeout(){}});
+ vm.runInContext(fs.readFileSync('public/js/sleep-record-policy.js','utf8'),c);c.window.SleepRecordPolicy=c.SleepRecordPolicy;
+ vm.runInContext(fs.readFileSync('public/js/student-sync.js','utf8'),c);
+ const store={put:async r=>rows.set(r.mutationId,structuredClone(r)),list:async owner=>[...rows.values()].filter(r=>r.owner===owner),lease:async()=>true,release:async()=>{},snapshot:async(k,v)=>{if(v!==undefined)snapshots.set(k,structuredClone(v));return snapshots.get(k);}};
+ const sync=c.window.StudentSync.create({store,online:()=>false,send:async()=>{throw Error('offline')}});sync.setSubject({studentId:'9901',name:'합성'});
+ return {sync,stats:async(end='2026-10-19')=>{const args=['9901',end];await sync.capture('getFilteredStats',{todayTotal:999},args);return sync.read('getFilteredStats',undefined,args);}};
+}
+const episode=(id,extra={})=>({id,date:'2026-10-19',start:'02:30',wakeDate:'2026-10-19',end:'06:30',hours:99,...extra});
+test('offline actual intervals preserve two same-bed-date sleeps on wake-minus-one days',async()=>{const x=client();await x.sync.capture('getSleepLogs',[episode('a'),episode('b',{start:'23:30',wakeDate:'2026-10-20'})]);const s=await x.stats();assert.equal(s.sleepData.at(-2),4);assert.equal(s.sleepData.at(-1),7);assert.equal(s.sleepEpisodes.length,2);assert.equal(s.sleepPolicyVersion,'2026-10-21-episode-preservation-v2');});
+test('offline 05:00 afternoon waking is usable; missing wake date stays unassigned',async()=>{const x=client();await x.sync.capture('getSleepLogs',[episode('a',{start:'05:00',end:'15:00'}),episode('unknown',{wakeDate:''})]);const s=await x.stats();assert.equal(s.sleepData.at(-2),10);assert.equal(s.sleepUnassignedRecordCount,1);});
+test('offline same-wake nonoverlap and historic overlap retain all IDs and hold daily scalar',async()=>{for(const extra of [{start:'14:00',end:'15:00'},{date:'2026-10-18',start:'23:30'}]){const x=client();await x.sync.capture('getSleepLogs',[episode('a'),episode('b',extra)]);const s=await x.stats();assert.equal(s.sleepData.at(-2),null);assert.equal(s.sleepDayStatuses.at(-2),'held');assert.equal(s.sleepEpisodeCounts.at(-2),2);assert.equal(s.sleepEpisodes.every(r=>r.analysisHoldReason=== (extra.start==='14:00'?'multiple_episodes':'overlap')),true);assert.equal(s.sleepEpisodes.length,2);}});
+test('offline caffeine distinguishes unknown, explicit zero, missing; window reads before period filter',async()=>{const x=client();await x.sync.capture('getSleepLogs',[episode('a')]);await x.sync.capture('getCaffeineLogs',[{id:'u',time:'2026-10-19T03:00',amount:''},{id:'z',time:'2026-10-17T12:00',amount:0},{id:'p',time:'2026-10-18T22:00',amount:40}]);const s=await x.stats();assert.equal(s.todayTotal,null);assert.equal(s.todayHasRecord,true);assert.equal(s.caffeineStatuses.at(-1),'unknown');assert.equal(s.caffeineData.at(-3),0);assert.equal(s.caffeineStatuses[0],'missing');assert.equal(s.sleepEpisodes[0].exposure24h.total,40);});
+test('offline first comparison day retains prior-day caffeine and final D+1 wake',async()=>{const x=client();await x.sync.capture('getSleepLogs',[episode('first',{date:'2026-10-13',wakeDate:'2026-10-13'}),episode('last',{start:'23:30',wakeDate:'2026-10-20'})]);await x.sync.capture('getCaffeineLogs',[{time:'2026-10-12T22:00',amount:30}]);const s=await x.stats();assert.equal(s.sleepEpisodes.length,1);assert.equal(s.sleepData.at(-1),7);const first=await x.stats('2026-10-18');assert.equal(first.sleepData[0],4);assert.equal(first.sleepEpisodes[0].exposure24h.total,30);});

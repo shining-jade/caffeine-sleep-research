@@ -1,3 +1,4 @@
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -26,7 +27,7 @@ function setup() {
       append(...children) { this.children.push(...children); } };
   }
   const document = { createElement: element, body: { appendChild(el) { appended.push(el); } } };
-  const context = vm.createContext({ window: {} });
+  const context = vm.createContext({SleepRecordPolicy,sleepLogs:[], window: {} });
   vm.runInContext(source, context);
   assert.equal(typeof context.window.StudentFeedback.createSaveToast, 'function');
   const toast = context.window.StudentFeedback.createSaveToast({ document,
@@ -66,7 +67,7 @@ test('consecutive saves reuse one toast and an old timer cannot hide the latest 
 
 test('generic save acknowledgements use the toast', () => {
   const notices = [];
-  const context = vm.createContext({ window: { StudentFeedback: { showSaved: x => notices.push(x) } } });
+  const context = vm.createContext({SleepRecordPolicy,sleepLogs:[], window: { StudentFeedback: { showSaved: x => notices.push(x) } } });
   vm.runInContext(extract('showSaveCompleteModal'), context);
   context.showSaveCompleteModal('설정이 저장됐어요');
   assert.equal(notices[0], '설정이 저장됐어요');
@@ -74,19 +75,19 @@ test('generic save acknowledgements use the toast', () => {
 
 test('sleep status remains a popup for both recommended and excessive duration', () => {
   const popups = [], notices = [];
-  const context = vm.createContext({ SLEEP_CFG: {}, setTimeout() {},
+  const context = vm.createContext({SleepRecordPolicy,sleepLogs:[], SLEEP_CFG: {}, setTimeout() {},
     document: { createElement: () => ({}), body: { appendChild: el => popups.push(el) } },
     window: { StudentFeedback: { showSaved: x => notices.push(x) } },
   });
-  vm.runInContext(extract('showSaveCompleteModal') + '\n' + extract('showSleepCompleteModal'), context);
+  vm.runInContext(fs.readFileSync('public/js/sleep-comparison-chart.js','utf8'),context);vm.runInContext(extract('showSaveCompleteModal') + '\n' + extract('showSleepCompleteModal'), context);
   context.showSleepCompleteModal('8.0', false, false);
   context.showSleepCompleteModal('12.0', true, true);
   assert.equal(popups.length, 2);
   assert.match(popups[0].innerHTML, /권장 범위/);
-  assert.match(popups[0].innerHTML, /8시간/);
+  assert.match(popups[0].innerHTML, /8\.0시간/);
   assert.doesNotMatch(popups[0].innerHTML, /전송 대기/);
   assert.match(popups[1].innerHTML, /권장보다 김/);
-  assert.match(popups[1].innerHTML, /12시간/);
+  assert.match(popups[1].innerHTML, /12\.0시간/);
   assert.match(popups[1].innerHTML, /전송 대기/);
   assert.equal(notices.length, 0);
 });
@@ -94,7 +95,7 @@ test('sleep status remains a popup for both recommended and excessive duration',
 test('caffeine saving does not announce success until confirmed and distinguishes device storage', () => {
   const notices = [];
   const fields = caffeinePopupFields();
-  const context = vm.createContext({ window: {}, caffeineLogs: [], userLimit: 150, user: { name: '테스트' },
+  const context = vm.createContext({SleepRecordPolicy,sleepLogs:[], window: {}, caffeineLogs: [], userLimit: 150, user: { name: '테스트' },
     document: { getElementById: id => fields[id] }, setTimeout() {},
     getTodayKST: () => '2026-10-11', getLogDateKST: x => x.slice(0, 10),
     showSaveCompleteModal: x => notices.push(x) });
@@ -115,7 +116,7 @@ test('caffeine saving does not announce success until confirmed and distinguishe
 for (const [total, stage] of [[0, '1단계'], [84, '2단계'], [150, '3단계'], [180, '4단계'], [300, '5단계']]) {
   test(`confirmed caffeine ${total}mg preserves the ${stage} status popup`, () => {
     const fields = caffeinePopupFields();
-    const context = vm.createContext({ caffeineLogs: [], userLimit: 150, user: { name: '테스트' },
+    const context = vm.createContext({SleepRecordPolicy,sleepLogs:[], caffeineLogs: [], userLimit: 150, user: { name: '테스트' },
       getTodayKST: () => '2026-10-11', getLogDateKST: x => x.slice(0, 10),
       document: { getElementById: id => fields[id] }, setTimeout() {}, showSaveCompleteModal() {} });
     vm.runInContext(extract('showCaffeineWarning'), context);
@@ -126,7 +127,7 @@ for (const [total, stage] of [[0, '1단계'], [84, '2단계'], [150, '3단계'],
 }
 
 for (const kind of ['caffeine', 'sleep']) {
-  test(`${kind} edit acknowledges device-only changes without claiming server storage`, () => {
+  test(`${kind} edit acknowledges device-only changes without claiming server storage`, async () => {
     let onSuccess;
     const notices = [], failures = [];
     let closed = false;
@@ -139,7 +140,7 @@ for (const kind of ['caffeine', 'sleep']) {
     };
     const runner = { withSuccessHandler(fn) { onSuccess = fn; return this; },
       withFailureHandler() { return this; }, updateCaffeineData() {}, updateSleepData() {} };
-    const context = vm.createContext({ editingType: kind, editingId: 'local_test',
+    const context = vm.createContext({SleepRecordPolicy,withSleepHistoryReview:cb=>cb(),mergeSleepHistoryAfterSave:async()=>{},sleepLogs:[{id:'local_test'}], editingType: kind, editingId: 'local_test',
       user: { studentId: 'test', name: '테스트' },
       window: { editCondition: '😐', StudentFeedback: { showSaved: x => notices.push(x) } },
       document: { getElementById: id => fields[id], querySelectorAll: () => [],
@@ -152,9 +153,9 @@ for (const kind of ['caffeine', 'sleep']) {
       showInfoModal: (...args) => failures.push(args),
       closeEditModal() { closed = true; }, refreshData() {}, loadCaffeineLogs() {}, loadSleepLogs() {},
     });
-    vm.runInContext(['setEditSavePending', 'saveEdit', 'showSleepCompleteModal', 'showSaveCompleteModal', 'showCaffeineWarning'].map(extract).join('\n'), context);
+    vm.runInContext(fs.readFileSync('public/js/sleep-comparison-chart.js','utf8'),context);vm.runInContext(['setEditSavePending', 'saveEdit', 'showSleepCompleteModal', 'showSaveCompleteModal', 'showCaffeineWarning'].map(extract).join('\n'), context);
     context.saveEdit();
-    onSuccess({ success: true, localSaved: true });
+    await onSuccess({ success: true, localSaved: true });
     if (kind === 'caffeine') {
       assert.match(fields.warningInfo.innerText, /전송 대기/);
       assert.match(fields.warningInfo.innerText, /80mg/, 'edited amount replaces the old amount in today total');
@@ -164,7 +165,7 @@ for (const kind of ['caffeine', 'sleep']) {
     assert.equal(fields.editSaveBtn.disabled, false);
     notices.length = 0; closed = false;
     context.saveEdit();
-    onSuccess({ success: false });
+    await onSuccess({ success: false });
     assert.equal(notices.length, 0);
     assert.equal(closed, false);
     assert.match(failures[0][0], /확인 필요/);
@@ -175,7 +176,7 @@ for (const copied of [true, false]) {
   test(`clipboard fallback reports ${copied ? 'success' : 'persistent failure'} according to the real copy result`, async () => {
     const notices = [], failures = [];
     let removed = false;
-    const context = vm.createContext({ user: { name: '테스트' }, window: { currentAIAnalysis: '합성 분석' },
+    const context = vm.createContext({SleepRecordPolicy,sleepLogs:[], user: { name: '테스트' }, window: { currentAIAnalysis: '합성 분석' },
       navigator: { clipboard: { writeText: async () => { throw new Error('unavailable'); } } },
       document: { createElement: () => ({ select() {} }), execCommand: () => copied,
         body: { appendChild() {}, removeChild() { removed = true; } } },
@@ -195,7 +196,7 @@ test('new caffeine saving preserves the draft when no successful acknowledgment 
     const fields = { drinkName: { value: '합성 커피' }, customAmount: { value: '30' }, caffeineTime: { value: '2026-10-10T12:00' },
       caffeineReasonEtc: { value: '', classList: { add() {} } }, saveCaffeineBtn: { disabled: false } };
     const runner = { withSuccessHandler(fn) { acknowledge = fn; return this; }, withFailureHandler() { return this; }, saveCaffeineData() {} };
-    const context = vm.createContext({ user: { studentId: 'test', name: '테스트' }, selectedDrink: {}, pendingCaffeineSave: null,
+    const context = vm.createContext({SleepRecordPolicy,sleepLogs:[], user: { studentId: 'test', name: '테스트' }, selectedDrink: {}, pendingCaffeineSave: null,
       caffeineLogs: [], confirmedPendingCaffeine: [], getTodayKST: () => '2026-10-11', getLogDateKST: x => x.slice(0, 10),
       document: { getElementById: id => fields[id], querySelectorAll: () => [{ value: '없음' }] },
       google: { script: { run: runner } }, renderCaffeineLogs() {}, applyConfirmedCaffeineSave: () => false,

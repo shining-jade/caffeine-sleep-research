@@ -72,7 +72,7 @@ test('teacher page is gated by server-side authentication before dashboard start
   assert.match(auth, /startTeacherApp/);
   assert.match(auth, /location\.replace\('\/teacher'\)/);
   assert.match(html, /id="tab-reminders"/);
-  assert.match(html, /선택한 시간대 안에서 발송될 수 있습니다/);
+  assert.match(html, /예약된 시간대 안에서 발송될 수 있습니다/);
   assert.match(html, /어젯밤 수면 기록을 간단히 남겨보세요\./);
   assert.match(html, /오늘의 카페인 기록을 확인해 주세요\. 마시지 않았다면 ‘섭취 안 함’을 선택하면 돼요\./);
   assert.match(html, /테스트 학생 알림 확인/);

@@ -1,3 +1,5 @@
+import {installHistoryView} from './support/history-view.js';
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,17 +8,17 @@ const html=fs.readFileSync(new URL('../index.html',import.meta.url),'utf8');
 function extract(name){const start=html.indexOf(`    function ${name}(`);return start<0?'':html.slice(start,html.indexOf('\n    }',start)+6);}
 function element(){
  const classes=new Set(),selectors=new Map();let markup='';
- return {children:[],style:{},className:'',textContent:'',value:'',disabled:false,scrolls:0,
+ return {children:[],dataset:{},style:{},className:'',textContent:'',value:'',disabled:false,scrolls:0,
  classList:{add:x=>classes.add(x),remove:x=>classes.delete(x),contains:x=>classes.has(x)},
  get innerHTML(){return markup;},set innerHTML(v){markup=v;this.children=[];},
- appendChild(child){this.children.push(child);},setAttribute(){},scrollIntoView(){this.scrolls++;},
+ appendChild(child){this.children.push(child);},addEventListener(){},setAttribute(){},scrollIntoView(){this.scrolls++;},
  querySelector(selector){if(!selectors.has(selector))selectors.set(selector,element());return selectors.get(selector);}};
 }
 function setup({caffeine=[],sleep=[],active=true}={}){
  const elements=Object.fromEntries(['calendarTitle','calendarGrid','calendarDetailPanel','calendarDetailDate','calendarDetailContent','tab-calendar','caffeineLogsContainer','sleepLogsContainer'].map(id=>[id,element()]));
  if(active)elements['tab-calendar'].classList.add('active');elements.calendarDetailPanel.classList.add('hidden');
  const clicked=[];
- const c=vm.createContext({window:{},Date,calendarYear:2026,calendarMonth:9,caffeineLogs:caffeine,sleepLogs:sleep,teacherAwards:[],pendingCaffeineSave:null,caffeineHistoryLoaded:true,
+ const c=vm.createContext({SleepRecordPolicy,window:{},Date,calendarYear:2026,calendarMonth:9,caffeineLogs:caffeine,sleepLogs:sleep,teacherAwards:[],pendingCaffeineSave:null,caffeineHistoryLoaded:true,
  user:{studentId:'fictional',name:'가상'},lastDashboardData:null,
  document:{getElementById:id=>elements[id]||null,createElement:()=>element(),querySelectorAll:()=>[]},
  getTodayKST:()=> '2026-10-09',getLogDateKST:v=>String(v).slice(0,10),
@@ -25,7 +27,7 @@ function setup({caffeine=[],sleep=[],active=true}={}){
  openEditModal:(...args)=>clicked.push(args),showDeleteConfirm:(...args)=>clicked.push(args),
  cacheStudentRecords(){},updateCaffeineBadge(){},syncConfirmedCaffeineStats(){}
  });
- vm.runInContext(['sleepLogEndKey','compareSleepLogsByEndDesc','initCalendarDate','calendarPrevMonth','calendarNextMonth','getSleepLogForDate','getCaffeineLogsForDate','renderCalendar','showCalendarDetail','refreshCalendarIfVisible','renderCaffeineLogs','renderSleepLogs','applyConfirmedDeletion'].map(extract).join('\n'),c);
+ installHistoryView(c);vm.runInContext(['sleepLogEndKey','compareSleepLogsByEndDesc','initCalendarDate','calendarPrevMonth','calendarNextMonth','getSleepLogForDate','getCaffeineLogsForDate','renderCalendar','showCalendarDetail','refreshCalendarIfVisible','renderCaffeineLogs','renderSleepLogs','applyConfirmedDeletion'].map(extract).join('\n'),c);
  return {c,elements,clicked};
 }
 const sleepRecord={id:'sleep-a',date:'2026-10-08',wakeDate:'2026-10-09',start:'23:00',end:'07:00',hours:8,condition:'😐'};
@@ -39,7 +41,7 @@ test('record buttons pass quoted names and IDs literally without inline script',
 test('sleep memo and condition remain literal in both history and calendar',()=>{
  const log={...sleepRecord,memo:'<b>메모</b>',condition:'<img src=x onerror=bad()>'};const x=setup({sleep:[log]});
  x.c.renderSleepLogs();assert.doesNotMatch(x.elements.sleepLogsContainer.children[0].innerHTML,/<b>|<img/);
- x.c.showCalendarDetail(log.date,log,[]);assert.doesNotMatch(x.elements.calendarDetailContent.innerHTML,/<b>|<img/);assert.match(x.elements.calendarDetailContent.innerHTML,/&lt;b&gt;메모/);
+ x.c.showCalendarDetail(log.wakeDate,log,[]);assert.doesNotMatch(x.elements.calendarDetailContent.innerHTML,/<b>|<img/);assert.match(x.elements.calendarDetailContent.innerHTML,/&lt;b&gt;메모/);
 });
 
 test('sleep history escapes timing descriptions derived from malformed date fields',()=>{
@@ -48,16 +50,16 @@ test('sleep history escapes timing descriptions derived from malformed date fiel
  vm.runInContext(['shortDate','getSleepLifeDate','getSleepTimingInfo'].map(extract).join('\n'),x.c);
  x.c.renderSleepLogs();const markup=x.elements.sleepLogsContainer.children[0].innerHTML;
  assert.doesNotMatch(markup,/<svg|<img/);
- assert.match(markup,/&lt;img src=x onerror=bad\(\)&gt; 기상/);
- assert.match(markup,/그래프에는 &lt;svg onload=bad\(\)&gt; 수면/);
+ assert.match(markup,/&lt;img src=x onerror=bad\(\)&gt;/);
+ assert.match(markup,/날짜·시간 확인 필요/);
 });
 test('calendar sums numeric strings as amounts rather than concatenating',()=>{
  const x=setup();x.c.showCalendarDetail('2026-10-08',null,[{amount:'50',name:'a'},{amount:'100',name:'b'}]);
  assert.match(x.elements.calendarDetailContent.innerHTML,/총 150mg/);
 });
-test('calendar selects latest waking sleep record for the same date',()=>{
+test('calendar retains same-wake multiples as a count without choosing a representative',()=>{
  const x=setup({sleep:[{...sleepRecord,id:'old',end:'06:00',hours:7},sleepRecord]});
- assert.equal(x.c.getSleepLogForDate('2026-10-08').id,'sleep-a');
+ assert.equal(x.c.getSleepLogForDate(sleepRecord.wakeDate).recordCount,2);assert.equal(x.c.getSleepLogForDate(sleepRecord.wakeDate).hours,null);
 });
 test('visible calendar detail updates when caffeine history is refreshed',()=>{
  const old={id:'record-a',name:'가상',amount:50,time:'2026-10-08T12:00'};const x=setup({caffeine:[old]});
@@ -91,7 +93,8 @@ test('edit form retains quoted drink names and literal memo text',()=>{
  const x=setup({caffeine:[{id:'record-a',name:'가상 "커피" <b>한 잔</b>',amount:50,time:'2026-10-08T12:00'}],sleep:[{...sleepRecord,memo:'</textarea><b>메모</b>'}]});
  for(const id of ['editModalOverlay','editModalTitle','editModalBody'])x.elements[id]=element();
  x.c.combineDateAndTime=(d,t)=>d+'T'+t;x.c.document.querySelector=()=>null;
- vm.runInContext(extract('openEditModal'),x.c);x.c.openEditModal('caffeine','record-a');
+ for(const id of ['editSleepStart','editSleepEnd','editSleepStartPreview','editSleepEndPreview'])x.elements[id]=element();
+ vm.runInContext(extract('updateSleepEditDateTimePreviews')+'\n'+extract('openEditModal'),x.c);x.c.openEditModal('caffeine','record-a');
  assert.match(x.elements.editModalBody.innerHTML,/value="가상 &quot;커피&quot; &lt;b&gt;한 잔&lt;\/b&gt;"/);
  x.c.openEditModal('sleep',sleepRecord.id);assert.doesNotMatch(x.elements.editModalBody.innerHTML,/<b>메모/);
  assert.match(x.elements.editModalBody.innerHTML,/&lt;\/textarea&gt;&lt;b&gt;메모/);
@@ -102,3 +105,9 @@ test('calendar award names, messages and image attributes remain literal',()=>{
  assert.doesNotMatch(x.elements.calendarDetailContent.innerHTML,/<b>|<img src=x|" onload="|position:fixed|color:url/);
  assert.match(x.elements.calendarDetailContent.innerHTML,/&lt;b&gt;뱃지/);
 });
+
+test('calendar unknown amount does not become zero or a complete known subtotal',()=>{for(const rows of [[{amount:'',name:'unknown'}],[{amount:50,name:'known'},{amount:'',name:'unknown'}]]){const x=setup();x.c.showCalendarDetail('2026-10-08',null,rows);const text=x.elements.calendarDetailContent.innerHTML;assert.match(text,/총량 미확인/);assert.doesNotMatch(text,/총 (?:0|50)mg/);assert.match(text,/함량 미상/);}});
+
+test('calendar mini hours use one decimal without changing the record',()=>{const record={...sleepRecord,start:'23:00',end:'06:10',hours:7.166666666666667},x=setup({sleep:[record]});x.c.renderCalendar();const text=node=>[node.textContent||'',...(node.children||[]).map(text)].join(' ');const rendered=text(x.elements.calendarGrid);assert.match(rendered,/7\.2h/);assert.ok(!rendered.includes('7.166666'));assert.equal(record.hours,7.166666666666667);});
+
+test('calendar mini observed zero stays 0.0 and missing hours remain unlabelled',()=>{for(const [hours,expected]of [[0,true],[null,false],['',false],[NaN,false]]){const x=setup({sleep:[]});x.c.getSleepLogForDate=date=>date==='2026-10-09'?{...sleepRecord,hours}:null;x.c.renderCalendar();const text=node=>[node.textContent||'',...(node.children||[]).map(text)].join(' ');assert.equal(text(x.elements.calendarGrid).includes('0.0h'),expected);}});

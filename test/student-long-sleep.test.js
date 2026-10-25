@@ -1,3 +1,4 @@
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -25,21 +26,22 @@ function form({ edit = false, start = '2026-10-10T23:00', end = '2026-10-11T11:0
     saveSleepData(payload) { requests.push({ action: 'save', payload: JSON.parse(JSON.stringify(payload)) }); },
     updateSleepData(payload) { requests.push({ action: 'edit', payload: JSON.parse(JSON.stringify(payload)) }); },
   };
-  const context = vm.createContext({
+  // History-gate integration is exercised in sleep-entry-review; these cases isolate duration confirmation.
+  const context = vm.createContext({SleepRecordPolicy,withSleepHistoryReview:cb=>cb(),mergeSleepHistoryAfterSave:async()=>{},
     user: { studentId: 'test', name: '합성 검증' }, editingType: 'sleep', editingId: 'sleep-1',
     selectedCondition: { emoji: '😊', score: 5 },
     sleepChoices: { smartphone: '안 함', activity: '30분', latency: '15분 이내', awakenings: '없음', daytime: '없음' },
     window: { editCondition: '😊', editSleepChoices: { smartphone: '안 함' } },
-    sleepLogs: duplicate ? [{ id: 'old', date: '2026-10-10', hours: 8, start: '23:00', end: '07:00', condition: '😐', memo: '' }] : [],
+    sleepLogs: edit ? [{id:'sleep-1',date:'2026-10-10',start:'23:00',wakeDate:'2026-10-11',end:'11:00'}] : duplicate ? [{ id: 'old', date: '2026-10-11', wakeDate:'2026-10-11', hours: 1, start: '12:00', end: '13:00', condition: '😐', memo: '' }] : [],
     document: { getElementById: id => fields[id] || null, querySelectorAll: () => [] },
-    console: { log() {}, warn() {} }, google: { script: { run: runner } },
+    crypto:{randomUUID:()=> 'synthetic-new-id'},showAdditionalSleepType:cb=>cb('unclassified'),console: { log() {}, warn() {} }, google: { script: { run: runner } },
     showInfoModal: (...args) => notices.push(args),
     showSleepCompleteModal: () => notices.push(['success']), resetSleepChoices() {}, loadSleepLogs() {}, refreshData() {},
     showLongSleepConfirm: (start, end, confirm) => longPrompts.push({ start, end, confirm }),
-    showOverwriteConfirm: (message, confirm) => overwritePrompts.push({ message, confirm }),
+    showSeparateSleepConfirm: (message, records, confirm) => overwritePrompts.push({ message, records, confirm }),
   });
   vm.runInContext(['datePartFromDatetime', 'timePartFromDatetime', 'formatSleepDateTimeRange',
-    'getMissingSleepFields', 'proceedSaveSleep', 'submitSleep', 'setEditSavePending', 'saveEdit'].map(extract).join('\n'), context);
+    'getMissingSleepFields', 'sleepReviewPeerKeys', 'proceedSaveSleep', 'submitSleep', 'setEditSavePending', 'saveEdit'].map(extract).join('\n'), context);
   return { fields, requests, longPrompts, overwritePrompts, notices, context,
     submit: () => edit ? context.saveEdit() : context.submitSleep(), acknowledge: value => success(value) };
 }
@@ -115,7 +117,7 @@ for (const edit of [false, true]) {
   });
 }
 
-test('a long duplicate sleep requires date confirmation and then overwrite confirmation', () => {
+test('a long date-peer sleep requires date confirmation and then separate-add confirmation', () => {
   const f = form({ duplicate: true });
   f.submit();
   assert.equal(f.longPrompts.length, 1);
@@ -123,7 +125,9 @@ test('a long duplicate sleep requires date confirmation and then overwrite confi
   assert.equal(f.requests.length, 0);
   f.longPrompts[0].confirm();
   assert.equal(f.overwritePrompts.length, 1);
+  assert.equal(f.overwritePrompts[0].records[0].id, 'old');
   assert.equal(f.requests.length, 0);
   f.overwritePrompts[0].confirm();
   assert.equal(f.requests.length, 1);
+  assert.notEqual(f.requests[0].payload.id, 'old');
 });

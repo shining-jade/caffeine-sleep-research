@@ -1,3 +1,4 @@
+import {installComparisonDisplay} from './support/comparison-display.js';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -16,7 +17,7 @@ function setup(){
   setTimeout:fn=>timers.push(fn),
   Chart:function(_,config){this.data=config.data;this.options=config.options;this.updates=[];this.destroyed=false;this.update=mode=>this.updates.push(mode);this.destroy=()=>{this.destroyed=true};instances.push(this)}
  });
- vm.runInContext(source,c);
+ installComparisonDisplay(c);vm.runInContext(source,c);
  const data={labels:['10/10','10/11'],caffeineData:[35,60],caffeineHasData:[true,true],sleepData:[8.5,8]};
  return {c,data,instances,timers};
 }
@@ -24,7 +25,7 @@ function setup(){
 test('repeated dashboard responses keep the same charts and do not replay identical data',()=>{
  const x=setup();x.c.renderCharts(x.data);const first=[...x.instances];
  x.c.renderCharts(JSON.parse(JSON.stringify(x.data)));x.c.renderCharts({...x.data,todayTotal:60});
- assert.equal(x.instances.length,2);assert.ok(first.every(chart=>!chart.destroyed));
+ assert.equal(x.instances.length,1);assert.ok(first.every(chart=>!chart.destroyed));
  assert.ok(first.every(chart=>chart.updates.length===0));
  assert.equal(x.timers.length,1,'unchanged dates must not keep resetting chart scroll positions');
 });
@@ -32,18 +33,18 @@ test('repeated dashboard responses keep the same charts and do not replay identi
 test('changed caffeine values update in place without animation and preserve sleep chart',()=>{
  const x=setup();x.c.renderCharts(x.data);
  x.c.renderCharts({...x.data,caffeineData:[35,90]});
- assert.equal(x.instances.length,2);assert.deepEqual(x.instances[0].updates,['none']);
- assert.deepEqual(Array.from(x.instances[0].data.datasets[0].data),[35,90]);
- assert.equal(x.instances[1].updates.length,0);
+ assert.equal(x.instances.length,1);assert.deepEqual(x.instances[0].updates,['none']);
+ assert.deepEqual(Array.from(x.instances[0].data.datasets[0].data,p=>p.y),[35,90]);
+ assert.deepEqual(Array.from(x.instances[0].data.datasets[2].data,p=>p.y),[8.5,8]);
 });
 
 test('goal changes update in place while research sleep references stay fixed',()=>{
  const x=setup();x.c.renderCharts(x.data);x.c.userLimit=100;x.c.SLEEP_CFG.sleepWarn=9;
- x.c.renderCharts(x.data);assert.equal(x.instances.length,2);
- assert.deepEqual(Array.from(x.instances[0].data.datasets[1].data),[100,100]);
- assert.deepEqual(Array.from(x.instances[1].data.datasets[2].data),[8,8]);
- assert.match(x.instances[1].options.plugins.tooltip.callbacks.label({datasetIndex:2}),/8/);
- assert.deepEqual(x.instances[0].updates,['none']);assert.deepEqual(x.instances[1].updates,[]);
+ x.c.renderCharts(x.data);assert.equal(x.instances.length,1);
+ assert.deepEqual(Array.from(x.instances[0].data.datasets[1].data,p=>p.y),[100,100]);
+ assert.deepEqual(Array.from(x.instances[0].data.datasets[2].data,p=>p.y),[8.5,8]);
+ assert.match(x.instances[0].options.plugins.tooltip.callbacks.label({datasetIndex:2,raw:{y:8}}),/권장 범위/);
+ assert.deepEqual(x.instances[0].updates,['none']);
 });
 
 test('recorded zero remains distinct from missing caffeine and changed dates still update chart labels',()=>{
@@ -53,5 +54,5 @@ test('recorded zero remains distinct from missing caffeine and changed dates sti
  assert.notEqual(x.instances[0].data.datasets[0].backgroundColor[0],before);
  x.c.renderCharts({...x.data,labels:['10/11','10/12']});
  assert.deepEqual(Array.from(x.instances[0].data.labels),['10/11','10/12']);
- assert.equal(x.instances.length,2);assert.equal(x.timers.length,2);
+ assert.equal(x.instances.length,1);assert.equal(x.timers.length,2);
 });

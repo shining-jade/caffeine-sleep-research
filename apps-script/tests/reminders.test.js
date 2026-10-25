@@ -202,8 +202,8 @@ test('dispatch snapshot uses named headers and returns only active minimal remin
       [1, 2, 1, '김학생', 1201],
     ],
     sleep: [
-      ['메모', '날짜', '전체학번', '성명'],
-      ['private sleep note', '2026-09-09', 1101, '홍길동'],
+      ['메모', '기상날짜', '전체학번', '성명'],
+      ['private sleep note', '2026-09-10', 1101, '홍길동'],
     ],
     caffeine: [
       ['음료명', '전체학번', '섭취시간', '함량'],
@@ -234,7 +234,7 @@ test('dispatch snapshot uses named headers and returns only active minimal remin
   assert.doesNotMatch(JSON.stringify(sleep), /홍길동|김학생|private sleep note|섭취 안 함/);
 });
 
-test('dispatch snapshot recognizes the production bedtime-date header across midnight', async () => {
+test('dispatch snapshot recognizes the production wake-date header across midnight', async () => {
   const initial = {
     students: [['학년', '반', '번호', '이름', '학번', '연구대상자코드'], [2, 1, 1, '테스트학생', 2101, 'R001']],
     sleep: [

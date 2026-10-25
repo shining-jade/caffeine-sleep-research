@@ -26,6 +26,7 @@ function response() {
 
 function sleepSnapshot(overrides = {}) {
   return {
+    protocolVersion: 'wake-day-evening-v1',
     config: {
       enabled: true,
       sleepEnabled: true,

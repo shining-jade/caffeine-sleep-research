@@ -130,7 +130,7 @@ test('reminder candidate honors class boundary dates and weekend exclusion', () 
   assert.deepEqual(candidates({ nowMs: saturday, config: config({ includeWeekends: false }) }), []);
 });
 
-test('sleep reminder skips students with previous-day sleep completion', () => {
+test('sleep reminder skips students with actual wake-date completion', () => {
   assert.deepEqual(candidates({ completedStudentIds: ['1101'] }), []);
 });
 

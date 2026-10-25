@@ -118,7 +118,7 @@
               if (g !== generation) break;
               const receipt = await send(row.action, payload, who);
               if (receipt?.success !== true || receipt.mutationId !== row.mutationId || !receipt.committedAt) {
-                throw error(receipt?.error || 'SYNC_UNCONFIRMED');
+                throw error(receipt?.reason || receipt?.error || 'SYNC_UNCONFIRMED');
               }
               row.state = 'synced'; row.receipt = receipt; row.nextAt = 0; row.lastError = null;
               await store.put(row);
@@ -136,10 +136,11 @@
             } catch (e) {
               const code = e.code || 'NETWORK_ERROR';
               row.lastError = code;
-              row.state = ['SYNC_CONFLICT', 'SYNC_PROFILE_REQUIRED', 'ACTION_NOT_ALLOWED', 'REQUEST_REJECTED'].includes(code) || (e.status >= 400 && e.status < 500 && ![401, 409, 429].includes(e.status)) ? 'needsAttention' : 'pending';
+              row.state = ['SYNC_CONFLICT', 'SYNC_PROFILE_REQUIRED', 'ACTION_NOT_ALLOWED', 'REQUEST_REJECTED', 'SLEEP_RECORD_ID_CONFLICT', 'SLEEP_REQUEST_ID_REQUIRED'].includes(code) || (e.status >= 400 && e.status < 500 && ![401, 409, 429].includes(e.status)) ? 'needsAttention' : 'pending';
               row.nextAt = Date.now() + Math.min(60000, 2000 * Math.pow(2, Math.min(row.attempts, 5)));
               await store.put(row); await changed();
               if (e.status === 401 || code === 'SESSION_CHANGED') break;
+              if (row.action === 'saveSleepData' && row.state === 'needsAttention') continue;
               if (g === generation && row.state === 'pending') retryTimer = setTimeout(() => { void flush(); }, Math.max(1000, row.nextAt - Date.now()));
               break;
             }
@@ -213,9 +214,6 @@
           const serverId = row.receipt?.recordId || await syncedRecordId(row);
           if (g !== generation) throw error('SESSION_CHANGED');
           if (records.some(r => String(r.id) === String(record.id) || (serverId && String(r.id) === serverId))) continue;
-          if (action === 'getSleepLogs') {
-            for (let i = records.length - 1; i >= 0; i--) if (records[i].date === record.date && records[i].id !== record.id) records.splice(i, 1);
-          }
           if (!records.some(r => String(r.id) === String(record.id))) records.push(record);
         }
         return records;
@@ -242,32 +240,39 @@
         if (!Array.isArray(await store.snapshot(owner + ':' + history))) continue;
         const records = await read(history);
         if (g !== generation) throw error('SESSION_CHANGED');
+        const P = typeof SleepRecordPolicy === 'undefined' ? window.SleepRecordPolicy : SleepRecordPolicy;
+        if (!P) { result.sleepPolicyUnavailable = true; continue; }
         if (kind === 'Caffeine') {
-          const totals = new Map(), invalid = new Set();
-          records.forEach(record => {
-            const time = String(record.time || '');
-            const stamp = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(time) ? Date.parse(time) : NaN;
-            const date = Number.isFinite(stamp) ? new Date(stamp + 9 * 3600000).toISOString().slice(0, 10) : time.slice(0, 10);
-            const amount=record.amount;
-            if(amount===null||amount===undefined||amount===''||!Number.isFinite(Number(amount))||Number(amount)<0)invalid.add(date);
-            else totals.set(date, (totals.get(date) || 0) + Number(amount));
-          });
-          invalid.forEach(date=>totals.delete(date));
-          result.todayTotal = totals.get(endDate) || 0;
-          result.todayHasRecord = totals.has(endDate);
-          result.caffeineData = dates.map(date => totals.has(date)?totals.get(date):null);
-          result.caffeineHasData = dates.map(date => totals.has(date));
+          const groups = P.caffeineDays(records), today = groups.get(endDate);
+          result.todayTotal = today ? today.total : null;
+          result.todayHasRecord = !!today;
+          result.todayCaffeineStatus = today ? today.status : 'missing';
+          result.caffeineData = dates.map(date => groups.get(date)?.total ?? null);
+          result.caffeineHasData = dates.map(date => groups.has(date));
+          result.caffeineStatuses = dates.map(date => groups.get(date)?.status || 'missing');
         } else {
-          const byDate = new Map();
-          records.forEach(record => {
-            let date=String(record.date||'');
-            const hour=Number(String(record.start||record.sleepTime||'').split(':')[0]);
-            if(/^\d{4}-\d{2}-\d{2}$/.test(date)&&String(record.start||record.sleepTime||'')&&hour<4)date=new Date(Date.parse(date+'T00:00:00Z')-86400000).toISOString().slice(0,10);
-            const previous = byDate.get(date);
-            const stamp=log=>String(log.savedAt||log.timestamp||'').replace('T',' ');
-            if(!previous||(!!record.localPending!==!!previous.localPending?!!record.localPending:!stamp(record)||!stamp(previous)||(stamp(record)!==stamp(previous)?stamp(record)>stamp(previous):Number(record.sourceRow||0)>=Number(previous.sourceRow||0))))byDate.set(date,record);
+          // Complete history is grouped before applying comparison-day boundaries.
+          const groups = P.days(records), selected = P.selectPeriod(records, {basis:'target', start:dates[0], end:endDate});
+          const caffeineHistory = await store.snapshot(owner + ':getCaffeineLogs');
+          const caffeine = Array.isArray(caffeineHistory) ? await read('getCaffeineLogs') : null;
+          result.sleepData = dates.map(date => { const day = groups.get(date); return day?.status === 'ready' ? day.record.intervalHours : null; });
+          result.sleepDayStatuses = dates.map(date => groups.get(date)?.status || 'missing');
+          result.sleepEpisodeCounts = dates.map(date => groups.get(date)?.recordCount || 0);
+          result.sleepEpisodes = selected.records.map(record => {
+            const d = P.describe(record), day = groups.get(d.analysisDate);
+            const exposure = caffeine ? P.caffeineWindow(record, caffeine, 24) : null;
+            return {...record, analysisDate:d.analysisDate, analysisDateBasis:d.analysisDateBasis,
+              intervalHours:d.intervalHours, analysisStatus:d.type==='nap'?'excluded':day?.status || 'held', analysisHoldReason:d.type==='nap'?'nap':day?.holdReason || '',
+              exposure24h:exposure ? {total:exposure.total,status:exposure.status,knownSubtotal:exposure.knownSubtotal,
+                recordCount:exposure.records.length,unplacedRecordCount:exposure.unplacedRecords.length,boundary:'[bed-24h,bed)'}
+                : {total:null,status:'history_unavailable',knownSubtotal:null,recordCount:null,boundary:'[bed-24h,bed)'}};
           });
-          result.sleepData = dates.map(date => {const hours=byDate.get(date)?.hours;return hours===null||hours===undefined||hours===''||!Number.isFinite(Number(hours))?null:Number(hours);});
+          result.sleepHeldDays = dates.filter(date => groups.get(date)?.status === 'held').length;
+          result.sleepHeldRecordCount = result.sleepEpisodes.filter(record => record.analysisStatus === 'held').length;
+          result.sleepUnassignedRecordCount = selected.unassigned.length;
+          result.sleepUnassignedEpisodes = selected.unassigned;
+          result.sleepPolicyVersion = P.version;
+          result.sleepDateBasis = 'actual_wake_date_minus_one';
         }
         rebuilt = true;
       }

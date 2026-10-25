@@ -1,3 +1,5 @@
+import {installComparisonDisplay} from './support/comparison-display.js';
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
@@ -8,25 +10,26 @@ const teen={ageGroup:'teen',sleepSevere:7,sleepWarn:8,sleepGood:10,sleepMax:11};
 const adult={ageGroup:'adult',sleepSevere:6,sleepWarn:7,sleepGood:9,sleepMax:10};
 function setup(settings=teen){
  const configs=[], elements={sleepLegend:{innerHTML:''},sleepRecommendLabel:{textContent:''}};
- const c=vm.createContext({window:{},SLEEP_CFG:{...settings},user:{studentId:'fictional'},lastDashboardData:null,userLimit:150,
+ const c=vm.createContext({SleepRecordPolicy,window:{},SLEEP_CFG:{...settings},user:{studentId:'fictional'},lastDashboardData:null,userLimit:150,
  caffeineChart:null,sleepChart:null,document:{getElementById:id=>elements[id]||(id.endsWith('Chart')?{getContext:()=>({})}:null)},
  Chart:function(_,config){this.data=config.data;this.options=config.options;configs.push(config);this.update=()=>configs.push({data:this.data,options:this.options});this.destroy=()=>{};},buildSleepDataByLifeDate:(_,values)=>values,setTimeout(){},
  cacheStudentRecords(){},renderCaffeineLogs(){},renderSleepLogs(){},updateDashboard(){},refreshData(){},
  updateLimitDisplay(){},updateTargetSleepDisplay(){},showWeightSetupModal(){},google:{script:{run:{withSuccessHandler(h){this.success=h;return this;},withFailureHandler(){return this;},getSleepSettings(){}}}}
  });
- vm.runInContext(['renderCharts','applyWeightData','applyStudentBootstrap','loadSleepSettingsLegacy','changeSettingsAgeGroup'].map(extract).join('\n'),c);
+ installComparisonDisplay(c);vm.runInContext(['renderCharts','applyWeightData','applyStudentBootstrap','loadSleepSettingsLegacy','changeSettingsAgeGroup'].map(extract).join('\n'),c);
  return{c,configs,elements};
 }
 test('teen sleep graph stages and threshold lines match configured save feedback',()=>{
- const x=setup();x.c.renderCharts({labels:['1','2','3','4','5','6'],sleepData:[6.5,7.5,8,10.5,11,0]});
- const chart=x.configs[1];assert.deepEqual(Array.from(chart.data.datasets[0].backgroundColor),['#f97316','#f97316','#22c55e','#eab308','#eab308','#f97316']);
- assert.match(chart.options.plugins.tooltip.callbacks.label({datasetIndex:0,dataIndex:3}),/권장보다 김/);
+ const x=setup();x.c.renderCharts({labels:['2026-01-01','2026-01-02','2026-01-03','2026-01-04','2026-01-05','2026-01-06'],sleepData:[6.5,7.5,8,10.5,11,0]});
+ const chart=x.configs[0];assert.equal(chart.data.datasets[2].pointBackgroundColor,'#BFDBFE');
+ assert.deepEqual([6.5,7.5,8,10.5,11,0].map(y=>chart.options.plugins.tooltip.callbacks.label({datasetIndex:2,raw:{y}}).split(' / ')[1]),['권장보다 짧음','권장보다 짧음','권장 범위','권장보다 김','권장보다 김','권장보다 짧음']);
+ assert.match(chart.options.plugins.tooltip.callbacks.label({datasetIndex:2,dataIndex:3,raw:{y:10.5}}),/권장보다 김/);
 });
 test('adult graph recommendations, tooltip and legend use adult settings',()=>{
- const x=setup(adult);x.c.renderCharts({labels:['1'],sleepData:[7.5]});const chart=x.configs[1];
- assert.equal(chart.data.datasets[2].data[0],7);assert.equal(chart.data.datasets[3].data[0],9);
- assert.match(chart.options.plugins.tooltip.callbacks.label({datasetIndex:2}),/7시간/);
- assert.match(x.elements.sleepLegend.innerHTML,/7~9h/);
+ const x=setup(adult);x.c.renderCharts({labels:['2026-01-01'],sleepData:[7.5]});const chart=x.configs[0];
+ assert.equal(chart.data.datasets[2].data[0].y,7.5);assert.equal(chart.data.datasets[2].pointBackgroundColor,'#BFDBFE');
+ assert.match(chart.options.plugins.tooltip.callbacks.label({datasetIndex:2,raw:{y:7.5}}),/권장 범위/);
+ assert.match(x.elements.sleepLegend.textContent,/7~9h/);
 });
 test('bootstrap retains saved adult profile instead of global teen default',()=>{
  const x=setup();x.c.applyStudentBootstrap({dashboardRequestId:0,weight:{success:true,weight:60,ageGroup:'adult'},sleepSettings:{success:true,settings:teen},stats:{},caffeineLogs:[],sleepLogs:[]});
@@ -48,8 +51,8 @@ test('fresh profile age takes priority over the previously loaded age without lo
  assert.equal(custom.ageGroup,'teen');assert.equal(custom.sleepWarn,7.5);
 });
 test('legacy profile arriving after settings and chart refresh immediately redraws adult thresholds',()=>{
- const x=setup();x.c.lastDashboardData={labels:['1'],sleepData:[7.5]};x.c.loadSleepSettingsLegacy();
- x.c.google.script.run.success({success:true,settings:teen});assert.equal(x.configs.at(-1).data.datasets[2].data[0],8);
+ const x=setup();x.c.lastDashboardData={labels:['2026-01-01'],sleepData:[7.5]};x.c.loadSleepSettingsLegacy();
+ x.c.google.script.run.success({success:true,settings:teen});assert.match(x.elements.sleepLegend.textContent,/8~10h/);
  x.c.applyWeightData({success:true,weight:60,ageGroup:'adult'});
- assert.equal(x.configs.at(-1).data.datasets[2].data[0],7);assert.equal(x.configs.at(-1).data.datasets[0].backgroundColor[0],'#22c55e');
+ assert.match(x.elements.sleepLegend.textContent,/7~9h/);assert.equal(x.configs.at(-1).data.datasets[2].pointBackgroundColor,'#BFDBFE');
 });

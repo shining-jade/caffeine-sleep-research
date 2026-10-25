@@ -1,3 +1,5 @@
+import {installComparisonDisplay} from './support/comparison-display.js';
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
@@ -20,14 +22,14 @@ function setup() {
     } });
     return chain[name];
   } });
-  const c = vm.createContext({ window: {}, Date, Promise, console,
+  const c = vm.createContext({SleepRecordPolicy, window: {}, Date, Promise, console,
     user: { studentId: 'fictional', name: '가상' }, lastDashboardData: null,
     getTodayKST: () => '2026-10-09', resetStudentAnalysis() {},
     document: { getElementById: id => id === 'filterEndDate' ? input : id === 'dateRangeText' ? range : null },
     google: { script: { run } }, updateDashboard(data, date) { displayed.push({ data, date }); c.lastDashboardData = { ...data, chartEndDate: date }; },
     cacheStudentRecords() {}, renderCaffeineLogs() {}, renderSleepLogs() {}, renderCharts() {}, applyWeightData() {}, changeSettingsAgeGroup() {}
   });
-  vm.runInContext(['setDashboardChartState', 'requestDashboardStats', 'applyDateFilter', 'refreshData', 'manualRefresh', 'applyStudentBootstrap'].map(extract).join('\n'), c);
+  installComparisonDisplay(c);vm.runInContext(['setDashboardChartState', 'requestDashboardStats', 'applyDateFilter', 'refreshData', 'manualRefresh', 'applyStudentBootstrap'].map(extract).join('\n'), c);
   return { c, input, range, calls, displayed };
 }
 
@@ -86,21 +88,21 @@ test('unfiltered refresh follows today after midnight instead of pinning yesterd
 });
 test('student sleep graph fits long records with headroom', () => {
   const configs = []; const canvas = { getContext: () => ({}) };
-  const c = vm.createContext({ userLimit: 150, caffeineChart: null, sleepChart: null,
+  const c = vm.createContext({SleepRecordPolicy, userLimit: 150, caffeineChart: null, sleepChart: null,
     buildSleepDataByLifeDate: (_, values) => values,
     document: { getElementById: id => id.endsWith('Chart') ? canvas : null }, setTimeout() {},
     Chart: function(_, config) { configs.push(config); }
   });
-  vm.runInContext(extract('renderCharts'), c);
+  installComparisonDisplay(c);vm.runInContext(extract('renderCharts'), c);
   c.renderCharts({ labels: ['10/9'], caffeineData: [0], caffeineHasData: [true], sleepData: [16] });
-  assert.ok(configs[1].options.scales.y.max > 16); assert.equal(configs[1].data.datasets[0].data[0], 16);
+  assert.ok(configs[0].options.scales.y2.max > 16); assert.equal(configs[0].data.datasets[2].data[0].y, 16);
 });
 test('sleep graph uses committed chart year across New Year and ignores picker drafts', () => {
-  const c = vm.createContext({ Date, lastDashboardData: { chartEndDate: '2026-01-02' },
+  const c = vm.createContext({SleepRecordPolicy, Date, lastDashboardData: { chartEndDate: '2026-01-02' },
     document: { getElementById: () => ({ value: '2030-01-02' }) }, getTodayKST: () => '2026-10-09',
-    sleepLogs: [{ date: '2025-12-31', hours: 16 }, { date: '2026-01-01', hours: 8 }],
+    sleepLogs: [{id:'a',date:'2025-12-31',start:'15:00',wakeDate:'2026-01-01',end:'07:00',hours:16},{id:'b',date:'2026-01-01',start:'23:00',wakeDate:'2026-01-02',end:'07:00',hours:8}],
     getSleepLifeDate: log => log.date, compareSleepLogsByEndDesc: () => 0
   });
-  vm.runInContext(['labelToISODate', 'buildSleepDataByLifeDate'].map(extract).join('\n'), c);
+  installComparisonDisplay(c);vm.runInContext(['labelToISODate', 'buildSleepDataByLifeDate'].map(extract).join('\n'), c);
   assert.deepEqual(Array.from(c.buildSleepDataByLifeDate(['12/31', '01/01', '01/02'], [], '2026-01-02')), [16, 8, null]);
 });

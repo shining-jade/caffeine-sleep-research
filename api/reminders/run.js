@@ -5,6 +5,8 @@ import { callGas as defaultCallGas } from '../_lib/gas.js';
 import { sendJson } from '../_lib/http.js';
 import {
   deliveryKey,
+  REMINDER_TIMES,
+  REMINDER_PROTOCOL,
   getKstClock,
   normalizeStoredReminderConfig,
   selectReminderCandidates,
@@ -36,7 +38,9 @@ function boundedText(value, maxLength = 256) {
 }
 
 function normalizeSnapshot(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid scheduler snapshot.');
+  if (!value || typeof value !== 'object' || Array.isArray(value) || value.protocolVersion !== REMINDER_PROTOCOL) {
+    throw new Error('Unsupported reminder protocol.');
+  }
   for (const key of ['students', 'completedStudentIds', 'subscriptions', 'successfulDeliveryKeys']) {
     if (!Array.isArray(value[key])) throw new Error('Invalid scheduler snapshot.');
   }
@@ -67,9 +71,8 @@ async function schedulerCall(callGas, action, params) {
 function dueTypes(config, nowMs) {
   if (!config.enabled) return [];
   const { hour } = getKstClock(nowMs);
-  return ['sleep', 'caffeine'].filter((type) => (
-    config[`${type}Enabled`] && Number(config[`${type}Time`].slice(0, 2)) === hour
-  ));
+  const types = hour === 8 ? ['sleep'] : hour === 20 ? ['sleep', 'caffeine'] : [];
+  return types.filter((type) => config[`${type}Enabled`] && config[`${type}Time`] === REMINDER_TIMES[type]);
 }
 
 function publicType(types) {
@@ -142,6 +145,12 @@ export function createReminderRunHandler({
     }
 
     const nowMs = now() * 1000;
+    // Older hourly schedules must not query student data outside the two reminder hours.
+    const { hour } = getKstClock(nowMs);
+    if (!Object.values(REMINDER_TIMES).some((time) => Number(time.slice(0, 2)) === hour)) {
+      sendJson(res, 200, aggregate('none', 0, 0));
+      return;
+    }
     const nowIso = new Date(nowMs).toISOString();
     try {
       const sleepSnapshot = normalizeSnapshot(await schedulerCall(
@@ -160,11 +169,29 @@ export function createReminderRunHandler({
         )));
       }
 
-      const candidates = types.flatMap((type) => selectReminderCandidates({
+      const evening = getKstClock(nowMs).hour === 20;
+      let candidates = types.flatMap((type) => selectReminderCandidates({
         type,
+        slot: evening ? 'evening' : 'morning',
         nowMs,
         ...snapshots.get(type),
       }));
+      if (evening) {
+        const devices = new Map();
+        for (const candidate of candidates) {
+          const existing = devices.get(candidate.subscriptionId);
+          if (existing) {
+            if (existing.studentId !== candidate.studentId || existing.endpoint !== candidate.endpoint
+              || existing.keys.p256dh !== candidate.keys.p256dh || existing.keys.auth !== candidate.keys.auth) {
+              throw new Error('Inconsistent reminder subscription.');
+            }
+            existing.missingTypes.push(candidate.type);
+          } else {
+            devices.set(candidate.subscriptionId, { ...candidate, type: 'evening', missingTypes: [candidate.type] });
+          }
+        }
+        candidates = [...devices.values()];
+      }
       if (candidates.length === 0) {
         sendJson(res, 200, aggregate(publicType(types), 0, 0));
         return;

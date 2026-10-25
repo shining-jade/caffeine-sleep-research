@@ -48,7 +48,7 @@ function appendRecordRow_(sheet, values, replaceRow, confirmation) {
   var request = replaceRow
     ? { updateCells: { start: { sheetId: sheet.getSheetId(), rowIndex: replaceRow-1, columnIndex: 0 }, rows: [{ values: cells }], fields: 'userEnteredValue' } }
     : { appendCells: { sheetId: sheet.getSheetId(), ...(nativeTable ? { tableId: tableId } : {}), rows: [{ values: cells }], fields: 'userEnteredValue' } };
-  var requests = confirmation ? [request, confirmation] : [request];
+  var requests = [request].concat(confirmation ? (Array.isArray(confirmation) ? confirmation : [confirmation]) : []);
   try {
     // Sheets rejects appendCells on a message table containing only its header.
     // Reserve its first body row in the same batch, keeping the existing columns.

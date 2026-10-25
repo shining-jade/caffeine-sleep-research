@@ -116,6 +116,9 @@ function reminderConfigToRow_(config) {
 
 function normalizeReminderConfig_(value, actor) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('REQUEST_REJECTED');
+  if (normalizeReminderHour_(value.sleepTime) !== '08:00' || normalizeReminderHour_(value.caffeineTime) !== '20:00') {
+    throw new Error('REQUEST_REJECTED');
+  }
   if (!Array.isArray(value.classPeriods) || value.classPeriods.length !== 4) throw new Error('REQUEST_REJECTED');
   var byClass = {};
   value.classPeriods.forEach(function(period) {
@@ -297,8 +300,15 @@ function reminderRows_(sheet) {
 }
 
 function reminderDateValue_(value) {
-  if (value instanceof Date) return Utilities.formatDate(value, 'Asia/Seoul', 'yyyy-MM-dd');
-  return String(value || '').trim().slice(0, 10);
+  if (value instanceof Date) return isNaN(value.getTime()) ? '' : Utilities.formatDate(value, 'Asia/Seoul', 'yyyy-MM-dd');
+  var text = String(value || '').trim();
+  // Offset-bearing actual instants must cross midnight in Asia/Seoul correctly.
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(text)) {
+    var instant = new Date(text);
+    return isNaN(instant.getTime()) ? '' : Utilities.formatDate(instant, 'Asia/Seoul', 'yyyy-MM-dd');
+  }
+  if (!/^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?)?$/.test(text)) return '';
+  try { return normalizeReminderDate_(text.slice(0, 10), false); } catch (_) { return ''; }
 }
 
 function previousReminderDate_(dateText) {
@@ -324,10 +334,11 @@ function getReminderDispatchSnapshot_(type, nowIso) {
 
   var recordSheet = reminderRows_(spreadsheet.getSheetByName(type === 'sleep' ? 'sleep' : 'caffeine'));
   var recordIdColumn = requireNamedColumn_(recordSheet.headers, ['전체학번', '학번ID', '학번', 'studentId']);
-  var recordDateColumn = requireNamedColumn_(recordSheet.headers, type === 'sleep' ? ['취침날짜', '날짜', '수면날짜'] : ['섭취시간', '날짜']);
+  // Completion is today's actual wake/intake date. Keep the existing delivery key/link date separate.
+  var recordDateColumn = requireNamedColumn_(recordSheet.headers, type === 'sleep' ? ['기상날짜', '기상일', 'wakeDate'] : ['섭취시간', '날짜']);
   var completedMap = {};
   recordSheet.values.forEach(function(row) {
-    if (reminderDateValue_(row[recordDateColumn]) === referenceDate) {
+    if (reminderDateValue_(row[recordDateColumn]) === currentDate) {
       var studentId = normalizeOwnerId_(row[recordIdColumn]);
       if (studentId) completedMap[studentId] = true;
     }
@@ -354,12 +365,16 @@ function getReminderDispatchSnapshot_(type, nowIso) {
   var deliveryRows = deliverySheet.getLastRow() < 2 ? []
     : deliverySheet.getRange(2, 1, deliverySheet.getLastRow() - 1, REMINDER_SHEETS_.deliveries.headers.length).getValues();
   var successfulDeliveryKeys = deliveryRows.filter(function(row) {
-    return String(row[1]) === referenceDate && String(row[2]) === type && String(row[6]) === 'success';
+    return String(row[6]) === 'success' && (
+      (String(row[1]) === referenceDate && String(row[2]) === type)
+      || (String(row[1]) === currentDate && String(row[2]) === 'evening')
+    );
   }).map(function(row) { return String(row[0]); });
 
   return {
     config: getReminderConfig_(),
     students: students,
+    protocolVersion: 'wake-day-evening-v1',
     completedStudentIds: Object.keys(completedMap),
     subscriptions: subscriptions,
     successfulDeliveryKeys: successfulDeliveryKeys
@@ -411,7 +426,7 @@ function recordReminderDeliveryResults_(results) {
     var properties = PropertiesService.getScriptProperties();
     var now = reminderNowIso_();
     results.forEach(function(result) {
-      if (!result || !allowedStatuses[result.status] || (result.type !== 'sleep' && result.type !== 'caffeine')) {
+      if (!result || !allowedStatuses[result.status] || (result.type !== 'sleep' && result.type !== 'caffeine' && result.type !== 'evening')) {
         throw new Error('REQUEST_REJECTED');
       }
       var key = String(result.deliveryKey || '').trim();

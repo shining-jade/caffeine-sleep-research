@@ -1,8 +1,9 @@
 const CLASS_IDS = ['1', '2', '3', '4'];
 const REMINDER_TYPES = new Set(['sleep', 'caffeine']);
+const FIXED_REMINDER_TIMES = Object.freeze({ sleep: '08:00', caffeine: '20:00' });
 
-export function wholeHourOptions() {
-  return Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, '0')}:00`);
+export function reminderTimeOptions(type) {
+  return FIXED_REMINDER_TIMES[type] ? [FIXED_REMINDER_TIMES[type]] : [];
 }
 
 function normalizeWholeHour(value) {
@@ -52,6 +53,14 @@ export function normalizeTeacherReminderForm(value) {
     includeWeekends: value.includeWeekends,
     classPeriods,
   };
+}
+
+export function normalizeTeacherReminderSave(value) {
+  const normalized = normalizeTeacherReminderForm(value);
+  if (normalized.sleepTime !== FIXED_REMINDER_TIMES.sleep || normalized.caffeineTime !== FIXED_REMINDER_TIMES.caffeine) {
+    throw new Error('수면 알림은 08:00, 카페인 알림은 20:00에만 예약됩니다.');
+  }
+  return normalized;
 }
 
 function normalizeLoadedConfig(value) {
@@ -198,7 +207,7 @@ export function createTeacherReminders({
 
   function saveConfig() {
     if (configSaving) return configSaving;
-    const normalized = normalizeTeacherReminderForm(readForm());
+    const normalized = normalizeTeacherReminderSave(readForm());
     const revision = ++configRevision;
     payload = { ...(payload || {}), config: normalized };
     emit({ status: 'saving' });
@@ -398,15 +407,17 @@ function formatDateTime(value) {
 }
 
 function installTimeOptions() {
-  for (const id of ['teacherReminderSleepTime', 'teacherReminderCaffeineTime']) {
+  for (const [id, type] of [['teacherReminderSleepTime', 'sleep'], ['teacherReminderCaffeineTime', 'caffeine']]) {
     const select = element(id);
-    if (!select || select.options.length) continue;
-    for (const time of wholeHourOptions()) {
+    if (!select) continue;
+    select.replaceChildren();
+    for (const time of reminderTimeOptions(type)) {
       const option = document.createElement('option');
       option.value = time;
       option.textContent = time;
       select.appendChild(option);
     }
+    select.disabled = true;
   }
 }
 
@@ -434,8 +445,12 @@ function renderBrowserState(state) {
   element('teacherReminderEnabled').checked = config.enabled;
   element('teacherReminderSleepEnabled').checked = config.sleepEnabled;
   element('teacherReminderCaffeineEnabled').checked = config.caffeineEnabled;
-  element('teacherReminderSleepTime').value = config.sleepTime;
-  element('teacherReminderCaffeineTime').value = config.caffeineTime;
+  element('teacherReminderSleepTime').value = FIXED_REMINDER_TIMES.sleep;
+  element('teacherReminderCaffeineTime').value = FIXED_REMINDER_TIMES.caffeine;
+  const differentStoredTimes = config.sleepTime !== FIXED_REMINDER_TIMES.sleep || config.caffeineTime !== FIXED_REMINDER_TIMES.caffeine;
+  setText('teacherReminderScheduleNote', differentStoredTimes
+    ? `저장된 시각은 수면 ${config.sleepTime}, 카페인 ${config.caffeineTime}입니다. 설정을 저장하면 수면 08:00·저녁 미기록 확인 20:00으로 변경됩니다.`
+    : '한국시간 08:00에는 수면, 20:00에는 수면·카페인 미기록을 확인합니다. 해당 종류의 알림을 켠 기기에 누락 항목을 한 번에 안내합니다.');
   element('teacherReminderIncludeWeekends').checked = config.includeWeekends;
   for (const period of config.classPeriods) {
     element(`teacherReminderClass${period.classId}Start`).value = period.startDate;

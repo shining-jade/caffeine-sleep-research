@@ -1,3 +1,4 @@
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import fs from 'node:fs';
@@ -21,7 +22,7 @@ function setup() {
         getStudentBootstrap: (...args) => calls.push({ success, failure, args }) };
     } };
   } };
-  const c = vm.createContext({ window: { studentStartup: { loadStudentBootstrap } },
+  const c = vm.createContext({SleepRecordPolicy, window: { studentStartup: { loadStudentBootstrap } },
     user: { studentId: 'fictional', name: '가상' }, userLimit: 150, lastDashboardData: null, caffeineLogs: [], sleepLogs: [],
     document: { getElementById: id => elements[id] || null }, google: { script: { run } },
     getTodayKST: () => '2026-10-11', renderCharts() {}, changeSettingsAgeGroup() {},

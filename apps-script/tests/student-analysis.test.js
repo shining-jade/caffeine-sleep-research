@@ -7,10 +7,10 @@ async function setup({text=true,key=true,caffeine=true,sleep=true,mg=[0,50,100],
  const rows={caffeine:[Array(10).fill('')],sleep:[Array(11).fill('')]};
  dates.forEach((d,i)=>{
   if(caffeine){const r=Array(10).fill('');r[4]='fictional';r[7]=mg[i];r[8]=text?d+' 00:01:00':new Date(d+'T00:01:00+09:00');rows.caffeine.push(r);}
-  if(sleep){const r=Array(11).fill('');r[4]='fictional';r[6]=text?d:new Date(d+'T00:00:00+09:00');r[10]=hours[i];rows.sleep.push(r);}
+  if(sleep){const r=Array(11).fill('');r[4]='fictional';r[6]=text?d:new Date(d+'T00:00:00+09:00');r[7]='23:00';r[8]=new Date(Date.parse(d+'T00:00:00Z')+86400000).toISOString().slice(0,10);r[9]=hours[i]===8.5?'07:30':'07:00';r[10]=hours[i];r[13]='sleep-'+i;rows.sleep.push(r);}
  });
  const spreadsheet=createMemorySpreadsheet(rows);const calls=[];
- const {context:c}=await loadAppsScript({files:['Code.gs'],properties:key?{GEMINI_API_KEY:'FAKE_KEY'}:{},globals:{getSpreadsheet_:()=>spreadsheet,safeLog_(){}}});
+ const {context:c}=await loadAppsScript({files:['Code.gs','Ownership.gs','Sync.gs'],properties:key?{GEMINI_API_KEY:'FAKE_KEY'}:{},globals:{getSpreadsheet_:()=>spreadsheet,safeLog_(){}}});
  c.fetchWithRetry=(url,options)=>{calls.push({url,prompt:JSON.parse(options.payload).contents[0].parts[0].text});return fail?{errorCode:'RATE_LIMIT'}:{response:{getResponseCode:()=>200,getContentText:()=>JSON.stringify({candidates:[{finishReason:'STOP',content:{parts:[{text:'가상 기록의 분석입니다. '.repeat(20)}]}}]})}};};
  c.getSleepSettings=()=>({settings:{sleepSevere:7,sleepWarn:8,sleepGood:10,sleepMax:11}});
  const run=(start='2000-01-01',end='2000-01-07')=>c.generateAIHealthReport('fictional','가상',9999,999,99,60,120,start,end);

@@ -148,6 +148,7 @@ test('student bootstrap aggregates the existing student datasets', async () => {
     caffeineLogs: [{ id: 'c-1101' }],
     sleepLogs: [{ id: 's-1101' }],
     sleepSettings: { success: true, settings: { ageGroup: 'teen' } },
+    sleepPolicyVersion:context.SleepRecordPolicy.version,
   });
 });
 

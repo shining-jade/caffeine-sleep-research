@@ -1,3 +1,4 @@
+import {installComparisonDisplay} from './support/comparison-display.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -9,7 +10,7 @@ function extract(name) {
   const end = source.indexOf('\nfunction ', start + 9);
   return source.slice(start, end < 0 ? undefined : end);
 }
-function exportReport(status, {includeAi = true, contextMatches = true, content = '<div>저장한 건강 관찰 소견입니다. 평균 카페인 52mg, 평균 수면 12시간으로 확인했습니다. 기록일 기준으로 계산했습니다.</div>'} = {}) {
+function exportReport(status, {sleepAverage = 12, includeAi = true, contextMatches = true, content = '<div>저장한 건강 관찰 소견입니다. 평균 카페인 52mg, 평균 수면 12시간으로 확인했습니다. 기록일 기준으로 계산했습니다.</div>'} = {}) {
   const fields = {};
   const field = id => fields[id] ||= {style: {}, innerHTML: '', textContent: '', getContext() {return {};}, querySelector() {return null;}};
   field('aiStatusBadge').textContent = status;
@@ -20,14 +21,14 @@ function exportReport(status, {includeAi = true, contextMatches = true, content 
     getModalDates: () => ['2026-10-03', '2026-10-09'], getLimit: () => 170,
     aiReportContextKey: contextMatches ? 'current' : 'previous', getAIContextKey: () => 'current',
     getTargetCafText: () => '150mg', getTargetSleepCompactText: () => '23:00 / 07:00 / 8h',
-    avgCafForDates: () => 52, avgSleepForDates: () => 12, hasCafRecordOnDates: () => true,
+    avgCafForDates: () => 52, avgSleepForDates: () => sleepAverage, hasCafRecordOnDates: () => true,
     getCafStatusInfo: () => ({text: '1단계: 안전'}), getSleepStatusInfo: () => ({text: '수면 과다'}),
     caffeineData: [], sleepData: [], charts: {},
     evaluateAwards: () => [], getManualAwardsFor: () => [], findSleepForLifeDate: () => null,
     getTargetCafLimit: () => 150, getTargetSleepHours: () => 8, getCafBarColor: () => '#aaa',
     Chart: function () {}, setTimeout() {}
   });
-  vm.runInContext(['countSleepDays', 'getDefaultPDFOptions', 'normalizePDFOptions', 'compactPDFAIHTML', 'getSleepChartMax', 'compareSleepRecordsDesc', 'setPDFSectionVisible', 'exportPDF'].map(extract).join('\n'), c);
+  installComparisonDisplay(c);vm.runInContext(['renderSleepComparisonDetails','countSleepDays', 'getDefaultPDFOptions', 'normalizePDFOptions', 'compactPDFAIHTML', 'getSleepChartMax', 'compareSleepRecordsDesc', 'setPDFSectionVisible', 'exportPDF'].map(extract).join('\n'), c);
   c.exportPDF({pdfOptions: {includeAi}});
   return fields;
 }
@@ -61,3 +62,5 @@ test('PDF rejects analysis associated with a different student or period', () =>
     assert.equal(exportReport(status, {contextMatches: false}).pdf_aiBox.style.display, 'none');
   }
 });
+
+for(const [value,expected]of [[7.166666666666667,'7.2h'],[7.04,'7.0h'],[7.05,'7.1h'],[0,'0.0h'],[null,'-']])test('PDF displayed average one decimal '+String(value),()=>{const fields=exportReport('(분석 전)',{sleepAverage:value});assert.equal(fields.pdf_avgSleep.textContent,expected);});

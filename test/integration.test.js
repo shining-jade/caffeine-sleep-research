@@ -147,16 +147,12 @@ test('integration: Vercel config applies clean URLs, function duration and secur
   assert.equal(headers['Referrer-Policy'], 'no-referrer');
 });
 
-test('integration: Vercel config schedules 24 unique once-daily UTC reminder slots', async () => {
+test('integration: Vercel config schedules KST 08 and 20 reminder checks only', async () => {
   const config = JSON.parse(await readFile(new URL('../vercel.json', import.meta.url), 'utf8'));
   const hourlyCrons = config.crons.filter(({ path }) => path.startsWith('/api/reminders/run?slot='));
-  assert.equal(hourlyCrons.length, 24);
-  assert.deepEqual(hourlyCrons.map(({ path }) => path), Array.from(
-    { length: 24 }, (_, hour) => `/api/reminders/run?slot=${String(hour).padStart(2, '0')}`,
-  ));
-  assert.deepEqual(hourlyCrons.map(({ schedule }) => schedule), Array.from(
-    { length: 24 }, (_, hour) => `0 ${hour} * * *`,
-  ));
+  assert.equal(hourlyCrons.length, 2);
+  assert.deepEqual(hourlyCrons.map(({ path }) => path), ['/api/reminders/run?slot=23', '/api/reminders/run?slot=11']);
+  assert.deepEqual(hourlyCrons.map(({ schedule }) => schedule), ['0 23 * * *', '0 11 * * *']);
   assert.equal(new Set(config.crons.map(({ path }) => path)).size, config.crons.length);
   assert.ok(config.crons.length <= 100);
   assert.ok(config.crons.every(({ schedule }) => /^0 (?:[0-9]|1[0-9]|2[0-3]) \* \* \*$/.test(schedule)));

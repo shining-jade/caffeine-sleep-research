@@ -1,3 +1,6 @@
+export const REMINDER_PROTOCOL = 'wake-day-evening-v1';
+export const REMINDER_TIMES = Object.freeze({ sleep: '08:00', caffeine: '20:00' });
+
 const KST_FORMATTER = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Seoul',
   year: 'numeric',
@@ -117,7 +120,8 @@ export function normalizeStoredReminderConfig(value) {
 }
 
 export function deliveryKey({ referenceDate, type, subscriptionId }) {
-  return `${referenceDate}:${type}:${subscriptionId}`;
+  // Keep the existing caffeine key as the common PM key, including sleep-only PM reminders.
+  return `${referenceDate}:${type === 'evening' ? 'caffeine' : type}:${subscriptionId}`;
 }
 
 function addCalendarDays(dateText, offset) {
@@ -139,9 +143,8 @@ export function getNextReminderTimes({ config, nowMs }) {
   const clock = getKstClock(nowMs);
   const result = { sleep: null, caffeine: null };
   for (const type of ['sleep', 'caffeine']) {
-    if (!config?.[`${type}Enabled`]) continue;
-    const hour = Number(config[`${type}Time`]?.slice(0, 2));
-    if (!Number.isInteger(hour)) continue;
+    if (!config?.[`${type}Enabled`] || config[`${type}Time`] !== REMINDER_TIMES[type]) continue;
+    const hours = type === 'sleep' ? [8, 20] : [20];
     for (let offset = 0; offset <= 370; offset += 1) {
       const date = addCalendarDays(clock.date, offset);
       const weekday = weekdayForCalendarDate(date);
@@ -149,7 +152,8 @@ export function getNextReminderTimes({ config, nowMs }) {
       const active = (config.classPeriods || []).some((period) => (
         period.startDate <= date && date <= period.endDate
       ));
-      if (!active || (offset === 0 && hour < clock.hour)) continue;
+      const hour = hours.find((value) => offset > 0 || value >= clock.hour);
+      if (!active || hour === undefined) continue;
       result[type] = `${date}T${String(hour).padStart(2, '0')}:00:00+09:00`;
       break;
     }
@@ -159,6 +163,7 @@ export function getNextReminderTimes({ config, nowMs }) {
 
 export function selectReminderCandidates({
   type,
+  slot = 'morning',
   nowMs,
   config,
   students,
@@ -167,11 +172,11 @@ export function selectReminderCandidates({
   successfulDeliveryKeys,
 }) {
   if (type !== 'sleep' && type !== 'caffeine') return [];
-  if (!config?.enabled || !config?.[`${type}Enabled`]) return [];
+  if (!config?.enabled || !config?.[`${type}Enabled`] || config[`${type}Time`] !== REMINDER_TIMES[type]) return [];
 
   const clock = getKstClock(nowMs);
   if (!config.includeWeekends && (clock.weekday === 0 || clock.weekday === 6)) return [];
-  const configuredHour = Number(config[`${type}Time`]?.slice(0, 2));
+  const configuredHour = slot === 'evening' ? 20 : Number(config[`${type}Time`]?.slice(0, 2));
   if (!Number.isInteger(configuredHour) || configuredHour !== clock.hour) return [];
 
   const periods = new Map((config.classPeriods || []).map((period) => [String(period.classId), period]));
@@ -186,7 +191,7 @@ export function selectReminderCandidates({
 
   const completed = new Set(Array.from(completedStudentIds || [], (value) => String(value)));
   const successful = new Set(Array.from(successfulDeliveryKeys || [], (value) => String(value)));
-  const referenceDate = type === 'sleep' ? previousKstDate(clock.date) : clock.date;
+  const referenceDate = slot === 'evening' ? clock.date : type === 'sleep' ? previousKstDate(clock.date) : clock.date;
   const seenSubscriptions = new Set();
   const candidates = [];
 
@@ -198,7 +203,7 @@ export function selectReminderCandidates({
     if (!eligibleStudents.has(studentId) || completed.has(studentId)) continue;
     if (subscription.active !== true || subscription[`${type}Enabled`] !== true) continue;
 
-    const key = deliveryKey({ referenceDate, type, subscriptionId });
+    const key = deliveryKey({ referenceDate, type: slot === 'evening' ? 'evening' : type, subscriptionId });
     if (successful.has(key)) continue;
     candidates.push({
       studentId,

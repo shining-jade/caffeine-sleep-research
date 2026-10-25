@@ -1,6 +1,7 @@
 import webPush from 'web-push';
 
 import { getPushRuntimeConfig } from './env.js';
+import { previousKstDate } from './reminder-policy.js';
 
 const COPY = Object.freeze({
   sleep: Object.freeze({
@@ -34,8 +35,26 @@ function failureCode(statusCode) {
   return 'PUSH_UNAVAILABLE';
 }
 
-export function buildNotificationPayload({ type, referenceDate }) {
-  const copy = COPY[type];
+export function buildNotificationPayload({ type, referenceDate, missingTypes }) {
+  let copy = COPY[type];
+  let targetType = type;
+  let targetDate = referenceDate;
+  if (type === 'evening') {
+    if (!Array.isArray(missingTypes) || missingTypes.length < 1 || missingTypes.length > 2
+      || new Set(missingTypes).size !== missingTypes.length || missingTypes.some((value) => !COPY[value])) {
+      throw new Error('Invalid notification payload.');
+    }
+    targetType = missingTypes.includes('sleep') ? 'sleep' : 'caffeine';
+    targetDate = targetType === 'sleep' ? previousKstDate(referenceDate) : referenceDate;
+    copy = {
+      title: '오늘의 기록을 돌아볼 시간이에요 🌙',
+      body: missingTypes.length === 2
+        ? '오늘 기상한 수면 기록과 오늘의 카페인 기록을 남겨주세요. 카페인을 마시지 않았다면 ‘섭취 안 함’을 선택하면 돼요.'
+        : targetType === 'sleep'
+          ? '오늘 기상한 수면 기록을 아직 남기지 않았어요. 수면 기록을 남겨주세요.'
+          : COPY.caffeine.body,
+    };
+  }
   if (!copy || typeof referenceDate !== 'string' || !DATE_PATTERN.test(referenceDate)) {
     throw new Error('Invalid notification payload.');
   }
@@ -44,9 +63,10 @@ export function buildNotificationPayload({ type, referenceDate }) {
     body: copy.body,
     tag: `record-${type}-${referenceDate}`,
     data: {
-      type,
-      referenceDate,
-      url: `/?open=${type}&date=${referenceDate}`,
+      type: targetType,
+      referenceDate: targetDate,
+      url: `/?open=${targetType}&date=${targetDate}`,
+      ...(type === 'evening' ? { missingTypes: [...missingTypes] } : {}),
     },
   };
   // Supporting browsers open the record URL natively, even when worker click

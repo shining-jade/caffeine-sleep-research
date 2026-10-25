@@ -90,6 +90,7 @@ function syncSaveProfile_(payload, subject, entry, receipt) {
   return receipt;
 }
 function runSyncedMutation_(action, payload, subject, execute) {
+  if (['saveCaffeineData','saveSleepData','saveInitialSetup'].indexOf(action) < 0) throw new Error('REQUEST_REJECTED');
   var meta = payload._sync;
   if (!meta || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(meta.mutationId || '')) throw new Error('REQUEST_REJECTED');
   if (action === 'saveInitialSetup' && typeof meta.baseVersion !== 'string') return { success: false, error: 'SYNC_PROFILE_REQUIRED' };
@@ -105,8 +106,10 @@ function runSyncedMutation_(action, payload, subject, execute) {
   var receipt = { success: true, mutationId: meta.mutationId, recordId: payload.id, committedAt: new Date().toISOString() };
   if (action === 'saveInitialSetup') return syncSaveProfile_(payload, subject, entry, receipt);
   if (action === 'saveSleepData') {
-    // Sleep is replaceable by date: data and receipt must commit together.
+    // Keep the existing fingerprint/receipt contract; each new sleep appends by request ID.
     var saved = execute(syncConfirmation_(entry, receipt));
+    // Legacy clients understand REQUEST_REJECTED as a permanent review state.
+    if (saved && saved.success === false && ['SLEEP_RECORD_ID_CONFLICT','SLEEP_REQUEST_ID_REQUIRED','SLEEP_INTERVAL_OVERLAP','SLEEP_INTERVAL_INVALID','SLEEP_CLASSIFICATION_INVALID','SLEEP_RECORD_DELETED'].indexOf(saved.error) >= 0) return {success:false,error:'REQUEST_REJECTED',reason:saved.error};
     return saved && saved.success === true ? receipt : saved || {success:false,error:'SYNC_UNCONFIRMED'};
   }
   var result;

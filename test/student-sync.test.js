@@ -1,28 +1,29 @@
+import {SleepRecordPolicy} from './support/sleep-policy.js';
 import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';import test from 'node:test';import {webcrypto,createHash} from 'node:crypto';
 const code=fs.readFileSync('public/js/student-sync.js','utf8');
-function setup(send){const c=vm.createContext({window:{},crypto:{randomUUID:()=>String(++seq),subtle:webcrypto.subtle},TextEncoder,structuredClone,Date,JSON,setTimeout:()=>0,clearTimeout(){}});let seq=0;vm.runInContext(code,c);const rows=new Map();const store={put:async r=>rows.set(r.mutationId,structuredClone(r)),list:async owner=>[...rows.values()].filter(r=>r.owner===owner),lease:async()=>true,release:async()=>{},snapshot:async()=>null};const sync=c.window.StudentSync.create({store,send});sync.setSubject({studentId:'2101',name:'합성'});return {sync,rows};}
+function setup(send){const c=vm.createContext({SleepRecordPolicy,window:{},crypto:{randomUUID:()=>String(++seq),subtle:webcrypto.subtle},TextEncoder,structuredClone,Date,JSON,setTimeout:()=>0,clearTimeout(){}});let seq=0;vm.runInContext(code,c);const rows=new Map();const store={put:async r=>rows.set(r.mutationId,structuredClone(r)),list:async owner=>[...rows.values()].filter(r=>r.owner===owner),lease:async()=>true,release:async()=>{},snapshot:async()=>null};const sync=c.window.StudentSync.create({store,send});sync.setSubject({studentId:'2101',name:'합성'});return {sync,rows};}
 const payload={drink:'합성',mg:0,time:'2026-10-08 12:00:00'};
 
-test('offline sleep uses the analysis day, latest saved record and missing values as gaps',async()=>{
+test('offline conflicting episodes are retained and held; unknown actual wake dates remain unassigned',async()=>{
  const x=setup(async()=>{}),snapshots=new Map();
  x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};
  await x.sync.capture('getSleepLogs',[
-  {id:'new',date:'2026-10-14',start:'01:00',hours:7.5,savedAt:'2026-10-14 10:00'},
-  {id:'old',date:'2026-10-13',start:'23:00',hours:2,savedAt:'2026-10-14 09:00'},
+  {id:'new',date:'2026-10-14',start:'01:00',wakeDate:'2026-10-14',end:'08:30',hours:7.5,savedAt:'2026-10-14 10:00'},
+  {id:'old',date:'2026-10-13',start:'23:00',wakeDate:'2026-10-14',end:'01:30',hours:2,savedAt:'2026-10-14 09:00'},
   {id:'missing',date:'2026-10-14',start:'05:00',hours:null,savedAt:'2026-10-14 11:00'}]);
  await x.sync.capture('getFilteredStats',{todayTotal:0},['2101','2026-10-14']);
  const result=await x.sync.read('getFilteredStats',undefined,['2101','2026-10-14']);
- assert.equal(result.sleepData[5],7.5);assert.equal(result.sleepData[6],null);
+ assert.equal(result.sleepData[5],null);assert.equal(result.sleepDayStatuses[5],'held');assert.equal(result.sleepUnassignedRecordCount,1);assert.equal(result.sleepData[6],null);
 });
 
-test('pending dawn sleep retains a save timestamp and wins over an older night record',async()=>{
+test('pending dawn and existing overlapping episode both remain visible without a winner',async()=>{
  const x=setup(async()=>{}),snapshots=new Map();
  x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};
- await x.sync.capture('getSleepLogs',[{id:'old',date:'2026-10-14',start:'23:00',hours:2,savedAt:'2026-10-15 08:00',sourceRow:42}]);
+ await x.sync.capture('getSleepLogs',[{id:'old',date:'2026-10-14',start:'23:00',wakeDate:'2026-10-15',end:'01:30',hours:2,savedAt:'2026-10-15 08:00',sourceRow:42}]);
  await x.sync.capture('getFilteredStats',{todayTotal:0},['2101','2026-10-14']);
- await x.sync.enqueue('saveSleepData',{date:'2026-10-15',sleepTime:'01:00',wakeTime:'08:00',hours:7});
+ await x.sync.enqueue('saveSleepData',{date:'2026-10-15',sleepTime:'01:00',wakeDate:'2026-10-15',wakeTime:'08:00',hours:7});
  const records=await x.sync.read('getSleepLogs');assert.ok(records.find(r=>String(r.id).startsWith('local_')).savedAt);
- const stats=await x.sync.read('getFilteredStats',undefined,['2101','2026-10-14']);assert.equal(stats.sleepData.at(-1),7);
+ const stats=await x.sync.read('getFilteredStats',undefined,['2101','2026-10-14']);assert.equal(stats.sleepData.at(-1),null);assert.equal(stats.sleepDayStatuses.at(-1),'held');assert.equal(stats.sleepEpisodeCounts.at(-1),2);
 });
 
 test('lost save acknowledgment does not duplicate a matching mutation in refreshed history or offline totals',async()=>{
@@ -30,7 +31,7 @@ test('lost save acknowledgment does not duplicate a matching mutation in refresh
  x.sync.store.snapshot=async(key,value)=>{if(value!==undefined)snapshots.set(key,structuredClone(value));return snapshots.get(key);};
  await x.sync.capture('getCaffeineLogs',[]);await x.sync.capture('getFilteredStats',{todayTotal:0},['2101','2026-10-09']);
  const pending=await x.sync.enqueue('saveCaffeineData',{...payload,mg:25,time:'2026-10-09T13:00'});await x.sync.flush();
- const gas=vm.createContext({Utilities:{DigestAlgorithm:{SHA_256:'sha'},Charset:{UTF_8:'utf8'},computeDigest:(_,value)=>Array.from(createHash('sha256').update(value).digest())}});
+ const gas=vm.createContext({SleepRecordPolicy,Utilities:{DigestAlgorithm:{SHA_256:'sha'},Charset:{UTF_8:'utf8'},computeDigest:(_,value)=>Array.from(createHash('sha256').update(value).digest())}});
  vm.runInContext(fs.readFileSync('apps-script/Sync.gs','utf8'),gas);
  const expectedId='sync_'+gas.syncHash_(['2101','합성','saveCaffeineData',pending.mutationId]);
  // A separate, identical drink remains a distinct entry; only the mutation ID identifies the retry.
@@ -52,7 +53,7 @@ test('offline statistics follow pending and confirmed record changes instead of 
  await x.sync.confirmRecordMutation('deleteCaffeineData',['a']);await x.sync.confirmRecordMutation('deleteSleepData',['s']);
  stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,25);assert.equal(stats.sleepData.at(-1),null);
  const pending=[...x.rows.values()][0];pending.attempts=0;pending.state='pending';await x.sync.store.put(pending);await x.sync.cancelPending(pending.mutationId);
- stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,0);assert.equal(stats.caffeineHasData.at(-1),false);
+ stats=await x.sync.read('getFilteredStats',undefined,params);assert.equal(stats.todayTotal,null);assert.equal(stats.caffeineHasData.at(-1),false);
 });
 
 test('fresh server statistics are not replaced with older local histories while a record is pending',async()=>{

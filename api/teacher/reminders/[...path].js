@@ -3,6 +3,7 @@ import configHandler from '../../_lib/teacher/reminders/config.js';
 import testSendHandler from '../../_lib/teacher/reminders/test-send.js';
 import testStudentHandler from '../../_lib/teacher/reminders/test-student.js';
 import testSubscribeHandler from '../../_lib/teacher/reminders/test-subscribe.js';
+import runtimeBindingHandler from '../../_lib/teacher/reminders/runtime-binding.js';
 
 function routeName(req) {
   const value = req.query?.path;
@@ -19,6 +20,7 @@ export function createTeacherReminderRouter({ handlers = {
   'test-send': testSendHandler,
   'test-student': testStudentHandler,
   'test-subscribe': testSubscribeHandler,
+  'runtime-binding': runtimeBindingHandler,
 } } = {}) {
   return async function teacherReminderRouter(req, res) {
     const handler = handlers[routeName(req)];

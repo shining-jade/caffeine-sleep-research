@@ -2,11 +2,15 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
 const sources = [
+  'public/js/sleep-record-policy.js',
+  'apps-script/SleepEpisodeGuard.gs',
+  'apps-script/SleepEpisodeMetadata.gs',
   'apps-script/Spreadsheet.gs',
   'apps-script/Security.gs',
   'apps-script/Ownership.gs',
   'apps-script/Reminders.gs',
   'apps-script/Sync.gs',
+  'apps-script/SleepPreservation.gs',
   'apps-script/Api.gs',
   'apps-script/Code.gs',
 ];
