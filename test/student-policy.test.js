@@ -11,7 +11,7 @@ const EXPECTED_ACTIONS = [
   'saveSleepData', 'getSleepLogs', 'deleteSleepData', 'updateSleepData',
   'getWeightData', 'saveInitialSetup', 'getStats', 'getFilteredStats',
   'getStudentBootstrap',
-  'getTeacherAwardsForStudent', 'markTeacherAwardsSeen', 'submitInquiry',
+  'getTeacherAwardsForStudent', 'markTeacherAwardsSeen', 'claimBadgeCelebrations', 'submitInquiry',
   'getMyInquiries', 'markInquiryRepliesSeen', 'getCaffeineDB', 'testConnection', 'generateAIHealthReport',
   'analyzeDrinkImageWithAI', 'getTeacherMessages', 'markTeacherMessageRead',
   'replyToTeacherMessage', 'getBadgeConfig', 'getChallengeBadgeConfig',

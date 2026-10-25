@@ -46,3 +46,11 @@
 - Roll back Vercel by promoting the preceding known-good deployment.
 - Roll back Apps Script by selecting the preceding web-app version, then restore the matching `GAS_API_URL` in Vercel.
 - Disable GitHub Pages only after the Vercel student and teacher flows pass; deleting the repository is not required.
+
+## Badge celebrations (2026-10-25)
+
+Deploy the authenticated Apps Script claimBadgeCelebrations contract before the matching student/Vercel client. Shared BadgeJourney and the new module must be built together. Preserve the private badge_celebrations ledger across deploys.
+
+No silent baseline: first connection celebrates historical earned automatic badges absent from server claim history. Already-confirmed teacher milestones suppress the corresponding automatic celebration; the same unseen teacher/automatic badge is one teacher celebration. Known consumed IDs never replay. Legacy v1 ledger IDs are preserved and reported as uncertain because old silent-baseline and consumed states cannot be separated.
+
+Authorization is consumed before response for at-most-once behavior across updated tabs/devices. Lost response or page closure may omit a celebration; exactly-once visual delivery is not promised. Older open clients must refresh and can bypass the new ledger until updated. Never verify with actual student/TEST00 accounts or consume their claims manually. No new credentials, permissions, reminder schedules or record/achievement rules are needed.

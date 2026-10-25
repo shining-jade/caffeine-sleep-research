@@ -14,6 +14,7 @@ export const STUDENT_ACTION_RULES = Object.freeze({
   getFilteredStats: 'identityFirst',
   getTeacherAwardsForStudent: 'identityFirst',
   markTeacherAwardsSeen: 'identityPair',
+  claimBadgeCelebrations: 'identityPair',
   submitInquiry: 'identityPayload',
   getMyInquiries: 'identityFirst',
   markInquiryRepliesSeen: 'identityPair',

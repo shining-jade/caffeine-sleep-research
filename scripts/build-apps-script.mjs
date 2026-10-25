@@ -3,6 +3,8 @@ import { dirname, resolve } from 'node:path';
 
 const sources = [
   'public/js/sleep-record-policy.js',
+  'public/js/badge-journey.js',
+  'apps-script/BadgeCelebrations.gs',
   'apps-script/SleepEpisodeGuard.gs',
   'apps-script/SleepEpisodeMetadata.gs',
   'apps-script/Spreadsheet.gs',

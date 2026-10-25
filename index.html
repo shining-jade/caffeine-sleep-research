@@ -314,6 +314,8 @@
   <script src="/public/js/read-feedback.js"></script>
   <script src="/public/js/api-bridge.js"></script>
   <script src="/public/js/badge-journey.js"></script>
+  <script src="/public/js/badge-celebrations.js"></script>
+  <script defer src="/public/js/badge-celebrations-ui.js"></script>
   <script type="module" src="/public/js/install-guide.js"></script>
   <script type="module" src="/public/js/push-reminders.js"></script>
   <script type="module" src="/public/js/student-startup.js"></script>
@@ -1501,6 +1503,8 @@
       sleepTimeDraftEdited = false;
       sleepReminderDate = null;
       teacherAwards = [];
+      window.activeBadgeCelebrations = [];
+      if (window.badgeCelebrations) window.badgeCelebrations.reset();
       lastDashboardData = null;
       delete document.getElementById('sleepEpisodeList')?.dataset?.comparisonKey;
       window.studentDashboardEndDate = null;
@@ -1762,7 +1766,7 @@
             ? '기기 저장본 표시 중 · 서버 연결 후 갱신됩니다.' : '최신 데이터 표시 중';
         }
       }
-      if (lastDashboardData) renderCharts(lastDashboardData);
+      if (lastDashboardData) renderCharts(lastDashboardData);      if (window.badgeCelebrations && !document.hidden) void window.badgeCelebrations.refresh();
     }
 
     function loadLegacyStudentData() {
@@ -4387,6 +4391,7 @@
       cacheStudentRecords('caffeineLogs');
       renderCaffeineLogs();
       syncConfirmedCaffeineStats();
+      if (!response.localSaved && globalThis.badgeCelebrations && !document.hidden) void globalThis.badgeCelebrations.refresh();
       return true;
     }
 
@@ -4475,6 +4480,7 @@
         .withSuccessHandler(logs => {
           caffeineLogs = logs || []; caffeineHistoryLoaded = true; confirmedPendingCaffeine = []; cacheStudentRecords('caffeineLogs');
           renderCaffeineLogs();
+          if (window.badgeCelebrations && !document.hidden) void window.badgeCelebrations.refresh();
           if(showWarningAfter !== undefined) {
             const today = getTodayKST();
             let todayTotal = 0;
@@ -4497,6 +4503,7 @@
         .withSuccessHandler(logs => {
           sleepLogs = logs || []; cacheStudentRecords('sleepLogs');
           renderSleepLogs();
+          if (window.badgeCelebrations && !document.hidden) void window.badgeCelebrations.refresh();
           if(lastDashboardData) renderCharts(lastDashboardData);
         })
         .withFailureHandler(err => { showRecordConnectionError('sleep'); })
@@ -5378,15 +5385,8 @@
       // 버블 업데이트
       _updateTeacherBubble(newOnes.length);
 
-      // 새 뱃지가 있으면 모달 + 토스트
-      if (newOnes.length > 0) {
-        _showTeacherBadgeModal(newOnes);
-        const icon = newOnes[0].image || '🏅';
-        const txt = newOnes.length === 1
-          ? `${icon} "${newOnes[0].name}" 뱃지를 얻었습니다!`
-          : `🏅 뱃지 ${newOnes.length}개를 얻었습니다!`;
-        showUpdateNotification(txt);
-      }
+      // Only the durable server claim may authorize a celebration.
+      if (window.badgeCelebrations && !document.hidden) void window.badgeCelebrations.refresh();
     }
 
     // ── 달력 탭 뱃지 섹션 렌더 (통합됨 → updateBadges로 위임) ───
@@ -5460,12 +5460,15 @@
       const modal = document.getElementById('teacherBadgeModal');
       if (modal) modal.style.display = 'none';
       // 읽음 처리
-      markTeacherAwardsSeen(teacherAwards);
-      _updateTeacherBubble(0);
+      const displayed = window.activeBadgeCelebrations;
+      markTeacherAwardsSeen(Array.isArray(displayed) ? displayed.filter(item => item.kind === 'teacher') : teacherAwards);
+      window.activeBadgeCelebrations = [];
+      _updateTeacherBubble(getNewTeacherAwards(teacherAwards).length);
       // NEW 태그 제거를 위해 섹션 재렌더
       _renderTeacherAwardSection();
       // 달력 탭으로 이동
       showTab('calendar');
+      if (window.badgeCelebrations) window.badgeCelebrations.closed();
     }
 
     // ────────────────────────────────────────────────

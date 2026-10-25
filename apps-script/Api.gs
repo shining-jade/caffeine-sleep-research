@@ -6,6 +6,7 @@ var STUDENT_ACTIONS_ = {
   getWeightData: 'identityFirst', saveInitialSetup: 'identityPayload',
   getStats: 'identityFirst', getStudentBootstrap: 'identityFirst', getFilteredStats: 'identityFirst',
   getTeacherAwardsForStudent: 'identityFirst', markTeacherAwardsSeen: 'identityPair',
+  claimBadgeCelebrations: 'identityPair',
   submitInquiry: 'identityPayload', getMyInquiries: 'identityFirst',
   markInquiryRepliesSeen: 'identityPair',
   getCaffeineDB: 'passthrough', testConnection: 'passthrough',
@@ -47,7 +48,7 @@ var SCHEDULER_ACTIONS_ = {
 var STUDENT_MUTATIONS_ = {
   saveCaffeineData: true, deleteCaffeineData: true, updateCaffeineData: true,
   saveSleepData: true, deleteSleepData: true, updateSleepData: true,
-  saveInitialSetup: true, markTeacherAwardsSeen: true, submitInquiry: true,
+  saveInitialSetup: true, markTeacherAwardsSeen: true, claimBadgeCelebrations: true, submitInquiry: true,
   markInquiryRepliesSeen: true,
   markTeacherMessageRead: true, replyToTeacherMessage: true
 };
@@ -240,6 +241,7 @@ function invokeAction_(action, params) {
     case 'getFilteredStats': return getFilteredStats.apply(null, params);
     case 'getTeacherAwardsForStudent': return getTeacherAwardsForStudent.apply(null, params);
     case 'markTeacherAwardsSeen': return markTeacherAwardsSeen.apply(null, params);
+    case 'claimBadgeCelebrations': return claimBadgeCelebrations.apply(null, params);
     case 'submitInquiry': return submitInquiry.apply(null, params);
     case 'getMyInquiries': return getMyInquiries.apply(null, params);
     case 'getCaffeineDB': return getCaffeineDB.apply(null, params);
