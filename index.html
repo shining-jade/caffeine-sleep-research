@@ -16,6 +16,29 @@
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700&display=swap');
 
+    #teacherBadgeModal.centered {
+      align-items: center;
+      padding: 24px 16px;
+      min-height: 100dvh;
+    }
+    #teacherBadgeModal.centered > div.relative {
+      border-radius: 2rem;
+      max-height: calc(100dvh - 48px);
+      display: flex;
+      flex-direction: column;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    #teacherBadgeModal.centered #tbModalList {
+      min-height: 0;
+      overflow-y: auto;
+      flex-shrink: 1;
+      overscroll-behavior: contain;
+    }
+    #teacherBadgeModal.centered > div.relative > div:first-child,
+    #teacherBadgeModal.centered > div.relative > div:last-child {
+      flex-shrink: 0;
+    }
+
     .dashboard-chart-region { position: relative; }
     .dashboard-chart-status {
       position: absolute; inset: 0; z-index: 1;
@@ -1278,7 +1301,7 @@
     </div>
 
     <!-- ═══ 👩‍🏫 선생님 뱃지 도착 알림 모달 ═══ -->
-    <div id="teacherBadgeModal" class="fixed inset-0 z-[300] flex items-end justify-center" style="display:none !important;">
+    <div id="teacherBadgeModal" class="centered fixed inset-0 z-[300] flex items-center justify-center" style="display:none !important;">
       <div class="absolute inset-0 bg-black/70 backdrop-blur-sm" onclick="closeTeacherBadgeModal()"></div>
       <div class="relative bg-white w-full max-w-sm rounded-t-[2rem] shadow-2xl pb-safe animate-scale-in overflow-hidden">
         <!-- 퍼플 그라데이션 헤더 -->
