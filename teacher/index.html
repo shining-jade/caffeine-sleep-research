@@ -3283,7 +3283,7 @@ function getFilteredStudents(){
                 if(badgeKeys.length>0){
                     teacherMatch=teacherMatch||badgeKeys.some(k=>{
                         const bid=k.replace('badge_','');
-                        return sAwards.some(a=>(a.awardId||a.badgeId)===bid);
+                        return sAwards.some(a=>(a.awardId||a.badgeId)===bid)||evaluateJourneyBadges(s.학번,fd).some(a=>a.id===bid);
                     });
                 }
                 if(af.has('awardNoTeacher'))teacherMatch=teacherMatch||(sAwards.length===0);
@@ -3344,10 +3344,10 @@ function updateBadges(){
     n('cntAuto_today_sleep', getAnalysisStudents().filter(s=>hasSleepRecordOnWakeDate(s.학번,fd2)).length);
     n('cntAwardNoTeacher',   getAnalysisStudents().filter(s=>getManualAwardsFor(s.학번).length===0).length);
     // 개별 뱃지별 카운트
-    challengeBadges.filter(b=>!b.auto).forEach(b=>{
+    challengeBadges.forEach(b=>{
         const el=document.getElementById('cntBadge_'+b.id);
         if(!el)return;
-        el.textContent=getAnalysisStudents().filter(s=>getManualAwardsFor(s.학번).some(a=>(a.awardId||a.badgeId)===b.id)).length;
+        el.textContent=getAnalysisStudents().filter(s=>getManualAwardsFor(s.학번).some(a=>(a.awardId||a.badgeId)===b.id)||evaluateJourneyBadges(s.학번,fd2).some(a=>a.id===b.id)).length;
     });
 }
 // 드롭다운 토글
@@ -5907,12 +5907,12 @@ function submitManualAward() {
     closeManualAwardModal();
 }
 
-// ─── renderAwardChips: 오늘기록 자동뱃지 + 교사수여 뱃지 ───
+// ─── 오늘 기록 상태 + 누적 달성 뱃지 + 교사 수여 뱃지 ───
 function renderAwardChips(studentId, dates, baseDate, showDelete) {
-    const autoEarned = evaluateAutoTodayBadges(studentId, baseDate);
     const manualList = getManualAwardsFor(studentId);
+    const autoEarned = evaluateAwards(studentId, dates, baseDate).filter(a=>!manualList.some(m=>(m.awardId||m.badgeId)===a.id||String(m.name||'').trim()===a.name));
     let html = '';
-    // 자동 뱃지 (오늘 기록만)
+    // 오늘 기록 상태와 누적 달성 뱃지는 표시만 하며 수여 API를 호출하지 않는다.
     autoEarned.forEach(a => {
         html += `<span class="award-chip" style="background:${a.bg||'#f3f4f6'};color:${a.color||'#374151'};" title="자동 뱃지">
             <span style="font-size:13px;">${a.image||'🏅'}</span> ${a.name}
@@ -6228,9 +6228,21 @@ function evaluateAutoTodayBadges(studentId, baseDate) {
     if (todaySleep) earned.push({ id:'today_sleep', name:'수면 오늘 기록',   image:'😴', bg:'#eff6ff', color:'#2563eb' });
     return earned;
 }
-// 하위 호환 래퍼 (기존 evaluateAwards 호출 유지)
+// 학생 화면 및 서버와 동일하게 기상 날짜 기준으로 하루 기록 완료를 집계한다.
+function evaluateJourneyBadges(studentId, baseDate){
+    const cfg=BadgeJourney.mergeConfig(journeyConfig);
+    const schedule=cfg.schedules[BadgeJourney.classFromStudentId(studentId)]||cfg.schedules[cfg.defaultClass||'3'];
+    const end=baseDate&&baseDate<schedule.end?baseDate:schedule.end;
+    const summary=BadgeJourney.summarize({
+        caffeineDates:caffeineData.filter(r=>String(r.학번)===String(studentId)).map(r=>String(r.섭취시간||'').slice(0,10)),
+        sleepDates:sleepData.filter(r=>String(r.학번)===String(studentId)).map(getSleepWakeDate),
+        schedule:{...schedule,end}
+    });
+    return BadgeJourney.milestoneProgress(summary.completeDates,cfg.badges).filter(b=>b.auto===true&&b.earned);
+}
+// CSV/PDF와 학생 목록에서도 동일한 자동 뱃지를 사용한다.
 function evaluateAwards(studentId, dates, baseDate) {
-    return evaluateAutoTodayBadges(studentId, baseDate);
+    return [...evaluateAutoTodayBadges(studentId, baseDate),...evaluateJourneyBadges(studentId,baseDate)];
 }
 
 // ── 설정 에디터 렌더 ──────────────────────────────────────
@@ -7100,6 +7112,8 @@ function loadBadgeConfigFromGAS(){
             renderChallengeBadgeList();
             rebuildAwardDropdown();
             renderJourneyStatus();
+            updateStudentGrid();
+            if(document.getElementById('studentModal').classList.contains('active'))refreshModalData();
         })
         .withFailureHandler(function(err){console.warn('건강기록 여정 설정 로드 실패:',err);renderChallengeBadgeList();renderJourneyStatus();})
         .getChallengeBadgeConfig();
