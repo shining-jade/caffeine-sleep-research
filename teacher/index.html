@@ -1480,7 +1480,7 @@
 
 <!-- 학생 상세 모달 -->
 <div id="studentModal" class="modal">
-    <div class="modal-content">
+    <div id="studentModalContent" class="modal-content">
         <div class="modal-header">
             <button class="close-modal" onclick="closeModal()">&times;</button>
             <h2 style="font-size:24px;color:#1f2937;margin-bottom:4px;">
@@ -3669,6 +3669,8 @@ function openStudentModal(id){
     document.getElementById('modalEndDate').max=today;
     resetAIReportContext();
     refreshModalData();document.getElementById('studentModal').classList.add('active');
+    // 재사용하는 상세 창은 화면에 표시한 뒤 항상 맨 위부터 시작
+    document.getElementById('studentModalContent').scrollTop=0;
     // 저장된 분석 결과가 있으면 자동 로드
     loadSavedAIReport();
 }

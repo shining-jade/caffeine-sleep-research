@@ -15,7 +15,7 @@ function extract(name) {
 function fixture() {
   const fields = {}, requests = [];
   const field = id => fields[id] ||= {
-    style: {}, innerHTML: '', textContent: '', value: '', contentEditable: 'false', dataset:{}, querySelector(){return null;},
+    style: {}, innerHTML: '', textContent: '', value: '', contentEditable: 'false', scrollTop: 0, dataset:{}, querySelector(){return null;},
     classList: {add() {}, remove() {}, toggle() {}}, getContext() {return {};}
   };
   field('studentDateFilter').value = '2026-10-09';
@@ -54,6 +54,34 @@ function fixture() {
 }
 const saved = text => ({success: true, policyVersion:'2026-10-14', content: text.repeat(10), savedAt: '검증'});
 const completed = text => ({success: true, analysis: text.repeat(20), source: 'AI_Teacher'});
+
+for (const nextStudent of ['A', 'B']) {
+  test(`reopening student ${nextStudent} starts at the top after scrolling student A`, () => {
+    const {c, field} = fixture();
+    c.openStudentModal('A');
+    field('studentModalContent').scrollTop = 1200;
+    c.closeModal();
+    c.openStudentModal(nextStudent);
+    assert.equal(field('studentModalContent').scrollTop, 0);
+    assert.equal(field('modalStudentId').textContent, nextStudent);
+  });
+}
+
+test('switching students without closing also starts at the top', () => {
+  const {c, field} = fixture();
+  c.openStudentModal('A');
+  field('studentModalContent').scrollTop = 1200;
+  c.openStudentModal('B');
+  assert.equal(field('studentModalContent').scrollTop, 0);
+});
+
+test('refreshing the current student period preserves the scroll position', () => {
+  const {c, field} = fixture();
+  c.openStudentModal('A');
+  field('studentModalContent').scrollTop = 600;
+  c.setModalPeriod('14');
+  assert.equal(field('studentModalContent').scrollTop, 600);
+});
 
 test('legacy saved health reports stay out of the current report and PDF context',()=>{
   const {c,field,requests}=fixture();c.openStudentModal('A');
