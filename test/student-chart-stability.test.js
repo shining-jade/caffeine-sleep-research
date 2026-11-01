@@ -9,7 +9,7 @@ const start=html.indexOf('    function renderCharts(');
 const source=html.slice(start,html.indexOf('\n    }',start)+6);
 function setup(){
  const instances=[],timers=[];
- const canvases={caffeineChart:{getContext:()=>({})},sleepChart:{getContext:()=>({})}};
+ const canvases={caffeineChart:{setAttribute(name,value){(this.attributes||={})[name]=String(value);},getContext:()=>({})},sleepChart:{setAttribute(name,value){(this.attributes||={})[name]=String(value);},getContext:()=>({})}};
  const c=vm.createContext({userLimit:150,caffeineChart:null,sleepChart:null,
   SLEEP_CFG:{sleepSevere:7,sleepWarn:8,sleepGood:10,sleepMax:11},
   buildSleepDataByLifeDate:(_,values)=>values,

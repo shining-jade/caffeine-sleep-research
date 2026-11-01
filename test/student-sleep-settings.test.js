@@ -11,7 +11,7 @@ const adult={ageGroup:'adult',sleepSevere:6,sleepWarn:7,sleepGood:9,sleepMax:10}
 function setup(settings=teen){
  const configs=[], elements={sleepLegend:{innerHTML:''},sleepRecommendLabel:{textContent:''}};
  const c=vm.createContext({SleepRecordPolicy,window:{},SLEEP_CFG:{...settings},user:{studentId:'fictional'},lastDashboardData:null,userLimit:150,
- caffeineChart:null,sleepChart:null,document:{getElementById:id=>elements[id]||(id.endsWith('Chart')?{getContext:()=>({})}:null)},
+ caffeineChart:null,sleepChart:null,document:{getElementById:id=>elements[id]||(id.endsWith('Chart')?{setAttribute(name,value){(this.attributes||={})[name]=String(value);},getContext:()=>({})}:null)},
  Chart:function(_,config){this.data=config.data;this.options=config.options;configs.push(config);this.update=()=>configs.push({data:this.data,options:this.options});this.destroy=()=>{};},buildSleepDataByLifeDate:(_,values)=>values,setTimeout(){},
  cacheStudentRecords(){},renderCaffeineLogs(){},renderSleepLogs(){},updateDashboard(){},refreshData(){},
  updateLimitDisplay(){},updateTargetSleepDisplay(){},showWeightSetupModal(){},google:{script:{run:{withSuccessHandler(h){this.success=h;return this;},withFailureHandler(){return this;},getSleepSettings(){}}}}

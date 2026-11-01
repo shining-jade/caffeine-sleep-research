@@ -570,6 +570,14 @@
         .pdf-award-section{margin-bottom:16px;page-break-inside:avoid;}
         .pdf-award-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}
         .pdf-award-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:12px;font-size:9px;font-weight:600;border:1px solid rgba(0,0,0,0.1);}
+
+        .teacher-message-panel{position:fixed;z-index:1100;right:16px;top:16px;bottom:16px;width:344px;max-width:calc(100% - 32px);overflow-y:auto;overscroll-behavior:contain;background:white;border:1px solid #c7d2fe;border-radius:18px;box-shadow:0 12px 40px rgba(31,41,55,.22);}
+        .teacher-message-panel-inner{padding:22px;}
+        .teacher-message-panel textarea{min-height:180px;resize:vertical!important;}
+        .message-panel-launcher{position:fixed;right:24px;bottom:24px;z-index:1050;background:#065f46;color:white;box-shadow:0 4px 16px rgba(0,0,0,.2);}
+        .message-panel-open .message-panel-launcher{display:none;}
+        @media(min-width:900px){#studentModal.message-panel-open{padding-right:376px;box-sizing:border-box;}#studentModal.message-panel-open .modal-content{max-width:1020px;width:96%;}}
+        @media(max-width:899px){.teacher-message-panel{top:auto;bottom:0;right:0;width:100%;max-width:100%;height:48vh;height:48dvh;border-radius:18px 18px 0 0;}.teacher-message-panel-inner{padding:16px;}.teacher-message-panel textarea{min-height:90px;}#studentModal.message-panel-open{align-items:flex-start;padding-top:8px;box-sizing:border-box;}#studentModal.message-panel-open .modal-content{position:relative;bottom:auto;left:auto;max-height:calc(52vh - 16px);max-height:calc(52dvh - 16px);border-radius:16px;}}
     </style>
   <script src="/public/js/read-feedback.js"></script>
   <script src="/public/js/api-bridge.js"></script>
@@ -1177,10 +1185,12 @@
         </div>
     </div>
 
-<!-- 메시지 작성 모달 -->
-<div id="msgSendModal" style="display:none;position:fixed;z-index:1100;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.5);">
-    <div style="background:white;border-radius:16px;padding:28px;max-width:520px;width:calc(100% - 32px);margin:auto;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);box-shadow:0 20px 60px rgba(0,0,0,0.2);">
-        <h3 style="font-size:18px;font-weight:700;margin-bottom:6px;color:#1f2937;">📨 학생에게 메시지 보내기</h3>
+<!-- 기록을 보며 작성하는 메시지 패널 -->
+<div id="msgSendModal" class="teacher-message-panel" role="dialog" aria-modal="false" aria-labelledby="msgPanelHeading" style="display:none;">
+    <div class="teacher-message-panel-inner">
+        <button type="button" class="close-modal" onclick="closeMsgSendModal()" aria-label="메시지 작성창 접기">&times;</button>
+        <h3 id="msgPanelHeading" style="font-size:18px;font-weight:700;margin-bottom:6px;color:#1f2937;">📨 메시지 작성</h3>
+        <p style="font-size:12px;color:#6b7280;margin:0 0 12px;">기록을 스크롤하며 확인한 내용을 적어 주세요.</p>
         <div id="msgTargetLabel" style="font-size:13px;color:#6366f1;font-weight:600;margin-bottom:16px;"></div>
         <input type="text" id="msgTitle" placeholder="제목을 입력하세요"
             style="width:100%;padding:11px 14px;border:2px solid #e5e7eb;border-radius:8px;font-size:14px;font-family:inherit;outline:none;margin-bottom:12px;box-sizing:border-box;transition:border-color 0.2s;"
@@ -1191,7 +1201,7 @@
         <input type="hidden" id="msgTargetId">
         <input type="hidden" id="msgTargetName">
         <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end;">
-            <button onclick="closeMsgSendModal()" class="btn" style="background:#f3f4f6;color:#374151;flex:1;justify-content:center;">취소</button>
+            <button onclick="closeMsgSendModal()" class="btn" style="background:#f3f4f6;color:#374151;flex:1;justify-content:center;">접기</button>
             <button onclick="submitTeacherMsg()" class="btn btn-primary" style="flex:1;justify-content:center;">전송</button>
         </div>
     </div>
@@ -1480,6 +1490,7 @@
 
 <!-- 학생 상세 모달 -->
 <div id="studentModal" class="modal">
+    <button type="button" id="messagePanelLauncher" class="btn message-panel-launcher" onclick="openMsgSendModal()">📨 메시지 옆에서 열기</button>
     <div id="studentModalContent" class="modal-content">
         <div class="modal-header">
             <button class="close-modal" onclick="closeModal()">&times;</button>
@@ -1527,7 +1538,7 @@
                 <button class="btn btn-blue" onclick="openPDFOptionsModal('save')">📄 PDF 저장</button>
                 <button class="btn" style="background:#eff6ff;color:#1d4ed8;border:none;" onclick="openPDFOptionsModal('send')">📎 PDF 보내기</button>
                 <button class="btn" style="background:#f5f3ff;color:#6d28d9;border:none;" onclick="openManualAwardModal('single')">🏅 뱃지 수여</button>
-                <button class="btn" style="background:#ecfdf5;color:#065f46;border:none;" onclick="openMsgSendModal()">📨 메시지 보내기</button>
+                <button class="btn" style="background:#ecfdf5;color:#065f46;border:none;" onclick="openMsgSendModal()">📨 메시지 옆에서 열기</button>
             </div>
             <div style="margin-bottom:20px;">
                 <div class="ai-toggle-header" onclick="toggleAI()">
@@ -3649,6 +3660,9 @@ function resetAIReportContext(){
     const saveBtn=document.getElementById('aiSaveBtn');saveBtn.disabled=false;saveBtn.textContent='💾 저장';
 }
 function openStudentModal(id){
+    if(document.querySelector?.('#msgSendModal .btn-primary')?.disabled)return;
+    const messagePanel=document.getElementById('msgSendModal');if(messagePanel)messagePanel.style.display='none';
+    document.getElementById('studentModal').classList.remove('message-panel-open');
     currentStudentId=id;const s=studentsData.find(st=>st.학번===id);if(!s)return;
     document.getElementById('modalStudentName').textContent=s.이름;
     document.getElementById('modalStudentId').textContent=s.학번;
@@ -3675,7 +3689,7 @@ function openStudentModal(id){
     // 저장된 분석 결과가 있으면 자동 로드
     loadSavedAIReport();
 }
-function closeModal(){aiViewGeneration++;aiViewKey='';aiReportContextKey='';document.getElementById('studentModal').classList.remove('active');}
+function closeModal(){if(document.querySelector?.('#msgSendModal .btn-primary')?.disabled)return;const panel=document.getElementById('msgSendModal');if(panel)panel.style.display='none';document.getElementById('studentModal').classList.remove('message-panel-open');aiViewGeneration++;aiViewKey='';aiReportContextKey='';document.getElementById('studentModal').classList.remove('active');}
 window.onclick=e=>{if(e.target===document.getElementById('studentModal'))closeModal();};
 function setModalDateToday(){document.getElementById('modalEndDate').value=today;refreshModalData();}
 
@@ -5157,17 +5171,23 @@ function openMsgSendModal() {
     const id = currentStudentId;
     const s = studentsData.find(st => st.학번 === id);
     if (!s) return;
+    if (document.getElementById('msgTargetId').value !== String(id)) {
+        document.getElementById('msgTitle').value = '';
+        document.getElementById('msgContent').value = '';
+    }
     document.getElementById('msgTargetId').value = id;
     document.getElementById('msgTargetName').value = s.이름;
     document.getElementById('msgTargetLabel').textContent = `수신: ${s.이름} (${id})`;
-    document.getElementById('msgTitle').value = '';
-    document.getElementById('msgContent').value = '';
     document.getElementById('msgSendModal').style.display = 'block';
+    document.getElementById('studentModal').classList.add('message-panel-open');
+    document.getElementById('msgTitle').focus();
 }
 
 function closeMsgSendModal() {
     if (document.querySelector('#msgSendModal .btn-primary')?.disabled) return;
     document.getElementById('msgSendModal').style.display = 'none';
+    document.getElementById('studentModal').classList.remove('message-panel-open');
+    document.getElementById('messagePanelLauncher').focus();
 }
 
 function submitTeacherMsg() {
@@ -5185,6 +5205,8 @@ function submitTeacherMsg() {
         .withSuccessHandler(res => {
             btn.disabled = false; btn.textContent = '전송';
             if (res && res.success === true) {
+                document.getElementById('msgTitle').value = '';
+                document.getElementById('msgContent').value = '';
                 closeMsgSendModal();
                 showTeacherModal('✅', '전송 완료', `${studentName} 학생에게 메시지를 보냈습니다.`, 'success');
                 loadSentMessages();

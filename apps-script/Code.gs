@@ -870,9 +870,9 @@ function recordSleepCategory_(hours) {
 function buildRecordFeedback_(data,limit,teacher,period,thresholds,lifestyle) {
   const count=data.totalDays||7, cafDays=data.caffeineRecordedDays||0,slpDays=data.sleepRecordedDays||0,condDays=data.conditionRecordedDays||0;
   const caf=cafDays?data.caffeineTotal/cafDays:null,slp=slpDays?data.sleepTotal/slpDays:null,condition=condDays?data.conditionTotal/condDays:null;
-  const note=days=>days>0&&days<3?' — 기록이 적어 경향 해석에 주의가 필요합니다.':'';
-  let text=(teacher?'건강 관찰 소견':'기록 기반 건강 피드백')+' ('+period+')\n평균은 각 항목의 유효 기록일 기준이며 미기록은 제외합니다.\n\n☕ 카페인\n';
-  if(caf===null)text+='카페인 미기록 또는 함량 누락으로 평균을 계산하지 않습니다.\n';
+  const note=days=>days>0&&days<3?(teacher?' — 기록이 적어 경향 해석에 주의가 필요합니다.':' — 기록이 '+days+'일로 적어, 평소 습관으로 판단하기에는 아직 부족해요.'):'';
+  let text=(teacher?'건강 관찰 소견':'기록 기반 건강 피드백')+' ('+period+')\n평균은 각 항목의 유효 기록일을 기준으로 계산했으며, 미기록일은 계산에서 제외했습니다.\n\n☕ 카페인\n';
+  if(caf===null)text+='카페인 미기록 또는 함량 누락으로 평균을 계산하지 못했습니다.\n';
   else {
     text+='기록일 기준 일평균 '+Math.round(caf)+'mg / 목표 섭취량 '+Math.round(limit)+'mg · 기록 '+cafDays+'/'+count+'일'+note(cafDays)+'\n';
     if(cafDays>=3) {
@@ -886,9 +886,27 @@ function buildRecordFeedback_(data,limit,teacher,period,thresholds,lifestyle) {
   text+=slp===null?'수면 미기록 — 수면시간을 판단할 수 없습니다.\n':'평균 '+slp.toFixed(1)+'h · 기록 '+slpDays+'/'+count+'일'+note(slpDays)+'\n';
   if(slpDays>=3)text+='수면시간: '+recordSleepCategory_(slp)+' (수업 기준 8~10시간)\n';
   text+=condition===null?'기상 후 컨디션 미기록\n':'기상 후 컨디션 평균 '+condition.toFixed(1)+'점 · 기록 '+condDays+'/'+count+'일'+note(condDays)+'\n';
-  text+='수면시간과 기상 후 컨디션은 별도로 살펴봅니다.\n';
+  if(teacher)text+='수면시간과 기상 후 컨디션은 별도로 살펴봅니다.\n';
+  else {
+    if(slpDays>=3&&condDays>=3)text+='수면시간과 컨디션을 함께 기록했네요. 컨디션이 좋았던 날과 아쉬웠던 날의 수면시간을 나란히 비교해 보세요.\n';
+  }
   if(teacher&&lifestyle)text+='\n생활 습관 관찰\n'+lifestyle+'\n';
-  text+='\n💡 실천 제안\n1. 기록이 없는 날과 카페인을 섭취하지 않은 날의 0mg 기록을 구분해 주세요.\n2. 수면시간과 기상 후 컨디션을 기록하고 나의 생활과 함께 비교해 보세요.\n이 피드백은 자기관찰을 위한 교육자료입니다.';
+  if(teacher)text+='\n💡 실천 제안\n1. 기록이 없는 날과 카페인을 섭취하지 않은 날의 0mg 기록을 구분해 주세요.\n2. 수면시간과 기상 후 컨디션을 기록하고 나의 생활과 함께 비교해 보세요.\n이 피드백은 자기관찰을 위한 교육자료입니다.';
+  else {
+    const overDays=(data.overCaffeineDays||[]).filter(day=>day.mg>limit).length;
+    let caffeineTip;
+    if(data.caffeineMissingDays)caffeineTip='함량이 빠진 날의 음료명과 양을 확인하고 카페인 함량을 보완해 보세요.';
+    else if(cafDays<3)caffeineTip='오늘 마신 음료와 카페인 양을 기록해 보세요. 카페인을 마시지 않은 날도 0mg으로 남기면 다음 분석에 반영할 수 있어요.';
+    else if(overDays)caffeineTip='목표 섭취량을 넘은 '+overDays+'일의 기록에서 어떤 음료를 얼마나 마셨는지 확인해 보세요.';
+    else caffeineTip='카페인을 마신 날의 음료와 양을 확인하고, 다음 기록에서도 목표 섭취량과 비교해 보세요.';
+    let sleepTip;
+    if(slpDays<3)sleepTip='다음 수면부터 취침·기상 시각과 기상 후 컨디션을 함께 기록해 보세요. 기록이 쌓이면 날짜별 차이를 비교할 수 있어요.';
+    else if(condDays<3)sleepTip='다음에 일어나면 기상 후 컨디션을 1~5점으로 기록해 보세요. 수면시간 옆에 점수를 남기면 어떤 날 더 개운했는지 비교할 수 있어요.';
+    else if(slp<8)sleepTip='수면시간이 가장 짧았던 날의 취침·기상 시각을 확인하고, 그날의 컨디션을 다른 날과 비교해 보세요.';
+    else if(slp>10)sleepTip='수면시간이 가장 길었던 날의 취침·기상 시각을 확인하고, 그날의 컨디션을 다른 날과 비교해 보세요.';
+    else sleepTip='컨디션이 좋았던 날의 취침·기상 시각을 확인하고, 다른 날과 어떤 차이가 있었는지 비교해 보세요.';
+    text+='\n💡 실천 제안\n1. '+caffeineTip+'\n2. '+sleepTip;
+  }
   return text;
 }
 

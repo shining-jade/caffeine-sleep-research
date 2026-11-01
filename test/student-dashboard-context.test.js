@@ -87,7 +87,7 @@ test('unfiltered refresh follows today after midnight instead of pinning yesterd
   assert.equal(x.calls[1].args[1], '2026-10-10');
 });
 test('student sleep graph fits long records with headroom', () => {
-  const configs = []; const canvas = { getContext: () => ({}) };
+  const configs = []; const canvas = { setAttribute(name,value){(this.attributes||={})[name]=String(value);}, getContext: () => ({}) };
   const c = vm.createContext({SleepRecordPolicy, userLimit: 150, caffeineChart: null, sleepChart: null,
     buildSleepDataByLifeDate: (_, values) => values,
     document: { getElementById: id => id.endsWith('Chart') ? canvas : null }, setTimeout() {},

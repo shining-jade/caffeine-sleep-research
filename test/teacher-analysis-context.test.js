@@ -16,7 +16,7 @@ function fixture() {
   const fields = {}, requests = [];
   const field = id => fields[id] ||= {
     style: {}, innerHTML: '', textContent: '', value: '', contentEditable: 'false', scrollTop: 0, dataset:{}, querySelector(){return null;},
-    classList: {add() {}, remove() {}, toggle() {}}, getContext() {return {};}
+    classList: {add() {}, remove() {}, toggle() {}}, setAttribute(name,value){(this.attributes||={})[name]=String(value);},getContext() {return {};}
   };
   field('studentDateFilter').value = '2026-10-09';
   const runner = {withSuccessHandler(fn) {this.success = fn; return this;},

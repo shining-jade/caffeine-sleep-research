@@ -49,3 +49,30 @@ for(const [start,end] of [['2000-02-30','2000-03-07'],['2000-01-01','2050-01-07'
  const x=await setup();x.c.getSpreadsheet_=()=>{throw Error('must not read on invalid range');};
  const result=x.run(start,end);assert.equal(result.success,false);assert.equal(result.errorCode,'INVALID_PERIOD');assert.equal(x.calls.length,0);
 });
+
+test('student advice identifies goal-exceeding days even when the average is within the goal',async()=>{
+ const x=await setup({mg:[0,0,150]});
+ const report=x.run().analysis;
+ assert.match(report,/일평균 50mg/);
+ const tips=report.split('💡 실천 제안')[1];
+ assert.match(tips,/목표 섭취량을 넘은 1일/);
+ assert.match(tips,/음료.*(?:양|얼마나).*확인/);
+});
+
+test('student advice asks for missing condition records instead of comparing unrecorded scores',async()=>{
+ const x=await setup();
+ const tips=x.run().analysis.split('💡 실천 제안')[1];
+ assert.match(tips,/기상 후 컨디션.*1~5점.*기록/);
+ assert.doesNotMatch(tips,/컨디션이 좋았던 날/);
+});
+
+test('student short-sleep advice uses recorded times and condition without asserting causation',async()=>{
+ const x=await setup();
+ const data={totalDays:7,caffeineRecordedDays:6,caffeineTotal:222,sleepRecordedDays:6,sleepTotal:46.2,conditionRecordedDays:6,conditionTotal:18,overCaffeineDays:[]};
+ const report=x.c.buildRecordFeedback_(data,150,false,'2026-10-26 ~ 2026-11-01');
+ assert.match(report,/평균 7\.7h/);
+ assert.match(report,/기상 후 컨디션 평균 3\.0점/);
+ const tips=report.split('💡 실천 제안')[1];
+ assert.match(tips,/가장 짧았던 날.*취침·기상 시각.*컨디션.*비교/);
+ assert.doesNotMatch(report,/수면 부족 때문에|카페인 때문에/);
+});
