@@ -1549,6 +1549,7 @@
       setEditSavePending(false);
       if (caffeineChart) { caffeineChart.destroy(); caffeineChart = null; }
       if (sleepChart) { sleepChart.destroy(); sleepChart = null; }
+      document.getElementById('caffeineChart')?.removeAttribute('aria-label');
       privateUiDefaults.forEach(saved => {
         const element = document.getElementById(saved.id);
         if (!element) return;
@@ -2811,6 +2812,8 @@
       const caffeineHasData = data.caffeineHasData
         || labels.map(() => false);
       const display=window.SleepComparisonChart.build(comparisonDates,caffeineData.map((v,i)=>caffeineHasData[i]?v:null),sleepData);
+      const caffeineGroups=typeof SleepRecordPolicy!=='undefined'&&typeof caffeineHistoryLoaded!=='undefined'&&caffeineHistoryLoaded?SleepRecordPolicy.caffeineDays(caffeineLogs):null;
+      const caffeineStates=window.SleepComparisonChart.caffeineStates(comparisonDates,caffeineGroups,{amounts:caffeineData,hasData:data.caffeineHasData});
 
       // ── 카페인 단계 색상 함수 ──────────────────────────
       // 0단계(카페인 섭취 안 함) 청록 / 1단계(안전) 녹 / 2단계(적정/제한) 황 /
@@ -2856,11 +2859,12 @@
       const cafLegendEl = document.getElementById('caffeineLegend');
       if (ctx1Element) {
         const ctx1 = ctx1Element.getContext('2d');
-        const caffeineKey = JSON.stringify([labels, caffeineData, caffeineHasData, userLimit, sleepData, sleepEpisodes, sleepWarn, sleepGood]);
+        const caffeineKey = JSON.stringify([labels, caffeineData, caffeineHasData, userLimit, sleepData, sleepEpisodes, sleepWarn, sleepGood,caffeineStates]);
 
         const cafColors = caffeineData.map((mg, i) => getCafColor(mg, caffeineHasData[i]));
 
         const caffeineConfig = {
+          plugins:[window.SleepComparisonChart.caffeineStatePlugin],
           type: 'bar',
           data: {
             labels: labels,
@@ -2883,7 +2887,8 @@
                 animation: { duration: 0 },
                 fill: false
               },
-              {type:'line',label:'다음 날 기상한 수면 · 취침~기상 간격 (h)',data:display.sleep,...window.SleepComparisonChart.sleepStyle(),yAxisID:'y2'}
+              {type:'line',label:'다음 날 기상한 수면 · 취침~기상 간격 (h)',data:display.sleep,...window.SleepComparisonChart.sleepStyle(),yAxisID:'y2'},
+              window.SleepComparisonChart.caffeineStateDataset(caffeineStates)
             ]
           },
           options: {
@@ -2893,11 +2898,13 @@
             interaction:{mode:'nearest',axis:'xy',intersect:false},
             animations: { x: false },
             plugins: {
+              caffeineBaselineState:{states:caffeineStates},
               legend: { display: false },
               tooltip: {
                 callbacks: {
-                  title: contexts => {const actual=contexts.find(c=>c.datasetIndex===0||c.datasetIndex===2);return actual?(comparisonDates[actual.dataIndex]||'')+' 비교':'목표 기준선';},
+                  title: contexts => {const actual=contexts.find(c=>c.datasetIndex===0||c.datasetIndex===2||c.dataset?.caffeineStatus);return actual?(comparisonDates[actual.dataIndex]||'')+' 비교':'목표 기준선';},
                   label: function(context) {
+                    if(context.dataset?.caffeineStatus)return caffeineStates[context.dataIndex].label;
                     if (context.datasetIndex === 1) return `목표 섭취량: ${userLimit}mg`;
                     if (context.datasetIndex === 2) { const hours=window.SleepComparisonChart.formatHours(context.raw?.y);return hours===null?'수면: 미기록 또는 분석 보류':'다음 날 기상한 수면: '+hours+'h / '+getSleepStageName(context.raw.y); }
                     const i = context.dataIndex;
@@ -2907,9 +2914,10 @@
                     const stage = getCafStageName(mg, hasCaf);
                     if (!hasCaf) return '섭취 기록 없음';
                     if (mg===null) return '함량 미상 포함 · 총량 미확인';
+                    if(mg===0)return caffeineStates[i].label;
                     return `${mg}mg (${pct}%) / ${stage}`;
                   },
-                  afterBody: contexts => {const actual=contexts.find(c=>c.datasetIndex===0||c.datasetIndex===2);return actual?episodeTooltip(actual.dataIndex):[];}
+                  afterBody: contexts => {const actual=contexts.find(c=>c.datasetIndex===0||c.datasetIndex===2||c.dataset?.caffeineStatus);return actual?[caffeineStates[actual.dataIndex]?.detail||'',...episodeTooltip(actual.dataIndex)].filter(Boolean):[];}
                 }
               }
             },
@@ -2920,6 +2928,8 @@
             }
           }
         };
+        ctx1Element.setAttribute('role','img');
+        ctx1Element.setAttribute('aria-label','카페인·수면 비교 그래프. '+caffeineStates.map(s=>s.date+' '+s.symbol+' '+s.label).join('; ')+'. 날짜별 비교 보기에 텍스트 상세가 있습니다.');
         if (!caffeineChart) caffeineChart = new Chart(ctx1, caffeineConfig);
         else if (caffeineChart.$studentDataKey !== caffeineKey) {
           caffeineChart.data = caffeineConfig.data;
@@ -2932,7 +2942,7 @@
         if (cafLegendEl) {
           cafLegendEl.innerHTML = `
             <div style="display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:10px;font-size:11px;color:#6b7280;">
-              <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#0d9488;margin-right:3px;"></span>카페인 섭취 안 함</span>
+              <!-- 0mg 상태는 아래 공통 기호 범례로 구분합니다. -->
               <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#22c55e;margin-right:3px;"></span>1단계 안전</span>
               <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#eab308;margin-right:3px;"></span>2단계 적정/제한</span>
               <span><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:#f97316;margin-right:3px;"></span>3단계 과다</span>
@@ -2945,6 +2955,7 @@
       }
 
       const comparisonNote=document.getElementById('caffeineLegend');
+      if(comparisonNote)comparisonNote.insertAdjacentHTML('beforeend',window.SleepComparisonChart.caffeineStateLegend());
       if(comparisonNote)comparisonNote.insertAdjacentHTML('beforeend','<p style="font-size:12px;color:#4b5563;margin-top:10px;">카페인 섭취일과 다음 날 기상한 수면을 함께 보여줘요.</p><details id="comparisonGraphHelp" style="font-size:12px;color:#4b5563;word-break:keep-all;overflow-wrap:anywhere;"><summary style="min-height:48px;padding:10px 0;cursor:pointer;font-weight:700;">그래프 읽는 법</summary><ul style="padding-left:18px;list-style:disc;"><li>수면 점은 두 날짜 사이의 고정 중간점이며 실제 취침 시각의 위치가 아닙니다.</li><li>선의 높이는 입력한 취침~기상 간격입니다. 실제 구간은 아래 기록에서 확인할 수 있어요.</li><li>마지막 날짜는 기상일 경계입니다. 복수·겹침 수면은 일별 평균을 보류합니다.</li><li>달력 날짜별 카페인과 취침 전 24시간 섭취량은 서로 다른 지표입니다.</li></ul></details>');
       const sleepLegendEl=document.getElementById('sleepLegend');
       if(sleepLegendEl)sleepLegendEl.textContent='유효 수면 '+validSleep.length+'일 · 평균 '+(validSleep.length?window.SleepComparisonChart.formatHours(validSleep.reduce((a,b)=>a+Number(b),0)/validSleep.length)+'시간':'미확인')+' · '+(data.sleepEpisodes?.length||0)+'건 기록 · 권장 범위 '+sleepWarn+'~'+sleepGood+'h · 복수·겹침은 평균 보류';
@@ -2965,7 +2976,7 @@
         labels.forEach((label,index)=>{
           const rows=episodeDetails(index),section=document.createElement('details'),summary=document.createElement('summary');
           summary.style.cssText='min-height:48px;box-sizing:border-box;padding:12px 10px;cursor:pointer;font-weight:700;word-break:keep-all;overflow-wrap:break-word;';
-          summary.textContent=String(label)+' 비교 · '+(rows.length ? rows.length+'건'+(data.sleepDayStatuses?.[index]==='held'?' · 일별 평균 보류':'') : '기록 없음');
+          summary.textContent=String(label)+' 비교 · 카페인 '+caffeineStates[index].symbol+' '+caffeineStates[index].label+' · 수면 '+(rows.length ? rows.length+'건'+(data.sleepDayStatuses?.[index]==='held'?' · 일별 평균 보류':'') : '기록 없음');
           section.appendChild(summary);
           rows.forEach(record=>{
             const item=document.createElement('div');item.style.cssText='padding:10px;border-top:1px solid #e5e7eb;word-break:keep-all;overflow-wrap:break-word;';
@@ -4503,6 +4514,7 @@
         .withSuccessHandler(logs => {
           caffeineLogs = logs || []; caffeineHistoryLoaded = true; confirmedPendingCaffeine = []; cacheStudentRecords('caffeineLogs');
           renderCaffeineLogs();
+          if(lastDashboardData)renderCharts(lastDashboardData);
           if (window.badgeCelebrations && !document.hidden) void window.badgeCelebrations.refresh();
           if(showWarningAfter !== undefined) {
             const today = getTodayKST();

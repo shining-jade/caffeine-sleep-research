@@ -1555,7 +1555,8 @@
                 </div>
             </div>
             <h3 class="section-title">📈 카페인 &amp; 수면 현황 <span id="chartRangeLabel" style="font-size:13px;color:#9ca3af;font-weight:400;"></span></h3>
-            <div class="chart-card" style="margin-bottom:24px;"><div class="dual-chart-container"><canvas id="modalDualChart"></canvas></div><div id="modalSleepComparisonDetails"></div></div>
+            <div class="chart-card" style="margin-bottom:24px;"><div class="dual-chart-container"><canvas id="modalDualChart"></canvas></div><div id="modalCaffeineStateLegend"></div>
+                    <div id="modalSleepComparisonDetails"></div></div>
             <h3 class="section-title">☕ 카페인 섭취 내역 <span id="cafTableRangeLabel" style="font-size:13px;color:#9ca3af;font-weight:400;"></span></h3>
             <div class="responsive-table-wrap" tabindex="0" aria-label="카페인 섭취 내역 표">
             <table class="data-table">
@@ -3685,10 +3686,11 @@ function renderSleepComparisonDetails(id,dates,caffeineGroups,sleepGroups){
     const comparisonKey=JSON.stringify([typeof currentStudentId==='undefined'?null:currentStudentId,dates]);
     const wasOpen=!isPdf&&element.dataset.comparisonKey===comparisonKey&&!!element.querySelector('details[data-sleep-comparison-group]')?.open;
     if(!isPdf)element.dataset.comparisonKey=comparisonKey;
-    const content=note+dates.map(date=>{
+    const caffeineStates=window.SleepComparisonChart.caffeineStates(dates,caffeineGroups);
+    const content=note+dates.map((date,index)=>{
       const day=sleepGroups.get(date),caf=caffeineGroups.get(date);
       const status=day?.status==='held'?'일별 분석 보류':day?.status==='ready'?'유효 수면':'수면 기록 없음';
-      const caffeine=!caf?'섭취 기록 없음':caf.total===null?'함량 미상 포함 · 총량 미확인':caf.total+'mg';
+      const caffeine=caffeineStates[index].symbol+' '+caffeineStates[index].label;
       const rows=(day?.records||[]).map(d=>{const r=d.source;return '<p style="padding:8px;overflow-wrap:anywhere;">취침 '+escapeHtml((r.날짜||r.date||'?')+' '+(r.취침||r.start||'?'))+' → 기상 '+escapeHtml((r.기상날짜||r.wakeDate||'?')+' '+(r.기상||r.end||'?'))+' · '+escapeHtml(window.SleepComparisonChart.formatHours(d.intervalHours)??'확인 필요')+'시간 · 자가보고 취침~기상 간격</p>';}).join('');
       return '<details'+(id==='pdfSleepComparisonDetails'?' open':'')+'><summary style="min-height:48px;box-sizing:border-box;padding:12px;cursor:pointer;">'+escapeHtml(date)+' 비교 · '+escapeHtml(caffeine)+' · '+escapeHtml(status)+' · '+(day?.records?.length||0)+'건</summary>'+rows+'</details>';
     }).join('')+(!dates.length&&!isPdf?'<p>비교할 날짜가 없습니다.</p>':'');
@@ -3734,6 +3736,7 @@ function refreshModalData(){
 
     const labels=dates.map(d=>d.substring(5));
     const chartCaffeine=SleepRecordPolicy.caffeineDays(caffeineData.filter(c=>String(c.학번)===String(currentStudentId)));
+    const caffeineStates=window.SleepComparisonChart.caffeineStates(dates,chartCaffeine);
     const cafData=dates.map(d=>chartCaffeine.get(d)?.total ?? null);
     const chartSleepRows=sleepData.filter(r=>String(r.학번)===String(currentStudentId));
     const chartSleepGroups=SleepRecordPolicy.days(chartSleepRows);
@@ -3744,16 +3747,20 @@ function refreshModalData(){
     const targetSleepLine=targetSleepHours?new Array(dates.length).fill(targetSleepHours):[];
     const display=window.SleepComparisonChart.build(dates,cafData,sleepD);
     if(charts.dual)charts.dual.destroy();
-    charts.dual=new Chart(document.getElementById('modalDualChart').getContext('2d'),{
+    const cafCanvas=document.getElementById('modalDualChart');cafCanvas.setAttribute('role','img');cafCanvas.setAttribute('aria-label','카페인·수면 비교 그래프. '+caffeineStates.map(s=>s.date+' '+s.symbol+' '+s.label).join('; ')+'. 날짜별 비교 보기에 텍스트 상세가 있습니다.');
+    const cafStateLegend=document.getElementById('modalCaffeineStateLegend');if(cafStateLegend)cafStateLegend.innerHTML=window.SleepComparisonChart.caffeineStateLegend();
+    charts.dual=new Chart(cafCanvas.getContext('2d'),{
+        plugins:[window.SleepComparisonChart.caffeineStatePlugin],
         type:'bar',
         data:{labels,comparisonDates:dates,datasets:[
             {label:'카페인 (mg)',pointStyle:'rect',data:display.caffeine,assessmentLimit:lim,backgroundColor:cafData.map((v,i)=>getCafBarColor(v,lim,hasCafRecordOnDates(currentStudentId,[dates[i]]))),borderWidth:0,borderRadius:5,yAxisID:'y'},
             {label:targetCafLimit!==null?`목표 섭취량 (${Math.round(targetCafLimit)}mg)`:'목표 미설정',pointStyle:'rect',data:display.reference(targetCafLimit),type:'line',borderColor:'rgba(239,68,68,0.4)',backgroundColor:'rgba(239,68,68,0.12)',borderWidth:2,borderDash:[6,4],pointRadius:0,fill:false,yAxisID:'y'},
             {label:'다음 날 기상한 수면 · 취침~기상 간격 (h)',pointStyle:'circle',data:display.sleep,type:'line',...window.SleepComparisonChart.sleepStyle(),yAxisID:'y2'},
-            ...(targetSleepHours?[{label:`목표수면 (${targetSleepHours}h)`,pointStyle:'circle',data:display.reference(targetSleepHours),type:'line',borderColor:'rgba(59,130,246,0.7)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[])
+            ...(targetSleepHours?[{label:`목표수면 (${targetSleepHours}h)`,pointStyle:'circle',data:display.reference(targetSleepHours),type:'line',borderColor:'rgba(59,130,246,0.7)',backgroundColor:'rgba(59,130,246,0.12)',borderWidth:2,borderDash:[4,4],pointRadius:0,fill:false,yAxisID:'y2'}]:[]),
+            window.SleepComparisonChart.caffeineStateDataset(caffeineStates)
         ]},
         options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'nearest',axis:'xy',intersect:false},
-            plugins:{legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12,filter:item=>item.text!=='목표 미설정',sort:(a,b)=>a.datasetIndex-b.datasetIndex}},tooltip:{callbacks:{title:items=>{const actual=items.find(c=>c.datasetIndex===0||c.datasetIndex===2);return actual?(dates[actual.dataIndex]||'')+' 비교':'목표 기준선';},label:ctx=>{if(ctx.dataset.label.includes('목표 섭취량'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0)return ctx.raw?.y===null?(chartCaffeine.has(dates[ctx.dataIndex])?'함량 미상 포함 · 총량 미확인':'섭취 기록 없음'):`달력 날짜별 카페인: ${ctx.raw.y}mg`;const hours=window.SleepComparisonChart.formatHours(ctx.raw?.y);return hours!==null?`다음 날 기상한 수면: ${hours}h`:'수면: 미기록 또는 분석 보류';},afterBody:items=>{const actual=items.find(c=>c.datasetIndex===0||c.datasetIndex===2);if(!actual)return [];const day=chartSleepGroups.get(dates[actual.dataIndex]);return (day?.records||[]).flatMap(d=>[(d.source.날짜||'?')+' '+(d.source.취침||'?')+' → '+(d.source.기상날짜||d.source.wakeDate||'?')+' '+(d.source.기상||'?'),day.status==='held'?'일별 분석 보류 · '+day.holdReason:'자가보고 취침·기상 시각 간 시간']);}}}},
+            plugins:{caffeineBaselineState:{states:caffeineStates},legend:{position:'top',labels:{usePointStyle:true,boxWidth:12,boxHeight:12,filter:item=>item.text!=='목표 미설정'&&item.text!=='카페인 기록 상태',sort:(a,b)=>a.datasetIndex-b.datasetIndex}},tooltip:{callbacks:{title:items=>{const actual=items.find(c=>c.datasetIndex===0||c.datasetIndex===2||c.dataset?.caffeineStatus);return actual?(dates[actual.dataIndex]||'')+' 비교':'목표 기준선';},label:ctx=>{if(ctx.dataset?.caffeineStatus)return caffeineStates[ctx.dataIndex].label;if(ctx.dataset.label.includes('목표 섭취량'))return ctx.dataset.label;if(ctx.dataset.label.includes('목표수면'))return ctx.dataset.label;if(ctx.datasetIndex===0&&ctx.raw?.y===0)return caffeineStates[ctx.dataIndex].label;if(ctx.datasetIndex===0)return ctx.raw?.y===null?(chartCaffeine.has(dates[ctx.dataIndex])?'함량 미상 포함 · 총량 미확인':'섭취 기록 없음'):`달력 날짜별 카페인: ${ctx.raw.y}mg`;const hours=window.SleepComparisonChart.formatHours(ctx.raw?.y);return hours!==null?`다음 날 기상한 수면: ${hours}h`:'수면: 미기록 또는 분석 보류';},afterBody:items=>{const actual=items.find(c=>c.datasetIndex===0||c.datasetIndex===2||c.dataset?.caffeineStatus);if(!actual)return [];const day=chartSleepGroups.get(dates[actual.dataIndex]);return [caffeineStates[actual.dataIndex]?.detail||''].filter(Boolean).concat((day?.records||[]).flatMap(d=>[(d.source.날짜||'?')+' '+(d.source.취침||'?')+' → '+(d.source.기상날짜||d.source.wakeDate||'?')+' '+(d.source.기상||'?'),day.status==='held'?'일별 분석 보류 · '+day.holdReason:'자가보고 취침·기상 시각 간 시간']));}}}},
             scales:{x:display.xScale,y:{beginAtZero:true,position:'left',title:{display:true,text:'달력 날짜별 카페인 (mg)',color:'#6366f1'}},y2:{beginAtZero:true,position:'right',max:getSleepChartMax(sleepD,targetSleepHours),title:{display:true,text:'다음 날 기상한 수면 (h)',color:'#4C8ED9'},grid:{drawOnChartArea:false}}}}
     });
 
