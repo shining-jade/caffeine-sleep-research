@@ -43,8 +43,7 @@
       }else if(total===null){status='unknown';label='함량 미상';short='미상';symbol='◇';color='#92400e';detail='기록은 있지만 함량 미상이 포함되어 총량을 확인할 수 없습니다.';
       }else if(none&&positive){status='conflict';label=total+'mg · 확인 필요';short='확인';symbol='△';color='#92400e';detail='미섭취 기록과 양수 섭취 기록이 함께 있습니다. 합산값과 원기록은 유지됩니다.';
       }else if(total>0){status='positive';label=total+'mg 기록';short='';symbol='';color='#475569';
-      }else if(rows.length&&none===rows.length){status='no_intake';label='미섭취 완료 · 0mg';short='0mg';symbol='✓';color='#0f766e';detail='카페인 섭취 안 함으로 명시한 기록입니다.';
-      }else{status='zero';label='0mg 기록';short='0mg';symbol='□';color='#0369a1';detail=rows.length?'0mg 제품 또는 일반 0mg 기록입니다.':'0mg 기록 완료 · 상세가 없어 미섭취와 0mg 제품은 구분하지 않습니다.';}
+      }else{status=rows.length&&none===rows.length?'no_intake':'zero';label='미섭취(0mg)';short='0mg';symbol='○';color='#0f766e';detail='카페인 함량을 0mg으로 기록한 날입니다.';}
       return {date,status,label,short,symbol,color,detail,total};
     });
   }
@@ -54,8 +53,8 @@
       data:states.map((s,i)=>({x:i,y:s.status==='positive'?null:0})),
       showLine:false,spanGaps:false,clip:false,yAxisID:'y',borderWidth:0,
       pointRadius:radius,pointHoverRadius:radius,pointHitRadius:16,
-      pointStyle:states.map(s=>s.status==='missing'?'crossRot':s.status==='unknown'?'rectRot':['conflict','unverified'].includes(s.status)?'triangle':s.status==='zero'?'rect':'circle'),
-      pointBackgroundColor:states.map(s=>s.status==='no_intake'?'#ccfbf1':'#ffffff'),
+      pointStyle:states.map(s=>s.status==='missing'?'crossRot':s.status==='unknown'?'rectRot':['conflict','unverified'].includes(s.status)?'triangle':'circle'),
+      pointBackgroundColor:states.map(()=>'#ffffff'),
       pointBorderColor:states.map(s=>s.color),pointBorderWidth:2};
   }
   // Labels are decorations at the actual 0 baseline, not amount coordinates.
@@ -66,10 +65,9 @@
     ctx.save();ctx.textAlign='center';ctx.textBaseline='bottom';ctx.font='600 10px sans-serif';
     states.forEach((state,i)=>{const point=points[i];if(!point||point.skip||state.status==='positive')return;
       ctx.fillStyle=state.color;
-      if(state.status==='no_intake'&&point.options.radius>=5){ctx.textBaseline='middle';ctx.fillText('✓',point.x,point.y);ctx.textBaseline='bottom';}
       if(ctx.measureText(state.short).width+2<=Math.abs(step))ctx.fillText(state.short,point.x,point.y-11);
     });ctx.restore();
   }};
-  function caffeineStateLegend(){return '<p data-caffeine-state-legend style="font-size:12px;line-height:1.7;word-break:keep-all;overflow-wrap:anywhere;margin:8px 0;">0선 기호: <span style="display:inline-block;color:#0f766e;">○✓ 미섭취 완료(0mg)</span> · <span style="display:inline-block;color:#0369a1;">□ 0mg 기록</span> · <span style="display:inline-block;color:#64748b;">× 미기록</span> · <span style="display:inline-block;color:#92400e;">◇ 함량 미상</span> · <span style="display:inline-block;color:#92400e;">△ 확인 필요</span></p>';}
+  function caffeineStateLegend(){return '<p data-caffeine-state-legend style="font-size:12px;line-height:1.7;word-break:keep-all;overflow-wrap:anywhere;margin:8px 0;">0선 기호: <span style="display:inline-block;color:#0f766e;">○ 미섭취(0mg)</span> · <span style="display:inline-block;color:#64748b;">× 미기록</span> · <span style="display:inline-block;color:#92400e;">◇ 함량 미상</span> · <span style="display:inline-block;color:#92400e;">△ 확인 필요</span></p>';}
   root.SleepComparisonChart={build,sleepStyle,formatHours,caffeineStates,caffeineStateDataset,caffeineStatePlugin,caffeineStateLegend};
 })(window);
