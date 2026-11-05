@@ -194,6 +194,17 @@
         .student-record-details>summary{padding:14px 16px;cursor:pointer;font-weight:700;color:#374865;}
         .student-record-details>summary:focus-visible{outline:3px solid #818cf8;outline-offset:2px;border-radius:10px;}
         .student-record-details-body{min-width:0;padding:0 12px 12px;}
+        .goal-compare-dialog{width:min(860px,calc(100% - 28px));max-height:calc(100vh - 32px);overflow:auto;border:1px solid #dedaf0;border-radius:14px;padding:16px;background:#fff;color:#1f2a44}
+        .goal-compare-dialog::backdrop{background:#1f2a4470}
+        .goal-compare-dialog h2{margin:0 0 8px;font-size:18px}
+        .goal-compare-dialog p{margin:6px 0}
+        .goal-compare-dialog fieldset{margin:8px 0;padding:10px;border:1px solid #e2def3;border-radius:10px}
+        .goal-compare-dialog legend{font-weight:800;color:#3b3195}
+        .goal-compare-dialog label{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;font-size:13px}
+        .goal-compare-dialog input,.goal-compare-dialog select,.goal-compare-dialog textarea{max-width:100%;border:1px solid #b8b5d4;border-radius:6px;padding:5px}
+        .goal-compare-dialog [type=number]{width:75px}.goal-compare-dialog textarea{width:min(380px,100%)}
+        .goal-dialog-rule,.goal-dialog-dates,.goal-dialog-actions{display:flex;flex-wrap:wrap;gap:7px;align-items:center;margin:5px 0}
+        .goal-compare-dialog [hidden]{display:none!important}
         .report-view-controls{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px;}
         .summary-top-editor:not([hidden]){display:flex;align-items:center;gap:8px;flex-wrap:wrap}
         .summary-top-editor [hidden],.summary-top-editor .summary-edit-status:empty{display:none}
@@ -1727,6 +1738,7 @@
             </div>
             <div class="modal-actions">
                 <button class="btn btn-green" onclick="requestAIAnalysis()" id="aiBtn">📊 피드백 만들기</button>
+                <button type="button" class="btn" onclick="openIndividualGoalComparison()">목표 전후 비교</button>
                 <button class="btn btn-blue" data-report-output onclick="runIndividualReportOutput('pdf')">이미지 PDF 저장</button>
                 <button type="button" class="btn" data-report-output onclick="runIndividualReportOutput('images')">이미지 저장</button>
                 <button class="btn" data-report-output onclick="runIndividualReportOutput('preview')">이미지 PDF 미리보기</button>
@@ -4956,6 +4968,13 @@ function savePDFOptions(storageKey, options){
     try{ localStorage.setItem(storageKey, JSON.stringify(options)); }catch(e){}
 }
 
+function openIndividualGoalComparison() {
+    const student = studentsData.find(row => row.학번 === currentStudentId);
+    const dates = getModalDates();
+    if (student && dates.length) void window.teacherGoalComparison.open(student, dates[0], dates.at(-1),
+        getLimit(student.학번, undefined, { withBasis:true }));
+}
+
 async function individualPdfReport() {
     const student = studentsData.find(row => row.학번 === currentStudentId);
     if (!student || !window.teacherBatchReports) return undefined;
@@ -7928,9 +7947,11 @@ function renderJourneyStatus(){
 }
 
 </script>
-<script src="/public/js/teacher-report-files.js?v=report-view-24"></script>
+<script src="/public/js/teacher-goal-comparison.js?v=1"></script>
+<script src="/public/js/teacher-report-files.js?v=report-view-25"></script>
 <script src="/public/js/teacher-report-export.js?v=image-report-3"></script>
-<script src="/public/js/teacher-batch-reports.js?v=report-view-8"></script>
+<script src="/public/js/teacher-goal-comparison-ui.js?v=1"></script>
+<script src="/public/js/teacher-batch-reports.js?v=report-view-9"></script>
 <script type="module" src="/public/js/caffeine-companies.js"></script>
 </body>
 </html>

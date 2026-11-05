@@ -1,4 +1,4 @@
-import { applyTeacherAI as defaultApplyTeacherAI } from '../_lib/teacher-openai.js';
+import { applyTeacherAI as defaultApplyTeacherAI, interpretTeacherGoal as defaultInterpretTeacherGoal } from '../_lib/teacher-openai.js';
 import { callGas as defaultCallGas } from '../_lib/gas.js';
 import { DEFAULT_MAX_BYTES, readJson, sendJson } from '../_lib/http.js';
 import { readSessionCookie, verifySession } from '../_lib/session.js';
@@ -14,6 +14,7 @@ const IMAGE_PDF_REQUEST_MAX_BYTES = ENCODED_PDF_MAX_LENGTH + 16 * 1024;
 export function createActionHandler({
   callGas = defaultCallGas,
   applyTeacherAI = defaultApplyTeacherAI,
+  interpretTeacherGoal = defaultInterpretTeacherGoal,
   now = () => Math.floor(Date.now() / 1000),
 } = {}) {
   return async function actionHandler(req, res) {
@@ -66,8 +67,14 @@ export function createActionHandler({
     }
 
     try {
+      if (normalized.action === 'interpretTeacherGoal') {
+        const [sentence] = normalized.params;
+        const interpretation = normalized.params.length === 1 ? await interpretTeacherGoal(sentence) : null;
+        sendJson(res, 200, { success:true, data:{ success:true, interpretation } });
+        return;
+      }
       const request = normalized.action === 'analyzeTeacherBatch' ? normalized.params[0] : null;
-      const wantsAI = request?.mode === 'ai';
+      const wantsAI = request?.mode === 'ai' && !request.goalComparison;
       const params = wantsAI ? [{ ...request, mode: 'rule' }] : normalized.params;
       let data = await callGas({ role: 'teacher', ...normalized, params });
       if (wantsAI) data = await applyTeacherAI(data);

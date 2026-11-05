@@ -267,7 +267,14 @@
         preview.addEventListener('click', () => {
           if (!busy) void openPreview(report);
         });
-        header.append(edit, preview);
+        const goalComparison = document.createElement('button');
+        goalComparison.type = 'button';
+        goalComparison.className = 'btn';
+        goalComparison.textContent = '목표 전후 비교';
+        goalComparison.addEventListener('click', () => {
+          if (!busy) void window.teacherGoalComparison.open(report.student, report.start, report.end, report);
+        });
+        header.append(edit, preview, goalComparison);
       }
       const detail = document.createElement('details');
       detail.open = report.expanded ?? index === 0;

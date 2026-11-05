@@ -1506,10 +1506,10 @@ function feedbackLatency_(value) {
     ? (value === '15분 이내' ? value : '30분 이상') : null;
 }
 
-function feedbackNormalizeDays_(input) {
+function feedbackNormalizeDays_(input, sparse = false) {
   const start = feedbackDate_(input.start);
   const end = feedbackDate_(input.end);
-  if (start === null || end === null || end < start || (end - start) / FEEDBACK_DAY_MS_ >= 366) {
+  if (start === null || end === null || end < start || (!sparse && (end - start) / FEEDBACK_DAY_MS_ >= 366)) {
     throw new Error('분석 기간을 확인해 주세요.');
   }
   const byDate = new Map();
@@ -1521,8 +1521,11 @@ function feedbackNormalizeDays_(input) {
   }
   const today = typeof input.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.today) ? input.today : null;
   const days = [];
-  for (let time = start; time <= end; time += FEEDBACK_DAY_MS_) {
-    const date = new Date(time).toISOString().slice(0, 10);
+  const dates = sparse ? [...byDate.keys()].sort() :
+    Array.from({ length:(end - start) / FEEDBACK_DAY_MS_ + 1 }, (_, i) =>
+      new Date(start + i * FEEDBACK_DAY_MS_).toISOString().slice(0, 10));
+  for (const date of dates) {
+    const time = feedbackDate_(date);
     const row = byDate.get(date) || {};
     const caf = row.caffeine || {};
     const intakes = (Array.isArray(caf.intakes) ? caf.intakes : []).map(item => ({
@@ -2350,9 +2353,14 @@ function feedbackSourceInput_(source, student, start, end, classGoals, options =
   const subject = { studentId: student.dashboardId || makeTeacherUniqueId(student.id, student.name), name: student.name };
   const owned = (id, name) => String(name || '').trim() === student.name && ownerMatchesSubject_(id, name, subject);
   const caffeine = new Map();
+  let firstRecordDate = null;
+  const observeDate = date => {
+    if (options.includeFirstRecord && date && (firstRecordDate === null || date < firstRecordDate)) firstRecordDate = date;
+  };
   for (const row of source.caffeine) {
     if (!owned(row[4], row[5])) continue;
     const date = SleepRecordPolicy.date(row[8]) || recordDateText_(row[8]);
+    observeDate(date);
     if (!date || date < start || date > end) continue;
     const items = caffeine.get(date) || [];
     const time = row[8] instanceof Date || /(?:Z|[+-]\d{2}:?\d{2})$/i.test(String(row[8]))
@@ -2367,8 +2375,9 @@ function feedbackSourceInput_(source, student, start, end, classGoals, options =
       identityConflict: metadata.identityConflict || (source.sleepIds.get(SleepRecordPolicy.id(row[13])) || 0) > 1,
       smartphone: row[14], activity: row[15], latency: row[16], awakenings: row[17], daytime: row[18], enteredAt: row[0] };
   }));
+  if (options.includeFirstRecord) for (const date of sleep.keys()) observeDate(date);
   const days = [];
-  for (let date = start; date <= end; date = shiftRecordDate_(date, 1)) {
+  const appendDay = date => {
     const intakes = caffeine.get(date);
     const group = sleep.get(date);
     const record = group?.record;
@@ -2380,6 +2389,12 @@ function feedbackSourceInput_(source, student, start, end, classGoals, options =
         bedOnTimeline: record ? Math.floor((record.bed - Date.parse(date) + 9 * 3600000) / 60000) : null, wake: clock(record?.wake),
         hours: record?.intervalHours, condition: record?.condition, wakeDate: record?.wakeDate, enteredAt: raw?.enteredAt, latency: raw?.latency, awakenings: raw?.awakenings, drowsy: raw?.daytime },
       habits: raw && { phone: raw.smartphone, activity: raw.activity } });
+  };
+  if (options.recordedDaysOnly) {
+    const dates = [...new Set([...caffeine.keys(), ...sleep.keys()])].filter(date => date >= start && date <= end).sort();
+    dates.forEach(appendDay);
+  } else {
+    for (let date = start; date <= end; date = shiftRecordDate_(date, 1)) appendDay(date);
   }
   const profile = source.info.find(row => owned(row[5], row[4]));
   const goals = [];
@@ -2408,7 +2423,8 @@ function feedbackSourceInput_(source, student, start, end, classGoals, options =
     for (const [criterion, field, label] of values) goals.push({ ...period, id: 'class-' + index + '-' + criterion,
       source: 'class', criterion, threshold: goal[criterion], label: values.length === 1 ? goal.goal : field + ' · ' + label(goal[criterion]) });
   }
-  return { start, end, days, goals, today: Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd'), ...options };
+  return { start, end, days, goals, today: Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd'), ...options,
+    ...(options.includeFirstRecord ? { firstRecordDate } : {}) };
 }
 
 function feedbackClassGoals_(student, rows) {
@@ -2450,7 +2466,7 @@ function teacherReportRoster_() {
   return sheet.getDataRange().getValues().slice(1).map(row => {
     const id = normalizeOwnerId_(row[4]);
     const name = String(row[3] || '').trim();
-    return { id, name, dashboardId: makeTeacherUniqueId(id, name) };
+    return { id, name, dashboardId: makeTeacherUniqueId(id, name), researchCode: String(row[12] || '').trim() };
   }).filter(student => student.id && student.name);
 }
 
@@ -2759,11 +2775,85 @@ function reportAverageClock_(minutes) {
   return String(Math.floor(mean / 60)).padStart(2, '0') + ':' + String(mean % 60).padStart(2, '0');
 }
 
+function teacherGoalComparisonPeriods_(start, end, goals, firstRecordDate) {
+  const goal = goals.find(entry => entry.start <= end && entry.end >= start) || goals[0] || null;
+  const practiceStart = goal?.start || start;
+  const practiceEnd = goal?.end || end;
+  const previous = shiftRecordDate_(practiceStart, -1);
+  const hasBaseline = firstRecordDate && firstRecordDate <= previous;
+  return { start:practiceStart, end:practiceEnd, goal,
+    baselineStart:hasBaseline ? firstRecordDate : null, baselineEnd:hasBaseline ? previous : null };
+}
+
+function teacherGoalSafeSentence_(text, student) {
+  let sentence = String(text || '')
+    .replace(/(?:이름|학번|연구\s*대상자\s*코드|참여자\s*코드)\s*[:：]?\s*[\p{L}\p{N}_-]+/gu, ' ')
+    .replace(/\b\d{4}[-./]\s*\d{1,2}[-./]\s*\d{1,2}\b/g, ' ')
+    .replace(/\b\d{1,2}[-./]\s*\d{1,2}\b(?!\s*(?:시간|분|mg|잔|일|번))/gi, ' ')
+    .replace(/(?:\d{2,4}\s*년\s*)?\d{1,2}\s*월\s*\d{1,2}\s*일/g, ' ')
+    .replace(/\b\d{4}\s*년/g, ' ');
+  for (const value of [student.dashboardId, student.name, student.researchCode, student.id]) {
+    if (!value || /^\d{1,3}$/.test(value)) continue;
+    sentence = sentence.split(value).join(' ');
+  }
+  return sentence.replace(/\s+/g, ' ').trim().slice(0, 500);
+}
+
+function teacherGoalComparisonDays_(input, sparse) {
+  return feedbackNormalizeDays_(input, sparse).map(({date, open, sleep, caffeine, habits}) => ({
+    date, open, habits,
+    sleep: { recorded:sleep.recorded && !sleep.held, bed:sleep.bed, wake:sleep.wake, hours:sleep.hours, condition:sleep.condition },
+    caffeine: { recorded:caffeine.recorded, totalMg:caffeine.totalMg, times:caffeine.intakes.filter(item=>item.mg !== 0).map(item=>item.time) },
+  }));
+}
+
+function teacherGoalComparison_(request, roster) {
+  const comparison = request.goalComparison;
+  if (!['setup','report'].includes(comparison.phase) || request.students.length !== 1) {
+    throw new Error('학생 한 명과 비교 단계가 필요합니다.');
+  }
+  const [entry] = request.students;
+  const student = matchReportStudent_(roster, entry);
+  if (!student) throw new Error('명단에서 학번과 이름을 확인해 주세요.');
+  const goals = feedbackClassGoals_(student, feedbackClassRows_());
+  const selected = teacherGoalComparisonPeriods_(request.start, request.end, goals, null);
+  teacherReportDates_(selected.start, selected.end);
+  const source = feedbackSourceRows_();
+  const options = { includeFirstRecord:true, audience:'teacher', mode:'ongoing',
+    caffeineLimitBasis:entry.limitBasis, caffeineLimitMg:Number.isFinite(entry.limit) && entry.limit > 0 ? entry.limit : null };
+  const input = feedbackSourceInput_(source, student, selected.start, selected.end, goals, options);
+  const { goal, ...periods } = teacherGoalComparisonPeriods_(request.start, request.end, goals, input.firstRecordDate);
+  if (comparison.phase === 'setup') return { success:true, periods, firstRecordDate:input.firstRecordDate,
+    goal:goal ? { goal:goal.goal, caffeineMax:goal.caffeineMax, sleepMin:goal.sleepMin, bedtime:goal.bedtime,
+      wakeTime:goal.wakeTime, aiSentence:teacherGoalSafeSentence_(goal.goal, student), revision:goal.uploadId || '' } : null };
+
+  if (comparison.practiceStart !== periods.start || comparison.practiceEnd !== periods.end ||
+      (comparison.revision || '') !== (goal?.uploadId || '')) {
+    throw new Error('수업 목표 기간이 바뀌었습니다. 목표 확인을 다시 열어 주세요.');
+  }
+  const baselineStart = comparison.baselineStart || null;
+  const baselineEnd = comparison.baselineEnd || null;
+  if ((baselineStart || baselineEnd) && (feedbackDate_(baselineStart) === null || feedbackDate_(baselineEnd) === null ||
+      baselineStart > baselineEnd || baselineEnd >= periods.start)) {
+    throw new Error('기준 기간은 비교 기간 시작 전날까지 선택해 주세요.');
+  }
+  const baseline = baselineStart ? feedbackSourceInput_(source, student, baselineStart, baselineEnd, [],
+    { recordedDaysOnly:true }) : null;
+  const engine = buildFeedbackReport_(input);
+  const editRows = summaryReportEditRows_(getSpreadsheet_());
+  const summaryEdit = readSummaryReportEdits_(editRows, String(entry.studentId), student.name, periods.start, periods.end)[engine.mode];
+  return { success:true, periods:{ ...periods, baselineStart, baselineEnd },
+    before:baseline ? teacherGoalComparisonDays_(baseline,true) : [], after:teacherGoalComparisonDays_(input,false),
+    feedback:{ mode:'rule', reportMode:engine.mode, sections:engine.sections, sources:engine.references, engine,
+      ...(summaryEdit ? { summaryEdit } : {}) } };
+}
+
 function analyzeTeacherBatch(request) {
   const { start, end, students, thresholds, mode = 'rule' } = request || {};
   const dates = teacherReportDates_(start, end);
   if (!Array.isArray(students) || !students.length || students.length > 30) throw new Error('분석 대상을 다시 선택해 주세요.');
   const roster = teacherReportRoster_();
+  if (request.reportVersion === 2 && request.goalComparison) return teacherGoalComparison_(request, roster);
   if (request.reportVersion === 2) {
     if (request.reportMode !== undefined && !['ongoing', 'final'].includes(request.reportMode)) throw new Error('분석 모드를 확인해 주세요.');
     const source = feedbackSourceRows_();
