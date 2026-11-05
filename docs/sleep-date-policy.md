@@ -3,7 +3,7 @@
 > 기록앱(학생 화면·교사 대시보드·피드백·PDF 보고서), 전처리 헬퍼, 논문 연구방법이 함께 따르는 기준 문서입니다.
 > 코드에서 날짜 규칙을 바꾸기 전에 이 문서를 먼저 고치고, 변경 이력에 날짜와 이유를 남깁니다.
 
-- 운영 배포본 규칙 버전: `2026-10-21-episode-preservation-v2` (2026-11-05 운영 배포 Apps Script v46·Vercel 소스 6d61ae3에서 확인)
+- 운영 배포본 규칙 버전: `2026-10-21-episode-preservation-v2` (2026-11-05 운영 배포 Apps Script v46·Vercel 소스 c16b038에서 확인)
 - 로컬 작업 폴더 규칙 버전: `2026-10-20-wake-minus-one-v1` (운영본보다 이전 버전)
 - 두 버전 모두 수면 대상일 규칙(`targetDate = previous(wakeDay)`)은 같음
 - 문서 작성: 2026-11-05
@@ -114,6 +114,7 @@
 
 | 날짜 | 내용 | 이유 |
 |---|---|---|
+| 2026-11-05 | 소스 커밋 c16b038 Vercel 운영 배포. Vercel dpl_3s98GsR8BbFaGjUqBcK1YTGJdPDb, Apps Script v46 유지 | 카페인 차트 네 칸, ‘안 마심’ 인포그래픽, 아쉬운 점 날짜 요약 반영. 수면 대상일 규칙은 동일 |
 | 2026-11-05 | 소스 커밋 6d61ae3 운영 배포. Apps Script v46, Vercel dpl_NqABpz781SxqSg3pqydExvBCkDKx | 첫 보고서의 한마디, 수면·컨디션 미기록, 수면시간 반올림과 7h·11h 표기 반영. 수면 대상일과 분모 계산 기준은 동일 |
 | 2026-11-05 | 소스 커밋 f08848f 운영 배포. Apps Script v45, Vercel dpl_Bd8NoASi5gPJjnwvZLKhDSgbbBb8 | 개인·일괄 보고서와 피드백 문장 편집 통일. 수면 대상일 규칙은 동일 |
 | 2026-11-05 | 소스 커밋 95fbdc9 운영 배포. Apps Script v44, Vercel dpl_A7NA2v5URWhQrLZDDdVFmz764ipR | 4장 피드백 날짜 규칙과 교사 보고서 개편 반영 |
