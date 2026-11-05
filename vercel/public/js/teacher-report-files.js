@@ -476,33 +476,290 @@
     return { styles, content, detailed, html: '<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>' + styles + '</style></head><body>' + content + '</body></html>' };
   }
 
+  const summaryStyles = `
+    :host{display:block;min-width:0}:host([hidden]){display:none}
+    .summary-report,.summary-report *{box-sizing:border-box}
+    .summary-report{display:grid;gap:18px;justify-items:center;color:#1f2a44;font:13px/1.55 "Noto Sans KR","Malgun Gothic",system-ui,sans-serif}
+    .summary-page{width:100%;max-width:794px;min-height:1123px;padding:36px 44px 28px;background:#fff;display:flex;flex-direction:column;gap:18px;border-radius:2px;box-shadow:0 1px 5px #25244820}
+    .summary-report h1,.summary-report h2,.summary-report h3,.summary-report p{margin:0;overflow-wrap:anywhere}
+    .summary-report h1{font-size:26px;font-weight:800;line-height:1.35}
+    .summary-report h2{font-size:17px;font-weight:800}.summary-report h3{font-size:13px;font-weight:800}
+    .summary-header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;padding-bottom:12px;border-bottom:2px solid #5b4fc4}
+    .summary-kicker{font-size:12px;font-weight:700;color:#5b4fc4}.summary-sub,.summary-note{color:#4a5470}
+    .summary-note{font-size:11px}.summary-header-counts{display:flex;gap:8px;flex-shrink:0}
+    .summary-counter{display:grid;place-content:center;text-align:center;min-width:92px;min-height:60px;padding:5px 8px;border-radius:12px;background:#f1effb;color:#3b3195}
+    .summary-counter.caf{background:#fff1e6;color:#8a3b10}.summary-counter span{color:#4a5470;font-size:11px}.summary-counter strong{font-size:19px;font-weight:800}
+    .summary-section{display:grid;gap:10px;min-width:0}.summary-title-line{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 10px}
+    .summary-scroll{overflow:auto;min-width:0}.summary-chart{padding:12px;border-radius:14px;background:#f7f6fc}
+    .summary-axis-row{display:grid;grid-template-columns:104px repeat(var(--days),minmax(0,1fr));gap:6px;align-items:center;min-width:calc(104px + var(--days) * 39px)}
+    .summary-axis-row+.summary-axis-row{margin-top:4px}.summary-axis-row>span:not(:first-child),.summary-axis-row>div:not(:first-child){text-align:center}
+    .summary-axis-row[data-row="dates"]{font-size:12px;font-weight:700}.summary-axis-row.compact[data-row="dates"]{font-size:10px}.summary-axis-row.compact .summary-dow{display:block}
+    .summary-axis-label{font-size:12px;font-weight:700;color:#33416a;line-height:1.35}.summary-axis-label small{display:block;font-size:10px;font-weight:400;color:#4a5470}
+    .summary-axis-label.caf{color:#a4521f}.summary-axis-label.hours{color:#2c5c9e}.summary-axis-label.condition{color:#1f6b4f}
+    .summary-chart-bar{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;height:66px;color:#7a3a12;font-size:11px;font-weight:700;line-height:1.25}
+    .summary-chart-bar>span,.summary-chart-bar>i{z-index:1}.summary-chart-bar i{display:block;width:22px;border-radius:4px 4px 0 0;background:#d98a55}.compact .summary-chart-bar i{width:17px}
+    .summary-chart-bar.hours{color:#1f4a85}.summary-chart-bar.hours::before{position:absolute;content:"";bottom:35px;height:9px;inset-inline:0;background:#dfe8f7}
+    .summary-chart-bar.hours i{background:#a9c0e6}.summary-chart-bar.hours i.in-range{background:#3f72bd}
+    .summary-caf-zero{color:#185a41;background:#e3f3ec;border-radius:6px;padding:2px 4px}
+    .summary-caf-missing{border:1px dashed #b8bccb;color:#555e7a;border-radius:6px;padding:2px 4px}
+    .summary-clock{min-height:28px;display:grid;place-items:center;font-size:13px;font-weight:700;border-radius:8px}
+    .summary-clock.late{background:#fde7da;color:#8a2f0c}.summary-muted{color:#555e7a;font-weight:500}
+    .summary-cond{margin:4px auto;display:grid;place-items:center;width:min(46px,100%);min-height:28px;border-radius:14px;font-size:13px;font-weight:800;background:#ebe8f7;color:#33296f}
+    .summary-cond.low{background:#fbe0d0;color:#7a2e0b}.summary-cond.high{background:#d6efe4;color:#185a41}
+    .summary-cond.summary-muted{background:#fff;border:1px dashed #b8bccb;color:#555e7a;font-size:11px}
+    .summary-three,.summary-two{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.summary-two{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .summary-compare,.summary-reflect-card{display:grid;align-content:start;gap:5px;border:1.5px solid #e2def3;border-radius:12px;padding:10px 12px}
+    .summary-compare-row{display:flex;justify-content:space-between;align-items:baseline;gap:5px;font-size:12px;color:#4a5470;font-weight:700}
+    .summary-compare-row.drink{color:#8a3b10}.summary-compare-row strong{font-size:17px;color:#1f2a44;white-space:nowrap}
+    .summary-callout{padding:9px 14px;border-radius:12px;background:#fff4e9;font-size:13px}
+    .summary-callout.mint{background:#eef6f2}.summary-callout.blue{background:#eef3fa}
+    .summary-goal-row{display:grid;grid-template-columns:180px repeat(var(--days),minmax(0,1fr)) 50px;gap:5px;align-items:center;min-width:calc(230px + var(--days) * 31px)}
+    .summary-goal-row.compact{grid-template-columns:140px repeat(var(--days),minmax(0,1fr)) 40px;min-width:calc(180px + var(--days) * 33px)}
+    .summary-goal-row+.summary-goal-row{margin-top:6px}.summary-goal-row .summary-goal-label{font-size:14px;font-weight:700;line-height:1.35}
+    .summary-goal-tag{display:block;font-size:10px;font-weight:700;color:#5b4fc4}
+    .summary-goal-total{text-align:center;font-size:15px;font-weight:800}.summary-goal-row .summary-note{text-align:center}.summary-goal-row.compact .summary-note{font-size:9px}
+    .summary-mark{display:grid;place-items:center;min-height:30px;border-radius:8px;background:#eef0f4;color:#4a5470;font-weight:800}
+    .summary-mark.ok{background:#2f7d62;color:white}.summary-mark.no,.summary-mark.short{border:2px solid #d0743f;background:white;color:#8a3b10}
+    .summary-mark.long{border:2px solid #8a7fd0;background:white;color:#3b3195}
+    .summary-mark.short,.summary-mark.long,.summary-mark.wait{font-size:11px}
+    .summary-mark.wait{border:1px dashed #b8bccb;background:white;color:#555e7a}
+    .summary-foot{margin-top:auto!important;font-size:10.5px;color:#4a5470}
+    .summary-page[data-page="2"] .summary-header{align-items:baseline}
+    .summary-intakes{border:1.5px solid #ecd9cb;border-radius:12px;max-height:195px}
+    .summary-intakes table{width:100%;min-width:570px;border-collapse:collapse;table-layout:fixed}
+    .summary-intakes th,.summary-intakes td{padding:7px 6px;text-align:left;overflow-wrap:anywhere}
+    .summary-intakes th{background:#fbeee4;color:#6b3a1c;font-size:11px}.summary-intakes td{border-top:1px solid #f1e4da}
+    .summary-intakes tr .late,.summary-intakes tr .discomfort{color:#8a2f0c;font-weight:800}
+    .summary-habit{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;align-items:center;font-weight:700}
+    .summary-habit-bar{display:flex;flex-wrap:wrap;gap:2px;overflow:hidden;border-radius:8px}
+    .summary-habit-bar span{display:grid;place-items:center;min-height:30px;min-width:0;padding:2px 3px;font-size:11px;line-height:1.25;text-align:center;overflow-wrap:anywhere;background:#e6ecf8;color:#24324f}
+    .summary-habit-bar .band-1{background:#bccde9}.summary-habit-bar .band-2{background:#5978b4;color:white}.summary-habit-bar .band-3{background:#3f68ad;color:white}
+    .summary-record-card{border-radius:12px;padding:12px 14px;display:grid;align-content:start;gap:5px}
+    .summary-record-card.good{background:#eef6f2;color:#185a41}.summary-record-card.review{border:1.5px dashed #d0a07f;color:#8a3b10}
+    .summary-record-card h2{font-size:15px}.summary-record-card p{color:#1f2a44}
+    .summary-reflections{flex:1;grid-template-rows:auto 1fr auto}.summary-reflect-card h3,.summary-teacher b{color:#3b3195}
+    .summary-teacher{border-radius:12px;background:#f1effb;padding:10px 14px;min-height:42px;display:flex;gap:10px}
+    .summary-teacher b{white-space:nowrap}
+    @media(max-width:680px){.summary-page{padding:22px 18px;min-height:0}.summary-header{align-items:flex-start;flex-wrap:wrap}.summary-page[data-page="2"] .summary-header{flex-wrap:wrap}.summary-scroll:focus-visible{outline:2px solid #5b4fc4;outline-offset:2px}}
+    @media(max-width:480px){.summary-three,.summary-two{grid-template-columns:1fr}.summary-report h1{font-size:22px}.summary-habit{grid-template-columns:1fr;gap:3px}}
+  `;
+
+  function buildSummaryReportDocument(report, { now = Date.now() } = {}) {
+    const { feedback, student, start, end } = report;
+    const finding = id => feedback.engine.findings.find(item => item.id === id)?.data;
+    const sleep = finding('bedtimeSeries')?.days || [];
+    const caffeine = new Map((finding('caffeineSummary')?.days || []).map(day => [day.date, day]));
+    const days = sleep.map(day => ({ ...day, caf: caffeine.get(day.date) }));
+    const shown = days.slice(-14);
+    const compact = shown.length > 7 ? ' compact' : '';
+    const n = Math.max(1, shown.length);
+    const today = days.find((day, i) => day.open && i > 0 && !days[i - 1].open)?.date
+      || new Date(now + 9 * 3600000).toISOString().slice(0, 10);
+    const closed = days.filter(day => !day.open);
+    const validSleep = closed.filter(day => day.recorded && !day.held);
+    const cafDays = days.filter(day => !day.open || day.caf?.recorded);
+    const zero = cafDays.filter(day => day.caf?.status === 'zero');
+    const missing = closed.filter(day => !day.caf?.recorded);
+    const counts = (label, recorded, total, tone = '') => `<div class="summary-counter ${tone}"><span>${label}</span><strong>${recorded} / ${total}일</strong></div>`;
+    const wd = date => ['일', '월', '화', '수', '목', '금', '토'][new Date(date + 'T00:00:00Z').getUTCDay()];
+    const dateText = date => `${pdfDay(date)}(${wd(date)})`;
+    const name = pdfText(student?.이름 || '학생');
+    const period = `${dateText(start)} ~ ${dateText(end)}`;
+    const plainPeriod = start.slice(0, 4) === end.slice(0, 4) ? `${start.slice(0, 4)}년 · ${period}` : `${start} ~ ${end}`;
+    const callout = (message, tone = '') => message ? `<p class="summary-callout ${tone}"><b>기록을 보면</b> ${pdfText(message)}</p>` : '';
+    const block = (title, body, note = '') => `<section class="summary-section"><div class="summary-title-line"><h2>${title}</h2>${note ? `<span class="summary-note">${pdfText(note)}</span>` : ''}</div>${body}</section>`;
+    const axis = (key, label, render) => `<div class="summary-axis-row${compact}" style="--days:${n}" data-row="${key}">${label}${shown.map(render).join('')}</div>`;
+    const markDate = day => `data-date="${pdfText(day.date)}"`;
+    const label = (main, sub = '', tone = '') => `<span class="summary-axis-label ${tone}">${main}${sub ? `<small>${sub}</small>` : ''}</span>`;
+    const asleep = value => Number.isFinite(value) ? pdfClock(value) : '–';
+    const sleepClock = (day, key) => `<span ${markDate(day)} class="summary-clock${day.open || !Number.isFinite(day[key]) ? ' summary-muted' : key === 'bed' && day.bed >= 1440 ? ' late' : ''}">${day.open ? '아직' : asleep(day[key])}</span>`;
+    const maxCaffeine = Math.max(150, ...shown.map(day => day.caf?.totalMg || 0));
+    const caffeineBar = day => {
+      const caf = day.caf;
+      const status = caf?.status;
+      const amount = status === 'known' ? caf.totalMg : null;
+      const text = status === 'zero' ? '<span class="summary-caf-zero">안 마심</span>'
+        : status === 'unknown' ? '<span class="summary-caf-missing">함량 미상</span>'
+        : status === 'known' ? `<span>${pdfText(amount)}</span>`
+        : day.open ? `<span class="summary-muted">${day.date === today ? '오늘' : '아직'}</span>`
+        : '<span class="summary-caf-missing">기록 없음</span>';
+      return `<div ${markDate(day)} class="summary-chart-bar">${text}${amount > 0 ? `<i aria-hidden="true" style="height:${Math.max(4, Math.round(44 * amount / maxCaffeine))}px"></i>` : ''}</div>`;
+    };
+    const inRange = h => h >= 8 && h <= 10;
+    const hoursBar = day => {
+      const value = !day.open && Number.isFinite(day.hours) ? day.hours : null;
+      return `<div ${markDate(day)} class="summary-chart-bar hours"><span>${day.open ? '아직' : value === null ? '–' : value.toFixed(1)}</span>${value === null ? ''
+        : `<i aria-hidden="true" class="${inRange(value) ? 'in-range' : ''}" style="height:${Math.round(Math.min(value, 11) / 11 * 48)}px"></i>`}</div>`;
+    };
+    const condition = day => {
+      const value = day.condition;
+      const score = !day.open && Number.isInteger(value) && value >= 1 && value <= 5;
+      return `<div ${markDate(day)}><span class="summary-cond ${score ? (value < 3 ? 'low' : value > 3 ? 'high' : '') : 'summary-muted'}">${score ? `${value}점` : day.open ? '아직' : day.recorded && !day.held ? '빠짐' : '–'}</span></div>`;
+    };
+    const chart = `<div class="summary-scroll summary-chart" role="region" tabindex="0" aria-label="날짜별 카페인과 수면">
+      ${axis('dates', '<span></span>', day => `<span ${markDate(day)}>${pdfDay(day.date)} <span class="summary-dow">(${wd(day.date)})</span></span>`)}
+      ${axis('caffeine', label('낮 · 카페인', 'mg', 'caf'), caffeineBar)}
+      ${axis('bedtime', label('밤 · 잠든 시각'), day => sleepClock(day, 'bed'))}
+      ${axis('wake', label('아침 · 일어난 시각'), day => sleepClock(day, 'wake'))}
+      ${axis('hours', label('잔 시간', '파란 띠 = 8~10시간', 'hours'), hoursBar)}
+      ${axis('condition', label('다음 날 아침 컨디션', '5점 만점', 'condition'), condition)}
+    </div>`;
+    // Display summaries of facts already present in the report. No sheet reads or new engine output.
+    const mean = values => values.reduce((sum, value) => sum + value, 0) / values.length;
+    const compare = (groups, key) => {
+      const values = groups.map(group => group.map(day => day[key]).filter(Number.isFinite));
+      const size = values.map(group => group.length);
+      return { size, means: size.every(count => count >= 2) ? values.map(mean) : null };
+    };
+    const fixed = (value, unit) => value.toFixed(1) + unit;
+    const groups = ['known', 'zero'].map(status => validSleep.filter(day => day.caf?.status === status));
+    const metrics = [
+      ['bed', '잠든 시각 평균', value => pdfClock(Math.round(value))],
+      ['hours', '잔 시간 평균', value => fixed(value, '시간')],
+      ['condition', '아침 컨디션 평균', value => fixed(value, '점')],
+    ].map(([key, title, format]) => ({ key, title, format, ...compare(groups, key) }));
+    const comparisons = `<div class="summary-three">${metrics.map(item => `<article class="summary-compare" data-compare="${item.key === 'bed' ? 'bedtime' : item.key}"><h3>${item.title}</h3>
+      ${['마신 날 밤', '안 마신 날 밤'].map((text, i) => `<div class="summary-compare-row${i === 0 ? ' drink' : ''}"><span>${text} (${item.size[i]}일)</span>${item.means ? `<strong>${item.format(item.means[i])}</strong>` : ''}</div>`).join('')}
+      ${item.means ? '' : '<p class="summary-note"><b>비교 보류</b> · 양쪽 모두 유효 기록 2일 이상이 필요해요.</p>'}</article>`).join('')}</div>`;
+    const availableMetric = metrics.find(item => item.means);
+    const aNote = availableMetric ? `카페인을 마신 날 밤의 ${availableMetric.title}은 ${availableMetric.format(availableMetric.means[0])}, 안 마신 날 밤은 ${availableMetric.format(availableMetric.means[1])}였어요.` : '';
+    const standards = finding('healthStandards')?.rows || [];
+    const maximumText = standards.find(row => row.id === 'caffeineMax')?.label.match(/([\d.]+)mg/)?.[1];
+    const displayGoal = goal => {
+      const threshold = goal.label?.match(/([\d.]+)mg/)?.[1];
+      return goal.criterion === 'caffeineMax' && threshold && /이하로 마시기/.test(goal.label) ? `하루 ${threshold}mg 넘지 않기`
+        : goal.criterion === 'bedtime' && /^23:59까지 잠자리에 들기$/.test(goal.label) ? '12시 전에 자기'
+        : (goal.label || '내 목표').replace('잠자리에 들기', '자기');
+    };
+    const registered = (finding('goalProgress')?.goals || []).filter(goal => goal.criterion || goal.label);
+    const selected = registered.filter(goal => goal.source === 'class' ||
+      !registered.some(other => other.source === 'class' && other.criterion && other.criterion === goal.criterion));
+    const range = { id: 'range', label: '8~10시간 취침', days: closed.map(day => ({
+      date: day.date, kept: Number.isFinite(day.hours) ? inRange(day.hours) : null,
+      outcome: Number.isFinite(day.hours) && !inRange(day.hours) ? (day.hours < 8 ? 'short' : 'long') : null,
+    })) };
+    const defaults = standards.filter(row => row.id !== 'sleepMin').map(row => ({ ...row,
+      label: row.id === 'caffeineMax' && maximumText ? `일일 최대 섭취량(${maximumText}mg) 넘지 않기` : '12시 전에 자기' }));
+    const goals = [...(selected.length ? selected.map(goal => ({ ...goal, label: displayGoal(goal) })) : defaults), range]
+      .map(goal => {
+        const states = new Map(goal.days.filter(day => typeof day.kept === 'boolean').map(day => [day.date, day]));
+        const measured = days.filter(day => states.has(day.date) && (!day.open || (goal.criterion || goal.id) === 'caffeineMax'));
+        return { ...goal, states, measured: measured.length, kept: measured.filter(day => states.get(day.date).kept).length };
+      });
+    const goalsShown = [...goals.filter(goal => goal.id !== 'range').slice(0, 4), goals.at(-1)];
+    const markLabels = { ok: '✓', no: '×', short: '짧음', long: '김', none: '–', wait: '아직' };
+    const goalMark = (goal, day) => {
+      const state = goal.states.get(day.date);
+      const canCheckToday = (goal.criterion || goal.id) === 'caffeineMax' && state;
+      const mark = day.open && !canCheckToday ? 'wait' : !state ? 'none' : state.outcome || (state.kept ? 'ok' : 'no');
+      return `<span ${markDate(day)} class="summary-mark ${mark}">${markLabels[mark]}</span>`;
+    };
+    const calendar = `<div class="summary-scroll" role="region" tabindex="0" aria-label="날짜별 목표 실천 달력">
+      <div class="summary-goal-row${compact}" style="--days:${n}"><span></span>${shown.map(day => `<span class="summary-note">${pdfDay(day.date)}</span>`).join('')}<span class="summary-note">지킨 날</span></div>
+      ${goalsShown.map(goal => `<div class="summary-goal-row${compact}" style="--days:${n}">
+        <div class="summary-goal-label"><span class="summary-goal-tag">${goal.source === 'class' || goal.source === 'student' ? '내 목표' : '기본 기준'}</span>${pdfText(goal.label)}</div>
+        ${shown.map(day => goalMark(goal, day)).join('')}<span class="summary-goal-total">${goal.measured ? `${goal.kept}/${goal.measured}` : '–'}</span></div>`).join('')}
+    </div>${goals.length > goalsShown.length ? `<p class="summary-note">개인 목표 ${selected.length}개 중 처음 ${goalsShown.length - 1}개를 표시했어요.</p>` : ''}`;
+    const conditionCompare = compare([validSleep.filter(day => Number.isFinite(day.hours) && inRange(day.hours)),
+      validSleep.filter(day => Number.isFinite(day.hours) && !inRange(day.hours))], 'condition');
+    const bNote = conditionCompare.means
+      ? `8~10시간 잔 밤(${conditionCompare.size[0]}일)의 다음 날 아침 컨디션은 평균 ${fixed(conditionCompare.means[0], '점')}, 그렇지 않은 밤(${conditionCompare.size[1]}일)은 ${fixed(conditionCompare.means[1], '점')}이었어요.`
+      : '8~10시간 잔 밤과 그렇지 않은 밤의 컨디션 비교는 양쪽 기록이 각각 2일 이상일 때 보여 줘요.';
+    const page1 = `<article class="summary-page"><header class="summary-header"><div>
+      <p class="summary-kicker">카페인·수면 기록 요약 · 1쪽 한눈에 보기</p><h1>${name}의 기록</h1>
+      <p class="summary-sub">${pdfText(plainPeriod)} · 날짜는 그날 밤 기준</p></div>
+      <div class="summary-header-counts">${counts('수면 기록', validSleep.length, closed.length)}${counts('카페인 기록', cafDays.filter(day => day.caf?.recorded).length, cafDays.length, 'caf')}</div></header>
+      ${block('A. 카페인과 수면', chart + comparisons + callout(aNote), days.length > shown.length ? '띠 그림은 최근 14일, 비교는 선택 기간 전체' : '')}
+      ${block('B. 수면을 위한 행동과 결과', calendar + callout(bNote, 'mint'), '✓ 지킴 · × 못 지킴 · – 기록 없음 · 아직 = 지나지 않은 밤')}
+      <p class="summary-foot">날짜는 그날 밤 기준이에요. 12시를 넘겨 잠든 날도 전날 밤에 넣어요. 잔 시간은 잠든 시각부터 일어난 시각까지예요. 비교는 양쪽 모두 유효 기록이 2일 이상일 때만 보여 줘요.${maximumText ? ` 일일 최대 섭취량 ${maximumText}mg.` : ''} 청소년 권장 수면 8~10시간(미국수면의학회, 2016).</p>
+    </article>`;
+
+    const intakes = days.flatMap(day => (day.caf?.intakes || []).filter(item => item.mg !== 0)
+      .map(item => ({ ...item, date: day.date, bed: day.open ? null : day.bed })))
+      .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? 1440) - (b.time ?? 1440));
+    const noDiscomfort = symptom => /^(없음|해당 없음|없었어요|없다)$/.test(symptom);
+    const intakeTable = intakes.length ? `<div class="summary-scroll summary-intakes" role="region" tabindex="0" aria-label="카페인 섭취 기록">
+      <table><colgroup><col style="width:10%"><col style="width:10%"><col style="width:22%"><col style="width:12%"><col style="width:25%"><col style="width:21%"></colgroup>
+      <thead><tr>${['날짜', '시각', '마신 것', '양', '마신 이유', '마신 뒤 불편함'].map(text => `<th scope="col">${text}</th>`).join('')}</tr></thead>
+      <tbody>${intakes.map(item => `<tr><td><b>${pdfDay(item.date)}</b></td><td${item.time >= 900 ? ' class="late"' : ''}>${asleep(item.time)}</td>
+        <td>${pdfText(item.drink || '–')}</td><td><b>${Number.isFinite(item.mg) ? `${item.mg}mg` : '–'}</b></td><td>${pdfText(item.reason || '–')}</td>
+        <td class="${item.symptom && !noDiscomfort(item.symptom) ? 'discomfort' : 'summary-muted'}">${pdfText(item.symptom || '–')}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="summary-note">표시할 섭취 내역이 없어요.</p>';
+    const dates = list => list.length ? ` (${list.slice(0, 10).map(day => pdfDay(day.date)).join(', ')}${list.length > 10 ? ` 외 ${list.length - 10}일` : ''})` : '';
+    const side = intakes.find(item => item.mg > 0 && item.symptom && !noDiscomfort(item.symptom) && Number.isFinite(item.time) && Number.isFinite(item.bed));
+    const after3 = new Set(intakes.filter(item => item.mg > 0 && item.time >= 900).map(item => item.date));
+    const cNote = [side ? `${pdfDay(side.date)}에는 ${pdfClock(side.time)}에 카페인을 마시고 ‘${side.symptom}’고 적었어요. 그날 밤 ${pdfClock(side.bed)}에 잠들었어요.` : '',
+      after3.size ? `오후 3시 이후에 카페인을 마신 날은 ${after3.size}일이었어요.` : ''].filter(Boolean).join(' ');
+    const habitOptions = {
+      phone: ['안 함', '30분 미만', '30~60분', '60분 이상'],
+      activity: ['안 함', '30분 미만', '30~60분', '60분 이상'],
+      latency: ['15분 이내', '15~30분', '30~60분', '60분 이상'],
+      awakenings: ['없음', '1번', '2번', '3회↑'],
+      drowsy: ['없음', '조금 있었음', '꽤 힘들었음', '매우 심했음'],
+    };
+    const habits = (finding('sleepQuality')?.rows || []).filter(row => row.responses?.length);
+    const byHabit = new Map(habits.map(row => [row.key, row]));
+    const habitLabels = { phone: '자기 전 스마트폰', activity: '어제 신체활동', latency: '잠들기까지 걸린 시간', awakenings: '자다가 깬 횟수', drowsy: '낮 졸음' };
+    const habitBars = Object.entries(habitLabels).map(([key, title]) => {
+      const row = byHabit.get(key);
+      if (!row) return '';
+      const order = value => Math.max(0, habitOptions[key].indexOf(value) === -1 ? 2 : habitOptions[key].indexOf(value));
+      return `<div class="summary-habit"><span>${title}</span><div class="summary-habit-bar">${[...row.responses]
+        .sort((a, b) => order(a.value) - order(b.value)).map(item => `<span class="band-${order(item.value)}" style="flex:${item.n} 1 0">${pdfText(item.value)} ${item.n}일</span>`).join('')}</div></div>`;
+    }).join('');
+    const phoneDates = finding('phoneBeforeBed')?.members || [[], []];
+    const phoneGroups = phoneDates.map(list => { const keys = new Set(list); return validSleep.filter(day => keys.has(day.date)); });
+    const phone = compare(phoneGroups, 'hours');
+    const dNote = phone.means ? `자기 전 스마트폰을 30분 이상 쓴 밤(${phone.size[0]}일)은 잔 시간이 평균 ${fixed(phone.means[0], '시간')}, 그보다 적게 사용했거나 사용하지 않은 밤(${phone.size[1]}일)은 ${fixed(phone.means[1], '시간')}이었어요.` : '';
+    const good = [validSleep.length ? `수면은 ${closed.length}일 중 ${validSleep.length}일 기록했어요.` : '',
+      zero.length ? `카페인을 안 마신 날도 ‘안 마심’으로 ${zero.length}일 남겼어요.` : ''].filter(Boolean);
+    const sleepMissing = closed.filter(day => !day.recorded);
+    const held = closed.filter(day => day.held);
+    const conditionMissing = validSleep.filter(day => !Number.isFinite(day.condition));
+    const quantityMissing = intakes.filter(item => !Number.isFinite(item.mg)).length;
+    const timeMissing = intakes.filter(item => !Number.isFinite(item.time)).length;
+    const review = [missing.length ? `카페인 기록이 비어 있는 날은 ${missing.length}일이에요${dates(missing)}. 안 마셨다면 ‘안 마심’을 눌러 주세요.` : '',
+      sleepMissing.length ? `수면 기록이 비어 있는 밤은 ${sleepMissing.length}일이에요${dates(sleepMissing)}.` : '',
+      held.length ? `겹치거나 충돌해 수면 분석을 보류한 밤은 ${held.length}일이에요${dates(held)}.` : '',
+      conditionMissing.length ? `아침 컨디션이 빠진 밤은 ${conditionMissing.length}일이에요${dates(conditionMissing)}.` : '',
+      quantityMissing || timeMissing ? `섭취 기록에서 ${[quantityMissing ? `함량 ${quantityMissing}건` : '', timeMissing ? `시각 ${timeMissing}건` : ''].filter(Boolean).join('과 ')}이 빠졌어요.` : ''].filter(Boolean);
+    const ranked = goals.filter(goal => goal.measured > 0).sort((a, b) => b.kept / b.measured - a.kept / a.measured);
+    const best = ranked[0];
+    const hardest = ranked.filter(goal => goal.kept < goal.measured).at(-1);
+    const ratio = goal => `‘${goal.label}’는 확인한 ${goal.measured}일 중 ${goal.kept}일 지켰어요.`;
+    const sample = hardest && validSleep.find(day => hardest.states.get(day.date)?.kept && Number.isFinite(day.bed));
+    const plan = sample && ['range', 'bedtime', 'sleepMin'].includes(hardest.criterion || hardest.id) ?
+      `‘${hardest.label}’를 지킨 ${pdfDay(sample.date)} 밤의 잠든 시각(${pdfClock(sample.bed)})을 다음 계획에 참고해 봐요.` : '';
+    const reflection = [
+      ['잘된 점', best ? ratio(best) : good[0]],
+      ['어려웠던 점', hardest ? ratio(hardest) : ''],
+      ['다음 계획', plan],
+    ];
+    const memo = feedback.savedPdfFeedback?.summary ?? feedback.summary ?? '';
+    const page2 = `<article class="summary-page" data-page="2"><header class="summary-header">
+      <p class="summary-kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="summary-sub">${name} · ${period}</p></header>
+      ${block('C. 카페인을 마신 날', intakeTable + `<p class="summary-sub">안 마신 날 ${zero.length}일${dates(zero)} · 기록 없는 날 ${missing.length}일${dates(missing)}</p>` + callout(cNote))}
+      ${block('D. 수면과 생활습관', (habitBars || '<p class="summary-note">표시할 생활습관 응답이 없어요.</p>') + callout(dNote, 'blue'), '밤 기록 중 고른 답 · 숫자는 일수')}
+      <section class="summary-two">
+        <div class="summary-record-card good"><h2>E. 기록 · 잘한 점</h2>${pdfParagraphs(good.length ? good : ['아직 확인할 기록이 없어요.'])}</div>
+        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${pdfParagraphs(review.length ? review : ['확인한 기록에서 빠진 항목이 없어요.'])}</div>
+      </section>
+      <section class="summary-section summary-reflections"><h2>F. 돌아보기</h2><div class="summary-three">
+        ${reflection.map(([title, value]) => `<div class="summary-reflect-card"><h3>${title}</h3><p${value ? '' : ' class="summary-note"'}>${pdfText(value || '기록에서 확인할 내용이 없어요.')}</p></div>`).join('')}
+      </div><div class="summary-teacher"><b>선생님 한마디</b><p>${pdfText(memo)}</p></div></section>
+    </article>`;
+    return { styles: summaryStyles, content: `<main class="summary-report" aria-label="카페인과 수면 기록 요약">${page1}${page2}</main>` };
+  }
+
   function renderFeedbackReportView(target, report, text, { preferText = false } = {}) {
     target.replaceChildren();
     text.hidden = false;
     if (!report.feedback?.engine) return;
     const view = document.createElement('div');
     const shadow = view.attachShadow({ mode: 'open' });
-    const { styles, content } = buildGoalPdfDocument(report, {
-      includeAi: true, includeMainChart: true, includePattern: true, includeCaffeineRecords: true,
-      includeSleepRecords: true, maxRecordRows: 5,
-    }, 'screen');
+    const { styles, content } = buildSummaryReportDocument(report);
     const style = document.createElement('style');
-    style.textContent = styles + `
-      :host{display:block;color:#17263b;font:14px/1.5 system-ui,sans-serif}
-      :host([hidden]){display:none}
-      .goal-page{break-after:auto;page-break-after:auto}
-      .goal-card{margin-bottom:10px;padding:10px 12px}
-      .goal-page footer{display:none}
-      .goal-record{grid-template-columns:repeat(3,minmax(0,1fr));gap:5px 10px}
-      .goal-record dd,.goal-record-group dd{overflow-wrap:anywhere}
-      .goal-record dt,.goal-record-group dt,small{font-size:12px}
-      @media(max-width:430px){
-        .goal-record,.goal-sleep-record{grid-template-columns:repeat(2,minmax(0,1fr))}
-        .goal-sleep-record .goal-record-group:first-child{grid-column:1/-1;grid-template-columns:repeat(3,minmax(0,1fr));border-bottom:1px solid #dce4ef;padding-bottom:4px}
-        .goal-sleep-record .goal-record-group:nth-child(2){border-left:0;padding-left:0}
-        h1{font-size:18px}h2{font-size:14px}table{font-size:12px}
-      }
-    `;
+    style.textContent = styles;
     const template = document.createElement('template');
     template.innerHTML = content;
     shadow.append(style, template.content);
@@ -540,5 +797,5 @@
     show(!preferText);
   }
 
-  window.teacherReportFiles = { parseGoalCsv, createPdfZip, goalColumns, loadReportPdf, renderFeedback, renderSavedFeedback, readSavedPdfFeedback, buildGoalPdfDocument, renderFeedbackReportView };
+  window.teacherReportFiles = { parseGoalCsv, createPdfZip, goalColumns, loadReportPdf, renderFeedback, renderSavedFeedback, readSavedPdfFeedback, buildGoalPdfDocument, buildSummaryReportDocument, renderFeedbackReportView };
 }());

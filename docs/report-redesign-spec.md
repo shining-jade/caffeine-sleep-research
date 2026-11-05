@@ -9,7 +9,7 @@
 |---|---|---|
 | 수면 날짜 축 통일(A~D) | 완료, 미배포 | 브랜치 `fix/2026-11-05-sleep-feedback-dates` 커밋 `f1f9f0a` |
 | 보고서 디자인 시안(2쪽) | 연구자 확인 완료 | `docs/design/report-redesign/` (시안 원본) |
-| 1. 보고서 화면 재구성 | 할 일 | `vercel/public/js/teacher-report-files.js` |
+| 1. 보고서 화면 재구성 | 완료, 미배포 | `vercel/public/js/teacher-report-files.js` · 7일/14일 A4 화면과 모바일 확인 |
 | 2. 피드백 엔진 계산 추가 | 할 일 | `gas/Code.js` |
 | 3. 이미지 출력·메시지 전송 | 할 일 | `teacher-report-files.js`, `teacher-batch-reports.js`, `gas/Code.js` |
 | 4. 확인·커밋 | 할 일 | 테스트 학생·가짜 자료로만 확인 |
