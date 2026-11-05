@@ -27,8 +27,6 @@
   const previewDialog = $('batchPdfPreview');
   // Individual preview also uses this dialog while the batch tab is hidden.
   document.body.append(previewDialog);
-  const editor = $('batchReportEditor');
-  const editFields = $('batchReportEditFields');
   const selected = new Set();
   const studentKey = student => JSON.stringify([student.학번, student.이름.trim()]);
   let reports = [];
@@ -36,7 +34,6 @@
   let busy = false;
   let previewVersion = 0;
   let previewUrl;
-  let editing;
   function call(action, params) {
     return new Promise((resolve, reject) => {
       google.script.run.withSuccessHandler(result => {
@@ -126,7 +123,6 @@
   }
 
   function clearReports(message = '기간과 학생을 선택해 분석해 주세요.') {
-    if (editor.open) editor.close();
     if (previewDialog.open) previewDialog.close();
     clearZip();
     reports = [];
@@ -176,8 +172,8 @@
     return input;
   }
 
-  async function requestAnalysis(prepared, start, end, mode, thresholds = getCafThresholds(), reportMode = 'ongoing') {
-    const request = { start, end, mode, thresholds, reportVersion: 2, reportMode, students: prepared.map(analysisInput) };
+  async function requestAnalysis(prepared, start, end, mode, thresholds = getCafThresholds(), reportMode = 'ongoing', includeSavedReportEdits = false) {
+    const request = { start, end, mode, thresholds, reportVersion: 2, reportMode, includeSavedReportEdits, students: prepared.map(analysisInput) };
     try {
       return await call('analyzeTeacherBatch', request);
     } catch (error) {
@@ -252,13 +248,17 @@
       badge.textContent = report.error ? '분석 실패' : report.delivered ? '전송 완료'
         : report.sendError ? '전송 실패' : report.edited ? '수정됨' : '분석 완료';
       header.append(identity, badge);
+      let editAnalysis;
       if (!report.error) {
-        const edit = document.createElement('button');
+        const edit = editAnalysis = document.createElement('button');
         edit.type = 'button';
         edit.className = 'btn';
         edit.textContent = '분석 수정';
         edit.setAttribute('aria-label', report.student.이름 + ' 분석 수정');
-        edit.addEventListener('click', () => openEditor(report));
+        edit.addEventListener('click', () => {
+          if (reportView.querySelector('[data-feedback-view="report"][aria-pressed="true"]')) openReportEditor();
+          else openFeedbackEditor();
+        });
         const preview = document.createElement('button');
         preview.type = 'button';
         preview.className = 'btn report-preview-button';
@@ -276,66 +276,73 @@
       const feedback = document.createElement('div');
       renderFeedback(feedback, report.feedback, report.error || report.analysis);
       const reportView = document.createElement('div');
-      const showReport = () => {
-        if (detail.open && !reportView.hasChildNodes()) {
-          window.teacherReportFiles.renderFeedbackReportView?.(reportView, report, feedback, { preferText: true });
+      const saveSummary = async values => {
+        if (busy || !reports.includes(report)) throw new Error('다시 분석한 뒤 저장해 주세요.');
+        busy = true;
+        updateActions();
+        try {
+          const mode = report.feedback.reportMode === 'final' ? 'final' : 'ongoing';
+          const saved = await saveReportEdit(report.student, report.start, report.end, mode, values);
+          if (!reports.includes(report)) throw new Error('분석 결과가 바뀌었습니다.');
+          report.feedback.summaryEdit = saved || { ...report.feedback.summaryEdit, ...values };
+          report.edited = true;
+          report.delivered = false;
+          report.sendError = false;
+          report.deliveryId = crypto.randomUUID();
+          clearZip();
+          badge.textContent = '수정됨';
+          return report.feedback.summaryEdit;
+        } finally {
+          busy = false;
+          updateActions();
         }
       };
+      detail.append(summary, reportView, feedback);
+      const textEditor = !report.error ? window.teacherReportFiles.createFeedbackTextEditor(feedback, {
+        save: feedbackHtml => saveSummary({ feedbackHtml }),
+      }) : null;
+      const showReport = () => {
+        if (detail.open && !reportView.hasChildNodes()) {
+          window.teacherReportFiles.renderFeedbackReportView?.(reportView, report, feedback, { preferText: true, saveSummary });
+        }
+      };
+      const openFeedbackEditor = () => {
+        if (busy) return;
+        detail.open = true;
+        showReport();
+        reportView.querySelector('[data-feedback-view="text"]')?.click();
+        textEditor?.start();
+      };
+      const openReportEditor = () => {
+        if (busy) return;
+        detail.open = true;
+        showReport();
+        reportView.querySelector('[data-feedback-view="report"]')?.click();
+        reportView.querySelector('[data-summary-edit]:not([hidden])')?.click();
+      };
+      if (report.feedback?.engine) {
+        const editReport = document.createElement('button');
+        editReport.type = 'button';
+        editReport.className = 'btn';
+        editReport.textContent = '보고서 문장 수정';
+        editReport.setAttribute('aria-label', report.student.이름 + ' 보고서 문장 수정과 선생님 한마디');
+        editReport.addEventListener('click', openReportEditor);
+        feedback.addEventListener('reportviewchange', () => {
+          const label = feedback.hidden ? '보고서 수정' : '분석 수정';
+          editAnalysis.textContent = label;
+          editAnalysis.setAttribute('aria-label', report.student.이름 + ' ' + label);
+          editReport.hidden = feedback.hidden;
+        });
+        header.append(editReport);
+      }
       detail.addEventListener('toggle', () => {
         report.expanded = detail.open;
         showReport();
       });
       showReport();
-      detail.append(summary, reportView, feedback);
       item.append(header, detail);
       return item;
     }));
-  }
-
-  function openEditor(report) {
-    if (busy) return;
-    editing = report;
-    $('batchReportEditTitle').textContent = report.student.이름 + ' 분석 수정';
-    const values = Array.isArray(report.feedback?.sections)
-      ? [['요약', report.feedback.summary || ''], ...report.feedback.sections.map(section => [section.title, section.items.join('\n')])]
-      : [['분석 내용', report.analysis]];
-    editFields.replaceChildren(...values.map(([title, value]) => {
-      const label = document.createElement('label');
-      const input = document.createElement('textarea');
-      input.rows = 3;
-      input.defaultValue = value;
-      label.append(title, input);
-      return label;
-    }));
-    editor.showModal();
-  }
-
-  function applyEdit(event) {
-    event.preventDefault();
-    const report = editing;
-    if (!report || busy || !reports.includes(report)) return;
-    const inputs = Array.from(editFields.querySelectorAll('textarea'));
-    if (inputs.some(input => input.value !== input.defaultValue)) {
-      const [summary, ...sections] = inputs.map(input => input.value.trim());
-      if (Array.isArray(report.feedback?.sections)) {
-        report.feedback.summary = summary;
-        report.feedback.sections.forEach((section, index) => {
-          section.items = sections[index].split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-        });
-      } else {
-        report.analysis = summary;
-      }
-      report.edited = true;
-      clearZip();
-      report.delivered = false;
-      report.sendError = false;
-      report.deliveryId = crypto.randomUUID();
-      report.expanded = true;
-      status.textContent = report.student.이름 + ' 학생의 수정 내용을 현재 결과에 적용했습니다.';
-    }
-    editor.close();
-    renderResults();
-    updateActions();
   }
 
   function clearPreview() {
@@ -398,7 +405,7 @@
       for (let i = 0; i < prepared.length; i += chunkSize) {
         const chunk = prepared.slice(i, i + chunkSize);
         try {
-          const response = await requestAnalysis(chunk, range.start, range.end, mode, thresholds, reportMode);
+          const response = await requestAnalysis(chunk, range.start, range.end, mode, thresholds, reportMode, true);
           verification = response.aiVerification || verification;
           for (const [index, report] of chunk.entries()) {
             const result = response.reports[index];
@@ -406,7 +413,7 @@
               reports.push({ student: report.student, error: result?.error || '분석 결과를 확인할 수 없습니다.' });
               continue;
             }
-            reports.push({ ...report, ...range, analysis: result.analysis, feedback: result.feedback });
+            reports.push({ ...report, ...range, analysis: result.analysis, feedback: result.feedback, edited: Boolean(result.feedback?.summaryEdit) });
           }
         } catch (error) {
           reports.push(...chunk.map(report => ({ student: report.student, error: error.message || '분석에 실패했습니다.' })));
@@ -570,9 +577,6 @@
   zipButton.addEventListener('click', () => processReports('pdf'));
   imageZipButton.addEventListener('click', () => processReports('images'));
   sendButton.addEventListener('click', () => processReports('send'));
-  $('batchReportEditForm').addEventListener('submit', applyEdit);
-  $('batchReportEditCancel').addEventListener('click', () => editor.close());
-  editor.addEventListener('close', () => { if (!editor.open) editing = undefined; });
   $('batchPdfClose').addEventListener('click', () => previewDialog.close());
   previewDialog.addEventListener('close', () => { if (!previewDialog.open) clearPreview(); });
   reportStart.value = goalStart.value = getLastNDates(today, 7)[0];

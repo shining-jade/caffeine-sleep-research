@@ -195,6 +195,9 @@
         .student-record-details>summary:focus-visible{outline:3px solid #818cf8;outline-offset:2px;border-radius:10px;}
         .student-record-details-body{min-width:0;padding:0 12px 12px;}
         .report-view-controls{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px;}
+        .summary-top-editor:not([hidden]){display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .summary-top-editor [hidden],.summary-top-editor .summary-edit-status:empty{display:none}
+        .summary-top-editor .summary-edit-status{margin:0;font-size:12px;color:#52657d}
         .report-view-controls [aria-pressed="true"]{background:#e8e5ff;color:#4338a5;border-color:#a6a0e1;}
         #aiContent[hidden],.report-view-controls~[hidden]{display:none;}
         @media screen and (max-width:640px){
@@ -232,6 +235,15 @@
         .ai-toggle-arrow.open{transform:rotate(180deg);}
         .ai-box-body{display:none;padding:14px 18px;background:linear-gradient(135deg,#f0f4ff,#faf5ff);border:1px solid #c7d2fe;border-top:none;border-radius:0 0 12px 12px;margin-bottom:20px;}
         .ai-box-body.open{display:block;}
+        .feedback-editor-tools[hidden],.feedback-editor-tools [hidden]{display:none!important}
+        .feedback-editor-bar{display:flex;margin:0 0 8px;gap:8px;align-items:center;flex-wrap:wrap}
+        .feedback-editor-status{font-size:12px;color:#047857}.feedback-editor-status.error{color:#b91c1c}
+        .feedback-format-bar{display:flex;margin-bottom:10px;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;background:#f8f9ff;border:1px solid #e0e7ff;border-radius:8px}
+        .feedback-format-bar span{font-size:12px;color:#52657d}
+        .feedback-format-bar button{min-height:30px;padding:3px 8px;border:1px solid #d1d5db;border-radius:5px;background:#fff;color:#374151;cursor:pointer}
+        .feedback-format-bar .feedback-color::before{content:'';display:block;width:15px;height:15px;border-radius:2px;background:currentColor}
+        .feedback-format-bar .red{color:#b91c1c} .feedback-format-bar .blue{color:#1d4ed8} .feedback-format-bar .green{color:#047857}
+        .feedback-format-bar .feedback-shortcut{margin-left:auto}
         .ai-content[contenteditable=true]{background:#fff;border:2px solid #6366f1;border-radius:8px;padding:12px;outline:none;cursor:text;}
 
         .ai-content{font-size:14px;line-height:1.55;color:#374151;white-space:normal;}
@@ -661,12 +673,7 @@
         .pdf-ai-content .report-feedback-card{padding:8px 10px;}
         #batchPdfPreview{width:min(960px,calc(100% - 24px));max-height:calc(100dvh - 24px);border:1px solid #dbe4f0;border-radius:16px;padding:14px;background:#fff;color:#26364b;}
         #batchPdfPreview::backdrop{background:#19294299;}
-        #batchReportEditor{width:min(680px,calc(100% - 24px));max-height:calc(100dvh - 24px);border:1px solid #dbe4f0;border-radius:16px;padding:18px;color:#26364b;}
-        #batchReportEditor::backdrop{background:#19294299;}
         #batchReportZipFile[hidden]{display:none;}
-        #batchReportEditFields{display:grid;gap:10px;margin:12px 0;}
-        #batchReportEditFields label{display:grid;gap:4px;font-size:13px;font-weight:600;}
-        #batchReportEditFields textarea{width:100%;min-height:64px;padding:8px;border:1px solid #aebdce;border-radius:8px;box-sizing:border-box;resize:vertical;font:inherit;font-weight:400;}
         .report-preview-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:7px;}
         .report-preview-heading h3{margin:0;font-size:17px;}
         #batchPdfPeriod,#batchPdfStatus{margin:4px 0 8px;color:#43536a;font-size:13px;}
@@ -693,7 +700,7 @@
   <script src="/public/js/sleep-record-policy.js"></script>
   <script src="/public/js/sleep-comparison-chart.js"></script>
   <script src="/public/js/badge-journey.js"></script>
-  <script src="/public/js/safe-render.js"></script>
+  <script src="/public/js/safe-render.js?v=feedback-format-2"></script>
   <script src="/public/js/teacher-auth.js"></script>
   <script type="module" src="/public/js/teacher-save-feedback.js"></script>
   <script type="module" src="/public/js/teacher-reminders.js"></script>
@@ -913,17 +920,26 @@
             <iframe id="batchPdfFrame" title="학생 건강 기록 PDF" hidden></iframe>
             <a id="batchPdfOpen" target="_blank" rel="noopener" hidden>새 탭에서 PDF 열기</a>
         </dialog>
-        <dialog id="batchReportEditor" aria-labelledby="batchReportEditTitle">
-            <form id="batchReportEditForm">
-                <h3 id="batchReportEditTitle">분석 수정</h3>
-                <p>한 줄에 한 항목씩 수정하세요. 수정본은 현재 일괄 결과와 그 PDF에 적용됩니다.</p>
-                <div id="batchReportEditFields"></div>
-                <div class="report-controls">
-                    <button type="button" id="batchReportEditCancel" class="btn">취소</button>
-                    <button type="submit" class="btn btn-primary">수정 적용</button>
+        <template id="feedbackTextEditorTools">
+            <div class="feedback-editor-tools" hidden>
+                <div class="feedback-editor-bar">
+                    <button type="button" data-feedback-edit class="btn btn-sm">✏️ 수정</button>
+                    <button type="button" data-feedback-save aria-keyshortcuts="Control+s Meta+s" class="btn btn-sm btn-primary" hidden>💾 저장</button>
+                    <button type="button" data-feedback-cancel class="btn btn-sm" hidden>취소</button>
+                    <span class="feedback-editor-status" role="status"></span>
                 </div>
-            </form>
-        </dialog>
+                <div class="feedback-format-bar" role="group" aria-label="피드백 문장 서식" hidden>
+                    <span>서식</span>
+                    <button type="button" data-format="bold" aria-label="굵게" title="굵게 (Ctrl+B)"><b>B</b></button>
+                    <button type="button" data-format="underline" aria-label="밑줄" title="밑줄"><u>U</u></button>
+                    <button type="button" data-format="red" class="feedback-color red" aria-label="빨간 글자색" title="빨간 글자색"></button>
+                    <button type="button" data-format="blue" class="feedback-color blue" aria-label="파란 글자색" title="파란 글자색"></button>
+                    <button type="button" data-format="green" class="feedback-color green" aria-label="초록 글자색" title="초록 글자색"></button>
+                    <button type="button" data-format="removeFormat">서식 지우기</button>
+                    <span class="feedback-shortcut">Ctrl+S로 저장</span>
+                </div>
+            </div>
+        </template>
     </div>
     <div id="tab-overview" class="tab-content active">
         <div class="filter-bar">
@@ -1705,9 +1721,9 @@
             </div>
             <div class="report-analysis-mode" role="group" aria-label="개별 분석 방식">
                 <strong>분석 방식</strong>
-                <label><input type="radio" name="individualAnalysisMode" value="rule" checked onchange="resetAIReportContext()"> 규칙 기반</label>
-                <label><input type="radio" name="individualAnalysisMode" id="individualAiMode" value="ai" onchange="resetAIReportContext()"> AI 분석</label>
-                <label><input type="checkbox" id="individualFinalMode" onchange="resetAIReportContext()"> 연구 종료 – 마무리 분석</label>
+                <label><input type="radio" name="individualAnalysisMode" value="rule" checked onchange="resetAIReportContext();loadSavedAIReport()"> 규칙 기반</label>
+                <label><input type="radio" name="individualAnalysisMode" id="individualAiMode" value="ai" onchange="resetAIReportContext();loadSavedAIReport()"> AI 분석</label>
+                <label><input type="checkbox" id="individualFinalMode" onchange="resetAIReportContext();loadSavedAIReport()"> 연구 종료 – 마무리 분석</label>
             </div>
             <div class="modal-actions">
                 <button class="btn btn-green" onclick="requestAIAnalysis()" id="aiBtn">📊 피드백 만들기</button>
@@ -1727,21 +1743,6 @@
                 <div class="ai-box-body" id="aiBoxBody">
                     <div id="individualReportView"></div>
                     <div class="ai-content" id="aiContent"><span style="color:#9ca3af;font-size:14px;">‘📊 피드백 만들기’를 누르면 여기에 결과가 표시됩니다.</span></div>
-                    <!-- 분석 수정/저장 버튼 -->
-                    <div id="aiEditBar" style="display:none;margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                        <button id="aiEditBtn" onclick="startAIEdit()" class="btn btn-sm" style="background:#f3f4f6;color:#374151;border:1px solid #e5e7eb;">✏️ 수정</button>
-                        <button id="aiSaveBtn" onclick="saveAIEdit()" class="btn btn-sm btn-primary" style="display:none;">💾 저장</button>
-                        <button id="aiCancelBtn" onclick="cancelAIEdit()" class="btn btn-sm" style="display:none;background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;">취소</button>
-                        <span id="aiSavedBadge" style="display:none;font-size:12px;color:#10b981;font-weight:600;">✓ 저장됨</span>
-                    </div>
-                    <!-- 서식 도구모음 (수정 모드에서만 표시) -->
-                    <div id="aiFormatBar" style="display:none;margin-top:8px;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;background:#f8f9ff;border:1px solid #e0e7ff;border-radius:8px;">
-                        <span style="font-size:11px;color:#6b7280;font-weight:600;margin-right:2px;">서식</span>
-                        <button onmousedown="event.preventDefault();formatAIText('bold')" title="굵게 (Ctrl+B)" style="font-weight:800;width:30px;height:28px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;font-size:14px;">B</button>
-                        <button onmousedown="event.preventDefault();formatAIText('underline')" title="밑줄 (Ctrl+U)" style="text-decoration:underline;width:30px;height:28px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;font-size:14px;">U</button>
-                        <button onmousedown="event.preventDefault();formatAIText('red')" title="빨간색" style="color:#ef4444;font-weight:800;width:30px;height:28px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;font-size:14px;">A</button>
-                        <button onmousedown="event.preventDefault();formatAIText('removeFormat')" title="서식 제거" style="width:46px;height:28px;border:1px solid #d1d5db;background:#fff;border-radius:4px;cursor:pointer;font-size:11px;color:#6b7280;">지우기</button>
-                    </div>
 
                 </div>
             </div>
@@ -3873,7 +3874,7 @@ function renderStudentGrid(students){
     });
 }
 
-let aiViewGeneration=0, aiViewKey='', aiReportContextKey='', individualEngineReport;
+let aiViewGeneration=0, aiViewKey='', aiReportContextKey='', individualEngineReport, savedAIRequest, individualTextEditor;
 function getAIContextKey(){
     return JSON.stringify([String(currentStudentId||''),...getModalDates()]);
 }
@@ -3883,6 +3884,7 @@ function isCurrentAIRequest(key,generation){
 function resetAIReportContext(){
     aiViewGeneration++;
     individualEngineReport = undefined;
+    savedAIRequest = undefined;
     const outputStatus = document.getElementById('individualReportOutputStatus');
     if (outputStatus) { outputStatus.textContent = ''; outputStatus.hidden = true; }
     aiViewKey=getAIContextKey();
@@ -3899,10 +3901,9 @@ function resetAIReportContext(){
     const badge=document.getElementById('aiStatusBadge');
     badge.textContent='(분석 전)';badge.style.color='#818cf8';badge.classList.remove('ai-fallback-badge');
     document.getElementById('aiBoxBody').classList.remove('open');document.getElementById('aiArrow').classList.remove('open');
-    ['aiEditBar','aiFormatBar','aiSavedBadge'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    individualTextEditor?.reset();
     const btn=document.getElementById('aiBtn');btn.disabled=false;
     btn.textContent=label;
-    const saveBtn=document.getElementById('aiSaveBtn');saveBtn.disabled=false;saveBtn.textContent='💾 저장';
 }
 function openStudentModal(id){
     if(document.querySelector?.('#msgSendModal .btn-primary')?.disabled)return;
@@ -4586,22 +4587,58 @@ function labelModalRecordRows(id) {
     }
 }
 
-function updateIndividualReportView(report) {
-    const view = document.getElementById('individualReportView');
-    const content = document.getElementById('aiContent');
-    if (view) window.teacherReportFiles?.renderFeedbackReportView?.(view, report, content, { preferText: true });
+function readSavedAIReport(student, dates) {
+    const key = getAIContextKey();
+    if (savedAIRequest?.key === key) return savedAIRequest.promise;
+    const promise = new Promise(resolve => {
+        google.script.run.withSuccessHandler(resolve).withFailureHandler(() => resolve(null))
+            .getAIReport(student.학번, dates[0] || today, dates.at(-1) || today, student.이름);
+    });
+    savedAIRequest = { key, promise };
+    return promise;
 }
 
-async function requestSharedTeacherAnalysis(student, dates) {
+function applySavedSummaryEdit(report, saved) {
+    const edits = saved?.summaryEdits;
+    if (edits?.owner !== report.student.이름.trim()) return;
+    const mode = report.feedback.reportMode === 'final' ? 'final' : 'ongoing';
+    if (edits[mode]) report.feedback.summaryEdit = edits[mode];
+}
+
+function saveReportEdit(student, start, end, mode, values) {
+    return new Promise((resolve, reject) => {
+        google.script.run.withSuccessHandler(result => result?.success ? resolve(result.summaryEdit) : reject(new Error(result?.error)))
+            .withFailureHandler(reject)
+            .saveAIReport(student.학번, start, end, '', student.이름, { mode, ...values });
+    });
+}
+
+function updateIndividualReportView(report, { preferText = true } = {}) {
+    const view = document.getElementById('individualReportView');
+    const content = document.getElementById('aiContent');
+    const key = getAIContextKey(), generation = aiViewGeneration;
+    const saveSummary = async values => {
+        if (!isCurrentAIRequest(key, generation)) throw new Error('보고서 대상이 바뀌었습니다.');
+        const mode = report.feedback.reportMode === 'final' ? 'final' : 'ongoing';
+        const saved = await saveReportEdit(report.student, report.start, report.end, mode, values);
+        if (savedAIRequest?.key === key) savedAIRequest = undefined;
+        if (!isCurrentAIRequest(key, generation)) return;
+        report.feedback.summaryEdit = saved || { ...report.feedback.summaryEdit, ...values };
+        return report.feedback.summaryEdit;
+    };
+    if (view) window.teacherReportFiles?.renderFeedbackReportView?.(view, report, content, { preferText, saveSummary });
+}
+
+async function requestSharedTeacherAnalysis(student, dates, { restoring = false } = {}) {
     const requestKey = getAIContextKey(), requestGeneration = ++aiViewGeneration;
     aiReportContextKey = '';
     const content = document.getElementById('aiContent');
     const button = document.getElementById('aiBtn');
     const badge = document.getElementById('aiStatusBadge');
-    const mode = document.getElementById('individualAiMode')?.checked ? 'ai' : 'rule';
+    const mode = !restoring && document.getElementById('individualAiMode')?.checked ? 'ai' : 'rule';
     document.getElementById('aiBoxBody').classList.add('open');
     document.getElementById('aiArrow').classList.add('open');
-    document.getElementById('aiEditBar').style.display = 'none';
+    individualTextEditor?.reset();
     content.contentEditable = 'false';
     document.getElementById('individualReportView')?.replaceChildren();
     content.hidden = false;
@@ -4611,11 +4648,18 @@ async function requestSharedTeacherAnalysis(student, dates) {
     badge.style.color = '#52657d';
     try {
         const reportMode = document.getElementById('individualFinalMode')?.checked ? 'final' : 'ongoing';
-        const result = await window.teacherBatchReports.analyzeStudent(student, dates, mode, reportMode);
+        const [result, saved] = await Promise.all([
+            window.teacherBatchReports.analyzeStudent(student, dates, mode, reportMode),
+            readSavedAIReport(student, dates),
+        ]);
         if (!isCurrentAIRequest(requestKey, requestGeneration)) return;
+        applySavedSummaryEdit(result, saved);
         individualEngineReport = result;
+        const edited = result.feedback.summaryEdit;
+        const hasSavedText = typeof edited?.feedbackHtml === 'string';
         window.teacherReportFiles.renderFeedback(content, result.feedback, result.analysis);
-        updateIndividualReportView(result);
+        const hasReportEdits = edited && Object.keys(edited).some(key => key !== 'feedbackHtml');
+        updateIndividualReportView(result, { preferText: !restoring || (hasSavedText && !hasReportEdits) });
         if (content.dataset) content.dataset.reportOwnerName = student.이름.trim();
         aiReportContextKey = requestKey;
         badge.textContent = '(분석 완료 ✓)';
@@ -4633,130 +4677,82 @@ async function requestSharedTeacherAnalysis(student, dates) {
 }
 
 // ── 분석 수정/저장 ───────────────────────────────────────────
-let _aiOriginalHTML = '';
-function showAITools(){
-    const bar=document.getElementById('aiEditBar');if(bar)bar.style.display='flex';
-    document.getElementById('aiSavedBadge').style.display='none';
-    document.getElementById('aiEditBtn').style.display='';
-    const saveBtn=document.getElementById('aiSaveBtn');saveBtn.style.display='none';saveBtn.disabled=false;saveBtn.textContent='💾 저장';
-    document.getElementById('aiCancelBtn').style.display='none';
+document.addEventListener('keydown', event => {
+    if (event.defaultPrevented || String(event.key).toLowerCase() !== 's' || !(event.ctrlKey || event.metaKey)
+        || event.altKey || event.shiftKey) return;
+    const modal = document.getElementById('studentModal');
+    const target = modal.classList.contains('active') ? modal
+        : event.composedPath().find(node => node.matches?.('.report-result'));
+    const button = target?.querySelector('.feedback-editor-tools:not([hidden]) [data-feedback-save]:not([hidden]), .summary-top-editor:not([hidden]) [data-summary-save]:not([hidden])');
+    if (!button) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!event.repeat && !button.disabled) button.click();
+}, true);
+
+function showAITools() {
+    const content = document.getElementById('aiContent');
+    individualTextEditor ||= window.teacherReportFiles.createFeedbackTextEditor(content, {
+        available: () => aiReportContextKey === getAIContextKey(),
+        save: async feedbackHtml => {
+            const key = getAIContextKey(), generation = aiViewGeneration;
+            const student = studentsData.find(row => row.학번 === currentStudentId);
+            if (!student || aiReportContextKey !== key) throw new Error('편집할 학생을 다시 선택해 주세요.');
+            const dates = getModalDates();
+            const mode = document.getElementById('individualFinalMode')?.checked ? 'final' : 'ongoing';
+            const saved = await saveReportEdit(student, dates[0], dates.at(-1), mode, { feedbackHtml });
+            if (savedAIRequest?.key === key) savedAIRequest = undefined;
+            if (!isCurrentAIRequest(key, generation)) return;
+            if (individualEngineReport?.feedback?.engine) {
+                const feedback = individualEngineReport.feedback;
+                feedback.summaryEdit = saved || { ...feedback.summaryEdit, feedbackHtml };
+                const cards = content.querySelectorAll('.report-feedback-card');
+                feedback.sections.forEach((section, index) => {
+                    const items = cards[index]?.querySelectorAll('.report-feedback-items li');
+                    if (items?.length) section.items = Array.from(items, item => item.textContent.trim()).filter(Boolean);
+                });
+            }
+        }
+    });
+    return individualTextEditor.reset();
 }
 
 // 분석 결과 저장본 불러오기 (모달 열릴 때)
 function loadSavedAIReport(){
     const dates=getModalDates();
     const requestKey=getAIContextKey(),requestGeneration=aiViewGeneration;
-    const startDate=dates[0]||today;
-    const endDate=dates[dates.length-1]||today;
-    google.script.run
-        .withSuccessHandler(function(res){
-            if(!isCurrentAIRequest(requestKey,requestGeneration))return;
-            if(res&&res.success&&res.content){
-                if(res.policyVersion!=='2026-10-14'){
-                    aiReportContextKey='';
-                    document.getElementById('aiContent').textContent='이전 기준으로 저장된 결과입니다. 최신 기록 기반 건강 피드백을 생성해 주세요.';
-                    document.getElementById('aiStatusBadge').textContent='(이전 기준 저장본 · 재생성 필요)';
-                    return;
-                }
-                const aiContent=document.getElementById('aiContent');
-                aiContent.dataset.reportOwnerName = String(res.studentName || '').trim();
-                if (!window.teacherReportFiles?.renderSavedFeedback?.(aiContent, res.content)) {
-                    aiContent.innerHTML=sanitizeRichHtml(res.content.includes('<')?res.content:formatAIReportHTML(res.content));
-                }
-                document.getElementById('aiStatusBadge').textContent='(저장된 분석 ✓)';
-                document.getElementById('aiStatusBadge').style.color='#10b981';
-                document.getElementById('aiStatusBadge').classList.remove('ai-fallback-badge');
-                aiReportContextKey=requestKey;
-                document.getElementById('aiBoxBody').classList.add('open');
-                document.getElementById('aiArrow').classList.add('open');
-                showAITools();
-                const badge=document.getElementById('aiSavedBadge');
-                badge.textContent='✓ 저장됨 ('+res.savedAt+')';
-                badge.style.color='#10b981';badge.style.display='';
+    const student = studentsData.find(row => row.학번 === currentStudentId);
+    if (!student) return;
+    readSavedAIReport(student, dates).then(function(res){
+        if(!isCurrentAIRequest(requestKey,requestGeneration))return;
+        const mode = document.getElementById('individualFinalMode')?.checked ? 'final' : 'ongoing';
+        if (res?.summaryEdits?.owner === student.이름.trim() && res.summaryEdits[mode]) {
+            void requestSharedTeacherAnalysis(student, dates, { restoring: true });
+            return;
+        }
+        if(res&&res.success&&res.content){
+            if (res.studentName && res.studentName !== student.이름.trim()) return;
+            if(res.policyVersion!=='2026-10-14'){
+                aiReportContextKey='';
+                document.getElementById('aiContent').textContent='이전 기준으로 저장된 결과입니다. 최신 기록 기반 건강 피드백을 생성해 주세요.';
+                document.getElementById('aiStatusBadge').textContent='(이전 기준 저장본 · 재생성 필요)';
+                return;
             }
-        })
-        .withFailureHandler(function(){})
-        .getAIReport(currentStudentId, startDate, endDate);
-}
-function startAIEdit(){
-    const el=document.getElementById('aiContent');
-    document.getElementById('individualReportView')?.querySelector('[data-feedback-view="text"]')?.click();
-    _aiOriginalHTML=el.innerHTML;
-    el.contentEditable='true';el.focus();
-    document.getElementById('aiEditBtn').style.display='none';
-    document.getElementById('aiSaveBtn').style.display='';
-    document.getElementById('aiCancelBtn').style.display='';
-    document.getElementById('aiSavedBadge').style.display='none';
-    document.getElementById('aiFormatBar').style.display='flex';
-}
-function formatAIText(type){
-    const el=document.getElementById('aiContent');
-    el.focus();
-    if(type==='bold'){document.execCommand('bold',false,null);}
-    else if(type==='underline'){document.execCommand('underline',false,null);}
-    else if(type==='red'){document.execCommand('foreColor',false,'#ef4444');}
-    else if(type==='removeFormat'){document.execCommand('removeFormat',false,null);}
-}
-function saveAIEdit(){
-    const requestKey=getAIContextKey(),requestGeneration=aiViewGeneration;
-    if(aiReportContextKey!==requestKey)return;
-    const el=document.getElementById('aiContent');
-    el.contentEditable='false';
-    const saveBtn=document.getElementById('aiSaveBtn');
-    const badge=document.getElementById('aiSavedBadge');
-    saveBtn.disabled=true;saveBtn.textContent='저장 중...';
-    badge.style.display='none';
-
-    const dates=getModalDates();
-    const startDate=dates[0]||today;
-    const endDate=dates[dates.length-1]||today;
-    // HTML 태그 제거 후 저장 (URL 길이 제한 및 시트 가독성)
-    const tmp=document.createElement('div');
-    tmp.innerHTML=el.innerHTML;
-    tmp.querySelectorAll('br').forEach(br=>br.replaceWith('\n'));
-    tmp.querySelectorAll('p,div,h4,li').forEach(b=>b.insertAdjacentText('afterend','\n'));
-    const content=tmp.textContent.replace(/\n{3,}/g,'\n\n').trim();
-
-    google.script.run
-        .withSuccessHandler(function(res){
-            if(!isCurrentAIRequest(requestKey,requestGeneration))return;
-            if (individualEngineReport?.feedback?.engine && res.success) {
-                const cards = el.querySelectorAll('.report-feedback-card');
-                individualEngineReport.feedback.sections.forEach((section, index) => {
-                    const items = cards[index]?.querySelectorAll('.report-feedback-items li');
-                    if (items?.length) section.items = Array.from(items, item => item.textContent.trim()).filter(Boolean);
-                });
-                updateIndividualReportView(individualEngineReport);
+            const aiContent=document.getElementById('aiContent');
+            aiContent.dataset.reportOwnerName = String(res.studentName || '').trim();
+            if (!window.teacherReportFiles?.renderSavedFeedback?.(aiContent, res.content)) {
+                aiContent.innerHTML=sanitizeRichHtml(res.content.includes('<')?res.content:formatAIReportHTML(res.content));
             }
-            saveBtn.disabled=false;saveBtn.textContent='💾 저장';
-            document.getElementById('aiEditBtn').style.display='';
-            saveBtn.style.display='none';
-            document.getElementById('aiCancelBtn').style.display='none';
-            document.getElementById('aiFormatBar').style.display='none';
-            badge.textContent=res.success?'✓ 저장됨':'⚠️ 저장 실패';
-            badge.style.color=res.success?'#10b981':'#ef4444';
-            badge.style.display='';
-        })
-        .withFailureHandler(function(){
-            if(!isCurrentAIRequest(requestKey,requestGeneration))return;
-            saveBtn.disabled=false;saveBtn.textContent='💾 저장';
-            document.getElementById('aiFormatBar').style.display='none';
-            badge.textContent='⚠️ 저장 실패';badge.style.color='#ef4444';badge.style.display='';
-        })
-        .saveAIReport(currentStudentId, startDate, endDate, content, (studentsData.find(s=>s.학번===currentStudentId)||{}).이름||'');
+            document.getElementById('aiStatusBadge').textContent='(저장된 분석 ✓)';
+            document.getElementById('aiStatusBadge').style.color='#10b981';
+            document.getElementById('aiStatusBadge').classList.remove('ai-fallback-badge');
+            aiReportContextKey=requestKey;
+            document.getElementById('aiBoxBody').classList.add('open');
+            document.getElementById('aiArrow').classList.add('open');
+            showAITools().message('✓ 저장됨 (' + res.savedAt + ')');
+        }
+    });
 }
-function cancelAIEdit(){
-    const el=document.getElementById('aiContent');
-    el.innerHTML=_aiOriginalHTML;
-    el.contentEditable='false';
-    document.getElementById('aiEditBtn').style.display='';
-    document.getElementById('aiSaveBtn').style.display='none';
-    document.getElementById('aiCancelBtn').style.display='none';
-    document.getElementById('aiFormatBar').style.display='none';
-}
-
-
-
 function hasLifestyleConcern(summary, ignored=[]){
     return String(summary||'').split(',').some(v=>{
         const label=v.replace(/\([^)]*\)/g,'').replace(/\s/g,'');
@@ -4966,9 +4962,14 @@ async function individualPdfReport() {
     const key = getAIContextKey();
     const generation = aiViewGeneration;
     if (individualEngineReport?.feedback?.engine && aiReportContextKey === key) return individualEngineReport;
-    const report = await window.teacherBatchReports.analyzeStudent(student, getModalDates(), 'rule',
-        document.getElementById('individualFinalMode')?.checked ? 'final' : 'ongoing');
+    const dates = getModalDates();
+    const [report, saved] = await Promise.all([
+        window.teacherBatchReports.analyzeStudent(student, dates, 'rule',
+            document.getElementById('individualFinalMode')?.checked ? 'final' : 'ongoing'),
+        readSavedAIReport(student, dates),
+    ]);
     if (!isCurrentAIRequest(key, generation)) throw new Error('조회 기간이나 학생이 바뀌었습니다.');
+    if (report?.feedback?.engine) applySavedSummaryEdit(report, saved);
     if (report.feedback?.engine && aiReportContextKey === key && document.getElementById('aiStatusBadge').textContent.includes('저장된 분석')) {
         report.feedback.savedPdfFeedback = window.teacherReportFiles.readSavedPdfFeedback(document.getElementById('aiContent'));
     }
@@ -5627,7 +5628,7 @@ async function runIndividualReportOutput(kind) {
         if (!isCurrentAIRequest(key, generation)) return;
         if (send) {
             const deliveryKey = JSON.stringify([report.student.학번, report.student.이름, report.start, report.end,
-                report.feedback.reportMode, report.feedback.mode, report.feedback.savedPdfFeedback?.summary || report.feedback.summary]);
+                report.feedback.reportMode, report.feedback.mode, report.feedback.summaryEdit || report.feedback.savedPdfFeedback?.summary || report.feedback.summary]);
             if (!individualDeliveryIds.has(deliveryKey)) individualDeliveryIds.set(deliveryKey, crypto.randomUUID());
             note('학생 메시지함에 PDF를 보내는 중입니다.');
             await new Promise((resolve, reject) => {
@@ -7927,9 +7928,9 @@ function renderJourneyStatus(){
 }
 
 </script>
-<script src="/public/js/teacher-report-files.js?v=report-view-11"></script>
+<script src="/public/js/teacher-report-files.js?v=report-view-17"></script>
 <script src="/public/js/teacher-report-export.js?v=image-report-2"></script>
-<script src="/public/js/teacher-batch-reports.js?v=report-view-5"></script>
+<script src="/public/js/teacher-batch-reports.js?v=report-view-8"></script>
 <script type="module" src="/public/js/caffeine-companies.js"></script>
 </body>
 </html>

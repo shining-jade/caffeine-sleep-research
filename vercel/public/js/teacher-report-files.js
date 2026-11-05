@@ -105,6 +105,11 @@
   }
 
   function renderFeedback(target, feedback, fallback = '', showMetrics = true) {
+    const savedHtml = feedback?.summaryEdit?.feedbackHtml;
+    if (typeof savedHtml === 'string') {
+      target.innerHTML = window.safeRender.sanitizeRichHtml(savedHtml, { feedback: true });
+      return;
+    }
     if (!Array.isArray(feedback?.sections)) {
       const legacy = document.createElement('p');
       legacy.className = 'report-feedback-legacy';
@@ -581,8 +586,26 @@
     .summary-habit-bar .band-1{background:#bccde9}.summary-habit-bar .band-2{background:#5978b4;color:white}.summary-habit-bar .band-3{background:#3f68ad;color:white}
     .summary-record-card{border-radius:12px;padding:12px 14px;display:grid;align-content:start;gap:5px}
     .summary-record-card.good{background:#eef6f2;color:#185a41}.summary-record-card.review{border:1.5px dashed #d0a07f;color:#8a3b10}
-    .summary-record-card h2{font-size:15px}.summary-record-card p{color:#1f2a44}
-    .summary-reflections{flex:1;grid-template-rows:auto 1fr auto}.summary-reflect-card h3,.summary-teacher b{color:#3b3195}
+    .summary-record-card h2{font-size:15px}.summary-record-card [data-summary-text]{display:grid;gap:5px;color:#1f2a44}
+    .summary-reflections>.summary-three{align-items:stretch}
+    .summary-reflect-card h3,.summary-teacher b{color:#3b3195}
+    [data-summary-text]{white-space:pre-line}
+    .summary-edit-heading,.summary-edit-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .summary-edit-heading{justify-content:space-between}
+    .summary-report [hidden]{display:none!important}
+    .summary-reflections button{font:inherit;color:#3b3195;background:#f4f2fc;border:1px solid #d7d0ef;border-radius:7px;padding:5px 9px;cursor:pointer}
+    .summary-reflections button:disabled{opacity:.55;cursor:wait}
+    .summary-field-editor{display:block;width:100%;min-width:0;min-height:3em;max-height:12em;overflow:auto;font:inherit;line-height:1.5;white-space:pre-wrap;border:1px solid #a6a0d4;border-radius:7px;padding:6px;background:#fff;color:#1f2a44}
+    .summary-field-editor:focus{outline:2px solid #776fc6;outline-offset:1px}
+    .summary-format-bar{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:5px}
+    .summary-format-bar button{font:inherit;min-width:28px;min-height:28px;color:#3b3195;background:#fff;border:1px solid #d7d0ef;border-radius:6px;padding:2px 6px;cursor:pointer}
+    .summary-format-bar button:disabled{opacity:.55;cursor:wait}
+    .summary-format-bar .format-swatch::before{content:'';display:block;width:14px;height:14px;border-radius:2px;background:currentColor}
+    .summary-format-bar .red{color:#b91c1c}.summary-format-bar .blue{color:#1d4ed8}.summary-format-bar .green{color:#047857}
+    .summary-reflections.is-editing .summary-teacher{display:grid;grid-template-columns:minmax(0,1fr)}
+    .summary-reflections.is-editing .summary-teacher button{justify-self:start}
+    .summary-edit-status:empty{display:none}
+
     .summary-teacher{border-radius:12px;background:#f1effb;padding:10px 14px;min-height:42px;display:flex;gap:10px}
     .summary-teacher b{white-space:nowrap}
     .summary-page[data-late="true"] .summary-intakes{max-height:146px}
@@ -628,6 +651,10 @@
     </div>`;
   }
 
+  const reportPlainText = value => typeof value === 'string' ? value : (value?.text || '');
+  const reportTextHtml = value => typeof value?.html === 'string' && window.safeRender
+    ? window.safeRender.sanitizeRichHtml(value.html, { report: true }) : pdfText(reportPlainText(value));
+
   function buildSummaryReportDocument(report, { now = Date.now() } = {}) {
     const { feedback, student, start, end } = report;
     const finding = id => feedback.engine.findings.find(item => item.id === id)?.data;
@@ -654,7 +681,14 @@
     const name = pdfText(student?.이름 || '학생');
     const period = `${dateText(start)} ~ ${dateText(end)}`;
     const plainPeriod = start.slice(0, 4) === end.slice(0, 4) ? `${start.slice(0, 4)}년 · ${period}` : `${start} ~ ${end}`;
-    const callout = (message, tone = '') => message ? `<p class="summary-callout ${tone}"><b>기록을 보면</b> ${pdfText(message)}</p>` : '';
+    const edit = feedback.summaryEdit;
+    const summaryText = (key, label, message) => `<span data-summary-text="${key}" data-summary-label="${label}">${reportTextHtml(message)}</span>`;
+    const callout = (key, label, fallback, tone = '') => {
+      const message = edit?.[key] ?? fallback;
+      return `<p class="summary-callout ${tone}" data-summary-callout${reportPlainText(message) ? '' : ' hidden'}><b data-summary-prefix${edit?.[key] === undefined ? '' : ' hidden'}>기록을 보면</b> ${summaryText(key, label, message)}</p>`;
+    };
+    const recordNote = (key, label, paragraphs) => `<div data-summary-text="${key}" data-summary-label="${label}">${edit?.[key] !== undefined
+      ? reportTextHtml(edit[key]) : pdfParagraphs(paragraphs)}</div>`;
     const block = (title, body, note = '', stacked = false) => `<section class="summary-section"><div class="summary-title-line${stacked ? ' stacked' : ''}"><h2>${title}</h2>${note ? `<span class="summary-note">${pdfText(note)}</span>` : ''}</div>${body}</section>`;
     const axis = (key, label, render) => `<div class="summary-axis-row${compact}" style="--days:${n}" data-row="${key}">${label}${shown.map(render).join('')}</div>`;
     const markDate = day => `data-date="${pdfText(day.date)}"`;
@@ -793,8 +827,8 @@
       <p class="summary-kicker">카페인·수면 기록 요약 · 1쪽 한눈에 보기</p><h1>${name}의 기록</h1>
       <p class="summary-sub">${pdfText(plainPeriod)} · 날짜는 그날 밤 기준</p></div>
       <div class="summary-header-counts">${counts('수면 기록', validSleep.length, closed.length)}${counts('카페인 기록', cafDays.filter(day => day.caf?.recorded).length, cafDays.length, 'caf')}</div></header>
-      ${block('A. 카페인과 수면', chart + comparisons + callout(aNote), weeks.length ? '주차별 평균 · 각 숫자 아래는 계산에 사용한 일수' : '')}
-      ${block('B. 수면을 위한 행동과 결과', calendar + callout(bNote, 'mint'), weeks.length ? '지킨 날 / 판정 가능한 날 · 비율이 높을수록 진하게 표시' : `✓ 지킴 · × 못 지킴 · – ${noWeight ? '판정 없음' : '기록 없음'} · 아직 = 지나지 않은 밤`, !weeks.length && n > 7)}
+      ${block('A. 카페인과 수면', chart + comparisons + callout('caffeineSleep', 'A. 카페인과 수면 설명', aNote), weeks.length ? '주차별 평균 · 각 숫자 아래는 계산에 사용한 일수' : '')}
+      ${block('B. 수면을 위한 행동과 결과', calendar + callout('behavior', 'B. 수면을 위한 행동과 결과 설명', bNote, 'mint'), weeks.length ? '지킨 날 / 판정 가능한 날 · 비율이 높을수록 진하게 표시' : `✓ 지킴 · × 못 지킴 · – ${noWeight ? '판정 없음' : '기록 없음'} · 아직 = 지나지 않은 밤`, !weeks.length && n > 7)}
       <footer class="summary-foot">
         <p>날짜는 그날 밤 기준이에요. 12시를 넘겨 잠든 날도 전날 밤에 넣어요. 잔 시간은 잠든 시각부터 일어난 시각까지예요. 비교는 양쪽 모두 유효 기록이 2일 이상일 때만 보여 줘요.</p>
         <div class="summary-foot-standards"><p>청소년 일일 최대 섭취량 = 내 체중 × 2.5mg(식품의약품안전처)</p><p>청소년 권장 수면 8~10시간(미국수면의학회, 2016)</p></div>
@@ -868,27 +902,335 @@
       `‘${hardest.label}’를 지킨 ${pdfDay(sample.date)} 밤의 잠든 시각(${pdfClock(sample.bed)})을 다음 계획에 참고해 봐요.` : '';
     const reflectionText = feedback.summaryReflection || feedback.engine.summaryReflection?.rule;
     const reflection = [
-      ['잘된 점', reflectionText?.praise ?? (best ? ratio(best) : good[0])],
-      ['어려웠던 점', reflectionText?.difficulty ?? (hardest ? ratio(hardest) : '')],
-      ['다음 계획', reflectionText?.plan ?? plan],
+      ['praise', '잘된 점', edit?.praise ?? reflectionText?.praise ?? (best ? ratio(best) : good[0])],
+      ['difficulty', '어려웠던 점', edit?.difficulty ?? reflectionText?.difficulty ?? (hardest ? ratio(hardest) : '')],
+      ['plan', '다음 계획', edit?.plan ?? reflectionText?.plan ?? plan],
     ];
-    const memo = feedback.savedPdfFeedback?.summary ?? feedback.summary ?? '';
+    const memo = edit?.memo ?? feedback.savedPdfFeedback?.summary ?? feedback.summary ?? '';
     const page2 = `<article class="summary-page" data-page="2"${weeks.length ? ' data-period="weekly"' : ''}${visibleLate.length ? ' data-late="true"' : ''}><header class="summary-header">
       <p class="summary-kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="summary-sub">${name} · ${period}</p></header>
-      ${block('C. 카페인을 마신 날', intakeTable + `<p class="summary-sub">안 마신 날 ${zero.length}일${dates(zero)} · 기록 없는 날 ${missing.length}일${dates(missing)}</p>` + callout(cNote))}
-      ${block('D. 수면과 생활습관', (habitBars || '<p class="summary-note">표시할 생활습관 응답이 없어요.</p>') + callout(dNote, 'blue'), '밤 기록 중 고른 답 · 숫자는 일수')}
+      ${block('C. 카페인을 마신 날', intakeTable + `<p class="summary-sub">안 마신 날 ${zero.length}일${dates(zero)} · 기록 없는 날 ${missing.length}일${dates(missing)}</p>` + callout('caffeineDays', 'C. 카페인을 마신 날 설명', cNote))}
+      ${block('D. 수면과 생활습관', (habitBars || '<p class="summary-note">표시할 생활습관 응답이 없어요.</p>') + callout('sleepHabits', 'D. 수면과 생활습관 설명', dNote, 'blue'), '밤 기록 중 고른 답 · 숫자는 일수')}
       <section class="summary-two">
-        <div class="summary-record-card good"><h2>E. 기록 · 잘한 점</h2>${pdfParagraphs(good.length ? good : ['아직 확인할 기록이 없어요.'])}</div>
-        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${pdfParagraphs(lateText ? [...review, lateText] : review.length ? review : ['확인한 기록에서 빠진 항목이 없어요.'])}${visibleLate.length ? '<small class="summary-note">저장 시각 기준이라 나중에 수정한 기록도 포함될 수 있어요.</small>' : ''}</div>
+        <div class="summary-record-card good"><h2>E. 기록 · 잘한 점</h2>${recordNote('recordGood', 'E. 기록 · 잘한 점', good.length ? good : ['아직 확인할 기록이 없어요.'])}</div>
+        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${recordNote('recordReview', 'E. 기록 · 아쉬운 점', lateText ? [...review, lateText] : review.length ? review : ['확인한 기록에서 빠진 항목이 없어요.'])}${visibleLate.length ? '<small class="summary-note">저장 시각 기준이라 나중에 수정한 기록도 포함될 수 있어요.</small>' : ''}</div>
       </section>
       <section class="summary-section summary-reflections"><h2>F. 돌아보기</h2><div class="summary-three">
-        ${reflection.map(([title, value]) => `<div class="summary-reflect-card"><h3>${title}</h3><p${value ? '' : ' class="summary-note"'}>${pdfText(value || '기록에서 확인할 내용이 없어요.')}</p></div>`).join('')}
-      </div><div class="summary-teacher"><b>선생님 한마디</b><p>${pdfText(memo)}</p></div></section>
+        ${reflection.map(([key, title, value]) => `<div class="summary-reflect-card"><h3>${title}</h3><p data-summary-text="${key}"${reportPlainText(value) ? '' : ' class="summary-note"'}>${reportTextHtml(reportPlainText(value) ? value : '기록에서 확인할 내용이 없어요.')}</p></div>`).join('')}
+      </div><div class="summary-teacher"><b>선생님 한마디</b><p data-summary-text="memo">${reportTextHtml(memo)}</p></div></section>
     </article>`;
     return { styles: summaryStyles, content: `<main class="summary-report" aria-label="카페인과 수면 기록 요약">${page1}${page2}</main>` };
   }
 
-  function renderFeedbackReportView(target, report, text, { preferText = false } = {}) {
+  const teacherNoteExamples = [
+    '기록을 남겨 줘서 고마워요. 다음에는 실천하기 쉬운 것 한 가지부터 해 봐요.',
+    '완벽하게 지키지 않아도 괜찮아요. 나에게 맞는 방법을 하나씩 찾아봐요.',
+    '기록에서 발견한 점을 다음 계획에 하나만 써 봐요.',
+    '이번에 해 보니 편했던 방법이 있다면, 다음에도 이어 가 봐요.',
+  ];
+
+  function createFeedbackTextEditor(content, { save, available = () => true } = {}) {
+    const tools = document.getElementById('feedbackTextEditorTools').content.firstElementChild.cloneNode(true);
+    content.before(tools);
+    content.classList.add('ai-content');
+    const editButton = tools.querySelector('[data-feedback-edit]');
+    const saveButton = tools.querySelector('[data-feedback-save]');
+    const cancelButton = tools.querySelector('[data-feedback-cancel]');
+    const status = tools.querySelector('[role="status"]');
+    const formatBar = tools.querySelector('.feedback-format-bar');
+    let state = 'read', original = '', lastRange, revision = 0;
+
+    function message(text = '', failure = false) {
+      status.textContent = text;
+      status.classList.toggle('error', failure);
+    }
+
+    function sync() {
+      tools.hidden = content.hidden || !available();
+      content.contentEditable = state === 'editing' ? 'true' : 'false';
+      editButton.hidden = state !== 'read';
+      saveButton.hidden = cancelButton.hidden = state === 'read';
+      saveButton.disabled = cancelButton.disabled = state === 'saving';
+      saveButton.textContent = state === 'saving' ? '저장 중…' : '💾 저장';
+      formatBar.hidden = state !== 'editing';
+    }
+
+    function reset() {
+      revision++;
+      state = 'read';
+      lastRange = undefined;
+      message();
+      sync();
+      return api;
+    }
+
+    function start() {
+      if (state !== 'read' || content.hidden || !available()) return;
+      original = content.innerHTML;
+      lastRange = undefined;
+      state = 'editing';
+      message();
+      sync();
+      content.focus({ preventScroll: true });
+      tools.scrollIntoView({ block: 'nearest' });
+    }
+
+    function rememberSelection() {
+      const selection = document.getSelection();
+      if (state === 'editing' && selection?.rangeCount &&
+          content.contains(selection.anchorNode) && content.contains(selection.focusNode)) {
+        lastRange = selection.getRangeAt(0).cloneRange();
+      }
+    }
+
+    const colors = { red: '#b91c1c', blue: '#1d4ed8', green: '#047857' };
+    for (const button of formatBar.querySelectorAll('[data-format]')) {
+      button.addEventListener('mousedown', event => { rememberSelection(); event.preventDefault(); });
+      button.addEventListener('click', () => {
+        if (state !== 'editing' || content.hidden) return;
+        const format = button.dataset.format;
+        rememberSelection();
+        content.focus({ preventScroll: true });
+        if (lastRange && content.contains(lastRange.commonAncestorContainer)) {
+          const selection = document.getSelection();
+          selection.removeAllRanges();
+          selection.addRange(lastRange);
+        }
+        if (Object.hasOwn(colors, format)) document.execCommand('foreColor', false, colors[format]);
+        else if (['bold', 'underline', 'removeFormat'].includes(format)) document.execCommand(format);
+        rememberSelection();
+      });
+    }
+    content.addEventListener('keyup', rememberSelection);
+    content.addEventListener('pointerup', rememberSelection);
+    content.addEventListener('reportviewchange', sync);
+    editButton.addEventListener('click', start);
+    cancelButton.addEventListener('click', () => {
+      if (state !== 'editing') return;
+      content.innerHTML = original;
+      reset();
+      editButton.focus({ preventScroll: true });
+    });
+    saveButton.addEventListener('click', async () => {
+      if (state !== 'editing' || content.hidden || !available()) return;
+      const current = ++revision;
+      const html = window.safeRender.sanitizeRichHtml(content.innerHTML, { feedback: true });
+      state = 'saving';
+      message();
+      sync();
+      try {
+        await save(html);
+        if (current !== revision) return;
+        content.innerHTML = html;
+        state = 'read';
+        message('✓ 저장됨');
+      } catch (error) {
+        if (current !== revision) return;
+        state = 'editing';
+        message(error?.message || '저장하지 못했습니다. 다시 시도해 주세요.', true);
+      } finally {
+        if (current === revision) {
+          sync();
+          if (!tools.hidden) (state === 'editing' ? content : editButton).focus({ preventScroll: true });
+        }
+      }
+    });
+    const api = { start, reset, message };
+    return reset();
+  }
+
+  function addSummaryEditor(shadow, saveSummary) {
+    const report = shadow.querySelector('.summary-report');
+    const section = shadow.querySelector('.summary-reflections');
+    const texts = [...report.querySelectorAll('[data-summary-text]')];
+    const heading = document.createElement('div');
+    heading.className = 'summary-edit-heading';
+    const title = section.querySelector('h2');
+    title.before(heading);
+    heading.append(title);
+
+    const button = (label, action) => {
+      const element = document.createElement('button');
+      element.type = 'button';
+      element.textContent = label;
+      element.addEventListener('click', action);
+      return element;
+    };
+    const top = document.createElement('div');
+    top.className = 'summary-top-editor';
+    const makeStatus = () => {
+      const status = document.createElement('p');
+      status.setAttribute('role', 'status');
+      status.className = 'summary-note summary-edit-status';
+      return status;
+    };
+    const status = makeStatus(), topStatus = makeStatus();
+    const announce = message => { status.textContent = message; topStatus.textContent = message; };
+    const toolbar = document.createElement('span');
+    toolbar.className = 'summary-format-bar';
+    toolbar.setAttribute('role', 'group');
+    toolbar.setAttribute('aria-label', '보고서 문장 서식');
+    toolbar.hidden = true;
+    let activeField, lastRange;
+    const selection = () => shadow.getSelection?.() || document.getSelection();
+    const rememberSelection = () => {
+      const current = selection();
+      if (current.rangeCount && activeField?.contains(current.anchorNode) && activeField.contains(current.focusNode)) {
+        lastRange = current.getRangeAt(0).cloneRange();
+      }
+    };
+    const formats = [
+      ['굵게', 'B', 'bold'], ['밑줄', 'U', 'underline'],
+      ['빨간 글자색', '', 'foreColor', 'red', '#b91c1c'], ['파란 글자색', '', 'foreColor', 'blue', '#1d4ed8'],
+      ['초록 글자색', '', 'foreColor', 'green', '#047857'], ['서식 지우기', '서식 지우기', 'removeFormat'],
+    ].map(([label, glyph, command, color, value]) => {
+      const control = button(glyph, () => {
+        if (activeField?.contentEditable !== 'true') return;
+        rememberSelection();
+        activeField.focus({ preventScroll: true });
+        if (lastRange && activeField.contains(lastRange.commonAncestorContainer)) {
+          const current = selection();
+          current.removeAllRanges();
+          current.addRange(lastRange);
+        }
+        document.execCommand(command, false, value);
+        rememberSelection();
+      });
+      if (color) control.className = 'format-swatch ' + color;
+      if (command === 'bold') control.style.fontWeight = '800';
+      if (command === 'underline') control.style.textDecoration = 'underline';
+      control.title = label;
+      control.setAttribute('aria-label', label);
+      control.addEventListener('mousedown', event => { rememberSelection(); event.preventDefault(); });
+      return control;
+    });
+    toolbar.append(...formats);
+    const fields = new Map(texts.map(text => {
+      const input = document.createElement('span');
+      const key = text.dataset.summaryText;
+      input.className = 'summary-field-editor';
+      input.contentEditable = 'true';
+      input.setAttribute('role', 'textbox');
+      input.setAttribute('aria-multiline', 'true');
+      input.setAttribute('aria-label', text.dataset.summaryLabel || text.previousElementSibling.textContent);
+      input.hidden = true;
+      input.addEventListener('focus', () => {
+        if (activeField !== input) lastRange = undefined;
+        activeField = input;
+        if (toolbar.nextSibling !== input) input.before(toolbar);
+        toolbar.hidden = false;
+      });
+      input.addEventListener('keyup', rememberSelection);
+      input.addEventListener('pointerup', rememberSelection);
+      input.addEventListener('paste', event => {
+        event.preventDefault();
+        document.execCommand('insertText', false, event.clipboardData?.getData('text/plain') || '');
+      });
+      text.after(input);
+      return [key, input];
+    }));
+    const sanitize = value => window.safeRender.sanitizeRichHtml(value, { report: true });
+    const readField = input => {
+      const text = input.innerText.trim();
+      const html = sanitize(input.innerHTML).trim();
+      return text && /<(?:b|strong|u|em|i)(?:\s|>)|style="color:/i.test(html) ? { text, html } : text;
+    };
+    let exampleIndex = 0, opener;
+    const initial = new Map();
+    const customized = new Set(texts.filter(text => text.closest('[data-summary-callout]')?.querySelector('[data-summary-prefix]')?.hidden)
+      .map(text => text.dataset.summaryText));
+    const begin = event => {
+      opener = event.currentTarget;
+      setEditing(true);
+      for (const text of texts) {
+        const key = text.dataset.summaryText;
+        const input = fields.get(key);
+        input.innerHTML = text.classList.contains('summary-note') ? '' : sanitize(text.innerHTML.trim());
+        initial.set(key, JSON.stringify(readField(input)));
+      }
+      announce('글자를 선택해 서식을 적용할 수 있어요. 저장한 문장은 이미지와 PDF에도 반영됩니다.');
+      fields.get(opener === topEdit ? 'caffeineSleep' : 'praise').focus();
+    };
+    const edit = button('보고서 문장 수정', begin), topEdit = button('보고서 문장 수정', begin);
+    const examples = button('다른 예시 문구', () => {
+      const memo = fields.get('memo');
+      if (memo.innerText === teacherNoteExamples[exampleIndex]) exampleIndex = (exampleIndex + 1) % teacherNoteExamples.length;
+      memo.textContent = teacherNoteExamples[exampleIndex];
+      exampleIndex = (exampleIndex + 1) % teacherNoteExamples.length;
+      memo.focus();
+    });
+    examples.dataset.summaryExample = '';
+    fields.get('memo').after(examples);
+    const cancelEdit = () => {
+      announce('');
+      setEditing(false);
+      opener.focus();
+    };
+    const saveEdit = async () => {
+      const values = Object.fromEntries([...fields]
+        .map(([key, input]) => [key, readField(input)])
+        .filter(([key, value]) => JSON.stringify(value) !== initial.get(key)));
+      if (!Object.keys(values).length) {
+        cancelEdit();
+        return;
+      }
+      const controls = [...formats, examples, save, cancel, topSave, topCancel];
+      for (const control of controls) control.disabled = true;
+      for (const field of fields.values()) field.contentEditable = 'false';
+      announce('저장 중…');
+      try {
+        const saved = await saveSummary(values) || values;
+        for (const text of texts) {
+          const key = text.dataset.summaryText;
+          if (!Object.hasOwn(saved, key)) continue;
+          const emptyReflection = ['praise', 'difficulty', 'plan'].includes(key) && !reportPlainText(saved[key]);
+          customized.add(key);
+          text.innerHTML = reportTextHtml(emptyReflection ? '기록에서 확인할 내용이 없어요.' : saved[key]);
+          text.classList.toggle('summary-note', emptyReflection);
+        }
+        setEditing(false);
+        announce('보고서 문장을 저장했습니다.');
+        opener.focus();
+      } catch {
+        announce('저장하지 못했습니다. 다시 시도해 주세요.');
+      } finally {
+        for (const control of controls) control.disabled = false;
+        for (const field of fields.values()) field.contentEditable = 'true';
+      }
+    };
+    const save = button('보고서 문장 저장', saveEdit), cancel = button('취소', cancelEdit);
+    const topSave = button('보고서 문장 저장', saveEdit), topCancel = button('취소', cancelEdit);
+    topEdit.dataset.summaryEdit = '';
+    topSave.dataset.summarySave = '';
+    topSave.setAttribute('aria-keyshortcuts', 'Control+s Meta+s');
+    save.setAttribute('aria-keyshortcuts', 'Control+s Meta+s');
+    for (const control of [topEdit, topSave, topCancel]) control.className = 'btn btn-sm';
+    top.append(topEdit, topSave, topCancel, topStatus);
+    const actions = document.createElement('div');
+    actions.className = 'summary-edit-actions';
+    actions.append(save, cancel);
+    heading.append(edit);
+    section.append(actions, status);
+    function setEditing(editing) {
+      edit.hidden = topEdit.hidden = editing;
+      actions.hidden = topSave.hidden = topCancel.hidden = examples.hidden = !editing;
+      section.classList.toggle('is-editing', editing);
+      if (!editing) { toolbar.hidden = true; activeField = lastRange = undefined; }
+      for (const text of texts) {
+        text.hidden = editing;
+        fields.get(text.dataset.summaryText).hidden = !editing;
+        const callout = text.closest('[data-summary-callout]');
+        if (callout) {
+          callout.hidden = !editing && !text.textContent.trim();
+          callout.querySelector('[data-summary-prefix]').hidden = editing || customized.has(text.dataset.summaryText);
+        }
+      }
+    }
+    setEditing(false);
+    return top;
+  }
+
+  function renderFeedbackReportView(target, report, text, { preferText = false, saveSummary } = {}) {
     target.replaceChildren();
     text.hidden = false;
     if (!report.feedback?.engine) return;
@@ -900,13 +1242,15 @@
     const template = document.createElement('template');
     template.innerHTML = content;
     shadow.append(style, template.content);
+    const editor = saveSummary ? addSummaryEditor(shadow, saveSummary) : null;
     const controls = document.createElement('div');
     controls.className = 'report-view-controls';
     controls.setAttribute('role', 'group');
-    controls.setAttribute('aria-label', '피드백 표시 방식');
+    controls.setAttribute('aria-label', '피드백 표시 및 편집');
     const reportButton = document.createElement('button');
     const textButton = document.createElement('button');
     reportButton.textContent = '보고서 보기';
+    reportButton.dataset.feedbackView = 'report';
     textButton.textContent = '피드백 문장 보기';
     textButton.dataset.feedbackView = 'text';
     for (const button of [reportButton, textButton]) {
@@ -916,8 +1260,10 @@
     const show = reportVisible => {
       view.hidden = !reportVisible;
       text.hidden = reportVisible;
+      if (editor) editor.hidden = !reportVisible;
       reportButton.setAttribute('aria-pressed', String(reportVisible));
       textButton.setAttribute('aria-pressed', String(!reportVisible));
+      text.dispatchEvent(new Event('reportviewchange'));
     };
     reportButton.addEventListener('click', () => show(true));
     textButton.addEventListener('click', () => show(false));
@@ -930,9 +1276,10 @@
       status.textContent = mode.textContent;
       controls.append(status);
     }
+    if (editor) controls.append(editor);
     target.append(controls, view);
     show(!preferText);
   }
 
-  window.teacherReportFiles = { parseGoalCsv, createPdfZip, goalColumns, loadReportPdf, renderFeedback, renderSavedFeedback, readSavedPdfFeedback, buildGoalPdfDocument, buildSummaryReportDocument, renderFeedbackReportView };
+  window.teacherReportFiles = { parseGoalCsv, createPdfZip, goalColumns, loadReportPdf, renderFeedback, renderSavedFeedback, readSavedPdfFeedback, buildGoalPdfDocument, buildSummaryReportDocument, renderFeedbackReportView, createFeedbackTextEditor };
 }());

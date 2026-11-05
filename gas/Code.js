@@ -2767,6 +2767,7 @@ function analyzeTeacherBatch(request) {
     if (request.reportMode !== undefined && !['ongoing', 'final'].includes(request.reportMode)) throw new Error('분석 모드를 확인해 주세요.');
     const source = feedbackSourceRows_();
     const classRows = feedbackClassRows_();
+    const editRows = request.includeSavedReportEdits === true ? summaryReportEditRows_(getSpreadsheet_()) : [];
     return { success: true, reports: students.map(entry => {
       const student = matchReportStudent_(roster, entry);
       if (!student) return { studentId: entry?.studentId, error: '명단에서 학번과 이름을 확인해 주세요.' };
@@ -2780,8 +2781,10 @@ function analyzeTeacherBatch(request) {
         const [icon, ...title] = section.title.split(' ');
         return { ...section, title: title.join(' '), icon, tone: tones[section.id] };
       });
+      const summaryEdit = readSummaryReportEdits_(editRows, String(entry.studentId), student.name, start, end)[engine.mode];
       return { studentId: entry.studentId, analysis: feedbackReportText_(engine.sections),
-        feedback: { mode: 'rule', aiFallback: mode === 'ai', reportMode: engine.mode, sections, sources: engine.references, engine } };
+        feedback: { mode: 'rule', aiFallback: mode === 'ai', reportMode: engine.mode, sections, sources: engine.references, engine,
+          ...(summaryEdit ? { summaryEdit } : {}) } };
     }) };
   }
   const sheet = getSpreadsheet_().getSheetByName(CLASS_GOALS_SHEET_);
@@ -4753,9 +4756,67 @@ function stripHtmlForSheet(html) {
     .trim();
 }
 
-function saveAIReport(studentId, startDate, endDate, content, name) {
+function summaryReportEditRows_(ss) {
+  return ss.getSheetByName('teacher_report_edits')?.getDataRange().getValues().slice(1) || [];
+}
+
+function readSummaryReportEdits_(rows, studentId, name, startDate, endDate) {
+  const edits = { owner: name };
+  for (const row of rows) {
+    if (String(row[0]) !== studentId || String(row[1]).trim() !== name ||
+        SleepRecordPolicy.date(row[2]) !== startDate || SleepRecordPolicy.date(row[3]) !== endDate ||
+        !['ongoing', 'final'].includes(row[4])) continue;
+    try { edits[row[4]] = JSON.parse(String(row[5])); } catch (_) { /* Ignore an invalid saved row. */ }
+  }
+  return edits;
+}
+
+function saveSummaryReportEdit_(ss, studentId, name, startDate, endDate, edit) {
+  teacherReportDates_(startDate, endDate);
+  const student = matchReportStudent_(teacherReportRoster_(), { studentId, studentName: name });
+  if (!student || !['ongoing', 'final'].includes(edit?.mode)) throw new Error('보고서 저장 대상을 확인해 주세요.');
+  const limits = {
+    caffeineSleep: 240, behavior: 240, caffeineDays: 240, sleepHabits: 240, recordGood: 500, recordReview: 500,
+    praise: 240, difficulty: 240, plan: 240, memo: 400, feedbackHtml: 24000,
+  };
+  const values = {};
+  for (const [field, value] of Object.entries(edit)) {
+    if (field === 'mode') continue;
+    if (!Object.hasOwn(limits, field)) throw new Error('보고서 문장과 길이를 확인해 주세요.');
+    if (typeof value === 'string' && value.length <= limits[field]) {
+      values[field] = value.trim();
+    } else if (field !== 'feedbackHtml' && typeof value?.text === 'string' && value.text.length <= limits[field] &&
+        typeof value.html === 'string' && value.html.length <= 4000) {
+      values[field] = { text: value.text.trim(), html: value.html.trim() };
+    } else {
+      throw new Error('보고서 문장과 길이를 확인해 주세요.');
+    }
+  }
+  let sheet = ss.getSheetByName('teacher_report_edits');
+  if (!sheet) {
+    sheet = ss.insertSheet('teacher_report_edits');
+    sheet.appendRow(['학번', '이름', '시작일', '종료일', '분석 유형', '문장']);
+    sheet.setFrozenRows(1);
+  }
+  const rows = sheet.getDataRange().getValues();
+  const index = rows.findLastIndex((row, i) => i > 0 && String(row[0]) === studentId && String(row[1]).trim() === name &&
+    SleepRecordPolicy.date(row[2]) === startDate && SleepRecordPolicy.date(row[3]) === endDate && row[4] === edit.mode);
+  let previous;
+  if (index >= 0) {
+    try { previous = JSON.parse(String(rows[index][5])); } catch (_) { /* Replace an invalid saved row. */ }
+  }
+  const summaryEdit = { ...previous, ...values };
+  const encoded = JSON.stringify(summaryEdit);
+  if (encoded.length > 48000) throw new Error('저장할 보고서 서식이 너무 많습니다.');
+  if (index >= 0) sheet.getRange(index + 1, 6).setValue(encoded);
+  else sheet.appendRow([studentId, name, startDate, endDate, edit.mode, encoded]);
+  return { success: true, summaryEdit };
+}
+
+function saveAIReport(studentId, startDate, endDate, content, name, summaryEdit) {
   try {
     const ss    = getSpreadsheet_();
+    if (summaryEdit !== undefined) return saveSummaryReportEdit_(ss, String(studentId), String(name || '').trim(), startDate, endDate, summaryEdit);
     let sheet   = ss.getSheetByName('ai_reports');
     if (!sheet) {
       sheet = ss.insertSheet('ai_reports');
@@ -4784,12 +4845,14 @@ function saveAIReport(studentId, startDate, endDate, content, name) {
   }
 }
 
-function getAIReport(studentId, startDate, endDate) {
+function getAIReport(studentId, startDate, endDate, name) {
   try {
     const ss    = getSpreadsheet_();
     const sheet = ss.getSheetByName('ai_reports');
-    if (!sheet) return { success: true, content: null };
     const sid  = String(studentId);
+    const owner = String(name || '').trim();
+    const summaryEdits = readSummaryReportEdits_(owner ? summaryReportEditRows_(ss) : [], sid, owner, startDate, endDate);
+    if (!sheet) return { success: true, content: null, summaryEdits };
     const data = sheet.getDataRange().getValues();
     // 헤더가 이름/학번 순인지 학번 순인지 자동 감지
     const isNewFormat = data.length > 0 && String(data[0][0]) === '이름';
@@ -4797,16 +4860,16 @@ function getAIReport(studentId, startDate, endDate) {
       if (isNewFormat) {
         // 새 형식: B=학번(1), C=시작일(2), D=종료일(3), E=내용(4), F=저장일시(5)
         if (String(data[i][1]) === sid && String(data[i][2]) === startDate && String(data[i][3]) === endDate) {
-          return { success: true, content: String(data[i][4]), savedAt: String(data[i][5]), policyVersion:String(data[i][6]||''), studentName: String(data[i][0] || '').trim() };
+          return { success: true, content: String(data[i][4]), savedAt: String(data[i][5]), policyVersion:String(data[i][6]||''), studentName: String(data[i][0] || '').trim(), summaryEdits };
         }
       } else {
         // 구 형식: A=학번(0), B=시작일(1), C=종료일(2), D=내용(3), E=저장일시(4)
         if (String(data[i][0]) === sid && String(data[i][1]) === startDate && String(data[i][2]) === endDate) {
-          return { success: true, content: String(data[i][3]), savedAt: String(data[i][4]) };
+          return { success: true, content: String(data[i][3]), savedAt: String(data[i][4]), summaryEdits };
         }
       }
     }
-    return { success: true, content: null };
+    return { success: true, content: null, summaryEdits };
   } catch(e) {
     return { success: false, error: e.message, content: null };
   }

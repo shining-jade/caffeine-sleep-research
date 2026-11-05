@@ -7,17 +7,47 @@
     });
   }
 
-  function sanitizeRichHtml(value) {
+  const feedbackPalette = new Map([
+    ['#b91c1c', '#b91c1c'], ['rgb(185,28,28)', '#b91c1c'], ['#ef4444', '#b91c1c'], ['rgb(239,68,68)', '#b91c1c'],
+    ['#1d4ed8', '#1d4ed8'], ['rgb(29,78,216)', '#1d4ed8'],
+    ['#047857', '#047857'], ['rgb(4,120,87)', '#047857'],
+  ]);
+  const feedbackClasses = new Set([
+    'report-feedback', 'report-feedback-mode', 'report-feedback-lead', 'report-feedback-card',
+    'report-feedback-title', 'report-feedback-items', 'report-feedback-note', 'report-feedback-sources',
+    'report-feedback-metrics', 'report-feedback-metric', 'report-feedback-label', 'report-feedback-value', 'report-feedback-detail',
+    'report-feedback-caffeine', 'report-feedback-sleep', 'report-feedback-habit', 'report-feedback-goal', 'report-feedback-next',
+  ]);
+
+  function sanitizeRichHtml(value, { feedback = false, report = false } = {}) {
     var template = document.createElement('template');
     template.innerHTML = String(value ?? '');
     var allowed = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'UL', 'OL', 'LI', 'H1', 'H2', 'H3', 'H4', 'DIV', 'SPAN', 'A']);
+    if (feedback) for (const tag of ['SECTION', 'SMALL', 'U', 'FONT']) allowed.add(tag);
+    if (report) {
+      allowed = new Set(['P', 'DIV', 'BR', 'STRONG', 'B', 'U', 'EM', 'I', 'SPAN', 'FONT']);
+    }
     Array.from(template.content.querySelectorAll('*')).forEach(function(element) {
       if (!allowed.has(element.tagName)) {
         element.replaceWith(document.createTextNode(element.textContent || ''));
         return;
       }
       var originalHref = element.tagName === 'A' ? element.getAttribute('href') || '' : '';
+      const color = (feedback || report) && feedbackPalette.get((element.style.color || element.getAttribute('color') || '').replace(/\s/g, '').toLowerCase());
+      const classes = feedback ? [...element.classList].filter(value => feedbackClasses.has(value)) : [];
+      const block = report && ['P', 'DIV'].includes(element.tagName);
+      if (block || ((feedback || report) && element.tagName === 'FONT')) {
+        if (block && element.previousSibling && element.previousSibling.nodeName !== 'BR') {
+          element.before(document.createElement('br'));
+        }
+        const span = document.createElement('span');
+        span.append(...element.childNodes);
+        element.replaceWith(span);
+        element = span;
+      }
       Array.from(element.attributes).forEach(function(attribute) { element.removeAttribute(attribute.name); });
+      if (classes.length) element.className = classes.join(' ');
+      if (color) element.style.color = color;
       if (element.tagName === 'A') {
         if (/^https?:\/\//i.test(originalHref)) {
           element.setAttribute('href', originalHref);

@@ -345,3 +345,86 @@ test('noWeight shows an unjudged row for daily and weekly reports while personal
     assert.ok(html.includes(standardsFootnote));
   }
 });
+
+test('saved summary wording reaches the exported report as text without replacing calculations', () => {
+  const report = makeSummaryFixture();
+  report.feedback.summaryEdit = {
+    praise: '꾸준히 기록했어요.',
+    difficulty: '목표를 다시 살펴봐요.',
+    plan: '내일도 같은 시간에 기록하기',
+    memo: '작은 변화부터 이어 가요. <기록>',
+    caffeineSleep: 'A 영역 가짜 설명', behavior: 'B 영역 가짜 설명',
+    caffeineDays: 'C 영역 가짜 설명', sleepHabits: 'D 영역 가짜 설명',
+    recordGood: 'E 영역 가짜 칭찬', recordReview: 'E 영역 가짜 아쉬운 점 <수정>'
+  };
+  const html = render(report);
+  for (const value of ['꾸준히 기록했어요.', '목표를 다시 살펴봐요.', '내일도 같은 시간에 기록하기', '작은 변화부터 이어 가요. &lt;기록&gt;',
+    'A 영역 가짜 설명', 'B 영역 가짜 설명', 'C 영역 가짜 설명', 'D 영역 가짜 설명',
+    'E 영역 가짜 칭찬', 'E 영역 가짜 아쉬운 점 &lt;수정&gt;']) {
+    assert.ok(html.includes(value), value);
+  }
+  assert.doesNotMatch(html, /<기록>|<수정>/);
+  assert.match(html, /하루 150mg 넘지 않기/);
+  report.feedback.summaryEdit.memo = { text:'색상 메모 <가짜>', html:'<b>색상 메모 &lt;가짜&gt;</b>' };
+  assert.match(render(report), /색상 메모 &lt;가짜&gt;/);
+});
+
+test('summary edits persist by report mode and preserve existing saved feedback text', () => {
+  const gas = vm.createContext({
+    Utilities: { formatDate: () => '2026-11-05 15:00:00' },
+  });
+  vm.runInContext(fs.readFileSync(path.join(root, 'gas/Code.js'), 'utf8'), gas);
+  const saved = [['이름','학번','시작일','종료일','내용','저장일시','정책버전'],
+    ['테스트 학생','0','2026-10-30','2026-11-05','기존 피드백','2026-11-05','2026-10-14']];
+  const summaryRows = [];
+  const sheets = {
+    students: { getDataRange: () => ({ getValues: () => [[],[1,1,1,'테스트 학생','0']] }) },
+    ai_reports: {
+      getDataRange: () => ({ getValues: () => saved.map(row => row.slice()) }),
+      getRange(row, col) { return { setValue(value) { saved[row-1][col-1] = value; } }; },
+    },
+  };
+  gas.getSpreadsheet_ = () => ({
+    getSheetByName: name => sheets[name],
+    insertSheet(name) {
+      assert.equal(name, 'teacher_report_edits');
+      return (sheets[name] = {
+        appendRow: row => summaryRows.push(Array.from(row)), setFrozenRows() {},
+        getDataRange: () => ({ getValues: () => summaryRows.map(row => row.slice()) }),
+        getRange(row, col) { return { setValue(value) { summaryRows[row-1][col-1] = value; } }; },
+      });
+    },
+  });
+  const args = ['0','2026-10-30','2026-11-05'];
+  const edit = { praise:'기록했어요.',difficulty:'한 가지씩 봐요.',plan:'다음 주도 기록하기',memo:'메모' };
+  assert.equal(gas.saveAIReport(...args, '', '테스트 학생', { mode:'ongoing', ...edit }).success, true);
+  assert.equal(gas.saveAIReport(...args, '', '테스트 학생', { mode:'final', ...edit, memo:'마무리' }).success, true);
+  assert.equal(gas.saveAIReport(...args, '', '다른 학생', { mode:'final', ...edit }).success, false);
+  assert.equal(gas.saveAIReport(...args, '', '테스트 학생', { mode:'ongoing', ...edit, memo:'고친 메모' }).success, true);
+  assert.equal(gas.saveAIReport(...args, '', '테스트 학생', { mode:'ongoing', caffeineSleep:'새 설명', recordReview:'' }).success, true);
+  assert.equal(gas.saveAIReport(...args, '', '테스트 학생', { mode:'ongoing', behavior:123 }).success, false);
+  assert.equal(gas.saveAIReport(...args, '', '테스트 학생', { mode:'ongoing', feedbackHtml:'<p><b>굵게</b> <span style="color: #b91c1c">빨강</span></p>' }).success, true);
+  const formattedMemo = { text: '굵은 가짜 메모', html: '<b><span style="color:#1d4ed8">굵은 가짜 메모</span></b>' };
+  assert.equal(gas.saveAIReport(...args, '', '테스트 학생', { mode:'final', memo:formattedMemo }).success, true);
+  const loaded = gas.getAIReport(...args, '테스트 학생');
+  assert.equal(loaded.content, '기존 피드백');
+  assert.equal(summaryRows.length, 3);
+  assert.equal(loaded.summaryEdits.ongoing.memo, '고친 메모');
+  assert.equal(loaded.summaryEdits.ongoing.caffeineSleep, '새 설명');
+  assert.equal(loaded.summaryEdits.ongoing.recordReview, '');
+  assert.match(loaded.summaryEdits.ongoing.feedbackHtml, /<b>굵게<\/b>.*#b91c1c/);
+  assert.equal(loaded.summaryEdits.final.feedbackHtml, undefined);
+  assert.equal(loaded.summaryEdits.final.caffeineSleep, undefined);
+  assert.equal(gas.getAIReport(...args, '다른 학생').summaryEdits.ongoing, undefined);
+  assert.equal(loaded.summaryEdits.final.memo.text, formattedMemo.text);
+  assert.equal(loaded.summaryEdits.final.memo.html, formattedMemo.html);
+  gas.feedbackSourceRows_ = () => ({ caffeine:[], sleep:[], info:[], sleepIds:new Map(), sleepMetadata:new Map() });
+  gas.feedbackClassRows_ = () => [];
+  const batch = gas.analyzeTeacherBatch({ start:args[1], end:args[2], reportVersion:2, reportMode:'ongoing', includeSavedReportEdits:true,
+    students:[{ studentId:args[0], studentName:'테스트 학생' }] });
+  assert.equal(batch.reports[0].feedback.summaryEdit.memo, '고친 메모');
+  assert.equal(batch.reports[0].feedback.summaryEdit.feedbackHtml, loaded.summaryEdits.ongoing.feedbackHtml);
+  const automatic = gas.analyzeTeacherBatch({ start:args[1], end:args[2], reportVersion:2,
+    students:[{ studentId:args[0], studentName:'테스트 학생' }] });
+  assert.equal(automatic.reports[0].feedback.summaryEdit, undefined);
+});
