@@ -162,7 +162,7 @@ test('distinguishes a known target achievement from a withheld baseline comparis
   assert.equal(result.comparable,false);
   assert.equal(result.achieved,true);
   const same = goals.compare({ periods,before:set(6,4),after:set(6,4) });
-  assert.equal(same.evaluation,'조금 아쉬웠어요');
+  assert.match(same.evaluation,/거의 그대로/);
   assert.match(same.summary,/거의 그대로/);
   const tooLong = goals.compare({ periods,before:[row(1),row(2)],after:[
     row(3,{sleep:{hours:13,bed:1410,wake:400,condition:3}}),
@@ -171,21 +171,53 @@ test('distinguishes a known target achievement from a withheld baseline comparis
   assert.equal(tooLong.evaluation,'조금 아쉬웠어요');
 });
 
-test('connects the two period values and reports exact changes across midnight and for rates', () => {
-  const before = set(6,2).map(day=>({...day,sleep:{...day.sleep,bed:1430},
-    caffeine:{recorded:true,totalMg:0,times:[]}}));
-  const after = set(6,4).map(day=>({...day,sleep:{...day.sleep,bed:1450},
-    caffeine:{recorded:true,totalMg:50,times:[900]}}));
-  const html = goals.renderPage(goals.compare({ periods,model:phone,before,after }),'테스트 학생');
-  assert.match(html, /목표 실천율[\s\S]*?33\.3%[\s\S]*?66\.7%/);
-  const lines = html.match(/<tr><th scope="row"[^>]*>.*?<\/tr>/gs);
-  const bed = lines.find(line=>line.includes('평균 취침시각'));
-  assert.match(bed, /23:50[\s\S]*?goal-compare-slope[\s\S]*?y1="24"[\s\S]*?y2="4"[\s\S]*?00:10[\s\S]*?20분 늦어짐/);
-  const caffeine = lines.find(line=>line.includes('하루 평균 카페인'));
-  assert.match(caffeine, /0\.0mg[\s\S]*?goal-compare-slope[\s\S]*?50\.0mg[\s\S]*?50mg 증가/);
-  assert.match(lines.find(line=>line.includes('오후 3시 이후 마신 날')), /100%p 증가/);
-  assert.match(lines.find(line=>line.includes('평균 수면시간')), /y1="14"[\s\S]*?y2="14"[\s\S]*?변화 없음/);
-  const withheld = goals.renderPage(goals.compare({ periods,model:phone,before:before.slice(0,1),after }),'테스트 학생');
-  assert.match(withheld, /비교 보류/);
-  assert.doesNotMatch(withheld, /class="goal-compare-(?:track|slope)/);
+test('shows dumbbell verdicts, known limits, and withheld metrics without treating missing weight as a limit', () => {
+  const before = set(5,2).map((day,i)=>({...day,sleep:{...day.sleep,hours:7.1,bed:1452,condition:2.2},
+    caffeine:{recorded:true,totalMg:i < 2 ? 180 : 0,times:i < 2 ? [null] : []}}));
+  const after = set(5,3).map((day,i)=>({...day,sleep:{...day.sleep,hours:8.3,bed:1410,condition:2.5},
+    caffeine:{recorded:true,totalMg:i < 4 ? 62.5 : 0,times:i < 4 ? [null] : []}}));
+  const result = goals.compare({ periods,model:phone,before,after });
+  const report = makeSummaryFixture();
+  report.goalComparison = result;
+  report.feedback.engine.summaryCaffeineLimit = {basis:'weight',amountMg:170};
+  const render = () => env.window.teacherReportFiles.buildSummaryReportDocument(report).content.split('data-page="2"')[0];
+  const html = render();
+  assert.match(html, /목표 실천율[\s\S]*?40%[\s\S]*?60%/);
+  assert.match(html, /dot before" style="left:35%"[\s\S]*?dot" style="left:55%"[\s\S]*?5시간[\s\S]*?8~10시간[\s\S]*?11시간[\s\S]*?좋아짐 · 1\.2시간 길어짐/);
+  assert.match(html, /00:12[\s\S]*?21시[\s\S]*?12시[\s\S]*?02시[\s\S]*?23:30[\s\S]*?좋아짐 · 42분 일찍/);
+  assert.match(html, /아침 컨디션[\s\S]*?보통 3점[\s\S]*?비슷해요/);
+  assert.match(html, /하루 평균 카페인[\s\S]*?class="reference" style="left:85%"[\s\S]*?일일 최대 170mg[\s\S]*?200mg[\s\S]*?좋아짐 · 22mg 적음/);
+  assert.match(html, /2 \/ 5일[\s\S]*?4 \/ 5일[\s\S]*?아쉬움 · 2일 많음/);
+  assert.match(html, /오후 3시 이후 마신 날[\s\S]*?비교 보류/);
+  report.feedback.engine.summaryCaffeineLimit = {basis:'noWeight',amountMg:150};
+  const withoutLimit = render();
+  const caffeineRow = withoutLimit.split('하루 평균 카페인</th>')[1].split('</tr>')[0];
+  assert.match(caffeineRow, /체중 정보 없음/);
+  assert.doesNotMatch(caffeineRow, /class="reference"/);
+  assert.doesNotMatch(withoutLimit, /일일 최대 (170|150)mg/);
+  assert.doesNotMatch(withoutLimit, /%p|증가|감소|적게/);
+});
+
+test('uses the smaller denominator for the one-day margin and skips similar results in feedback', () => {
+  const caffeineRows = (n,drank) => set(n,0).map((day,i)=>({...day,
+    sleep:{ hours:8,bed:1410,condition:3 },
+    caffeine:{recorded:true,totalMg:i < drank ? 10 : 0,times:i < drank ? [900] : []}}));
+  const same = goals.compare({ periods,before:caffeineRows(5,2),after:caffeineRows(10,6) });
+  assert.equal(same.metrics.find(metric=>metric.key==='drinking').verdict,'same');
+  assert.match(same.summary,/거의 그대로/);
+  assert.doesNotMatch(same.summary + same.reflection.join(' '), /카페인|컨디션|수면시간|취침시각/);
+  assert.match(goals.renderPage(same,'테스트 학생'), /② 기록한 날/);
+  const changed = goals.compare({ periods,before:caffeineRows(5,2),after:caffeineRows(10,7) });
+  assert.equal(changed.metrics.find(metric=>metric.key==='drinking').verdict,'bad');
+  assert.match(goals.renderPage(changed,'테스트 학생'), /아쉬움 · 약 1\.5일분 많음/);
+});
+
+test('adds a recorded fact only when it occurred on at least two missed days and avoids nested quotes', () => {
+  const before = set(5,2);
+  const twoMisses = goals.compare({periods,model:phone,before,after:set(5,3)});
+  assert.match(twoMisses.reflection[1], /그중 2일은 자기 전 휴대폰을 60분 이상/);
+  assert.match(twoMisses.reflection[2], /자기 전 휴대폰을 30분 미만으로 쓰는 날/);
+  assert.doesNotMatch(twoMisses.reflection[2], /[‘’]/);
+  const oneMiss = goals.compare({periods,model:phone,before,after:set(5,4)});
+  assert.doesNotMatch(oneMiss.reflection[1], /60분/);
 });

@@ -180,39 +180,73 @@
   };
   const binary = value => value === null ? null : Number(value);
   const metricDefinitions = [
-    ['sleep','평균 수면시간',day=>day.open ? null : day.sleep.hours,1,1,'시간'],
-    ['bed','평균 취침시각',day=>day.open ? null : day.sleep.bed,-1,60,'분'],
-    ['condition','평균 아침 컨디션',day=>day.open ? null : day.sleep.condition,1,1,'점'],
-    ['caffeine','하루 평균 카페인',day=>day.caffeine.recorded ? day.caffeine.totalMg : null,-1,100,'mg'],
-    ['drinking','카페인을 마신 날',day=>day.caffeine.recorded ? Number(day.caffeine.totalMg !== 0) : null,-1,1,'%p',true],
-    ['late','오후 3시 이후 마신 날',day=>binary(lateIntake(day,900)),-1,1,'%p',true],
+    ['sleep','평균 수면시간',day=>day.open ? null : day.sleep.hours,1,1,'시간',0.5],
+    ['bed','평균 취침시각',day=>day.open ? null : day.sleep.bed,-1,60,'분',30],
+    ['condition','평균 아침 컨디션',day=>day.open ? null : day.sleep.condition,1,1,'점',0.5],
+    ['caffeine','하루 평균 카페인',day=>day.caffeine.recorded ? day.caffeine.totalMg : null,-1,100,'mg',20],
+    ['drinking','카페인을 마신 날',day=>day.caffeine.recorded ? Number(day.caffeine.totalMg !== 0) : null,-1,1,'일',null,true],
+    ['late','오후 3시 이후 마신 날',day=>binary(lateIntake(day,900)),-1,1,'일',null,true],
   ];
   const precise = value => Number(value.toFixed(1));
+  const distanceFromRange = hours => Math.max(0,8-hours,hours-10);
+  const verdicts = { good:['좋아짐','#2F7D62'], bad:['아쉬움','#D0743F'], same:['비슷해요','#6B7390'] };
+
+  function changeAmount(metric) {
+    const { key, delta, before, after, proportion, unit } = metric;
+    const distance = Math.abs(delta);
+    if (proportion) return before.n === after.n ? Math.abs(after.count-before.count) + '일' :
+      '약 ' + precise(distance * Math.min(before.n,after.n)) + '일분';
+    return (key === 'bed' ? Math.round(distance) : precise(distance)) + unit;
+  }
+
   function changeText(metric) {
-    const amount = Math.abs(metric.delta);
-    const change = precise(metric.proportion ? amount * 100 : amount);
-    if (!change) return '';
-    if (metric.key === 'bed') return '평균 취침시각은 ' + change + '분 ' + (metric.delta < 0 ? '빨라졌어요.' : '늦어졌어요.');
-    if (metric.key === 'sleep') return '수면시간은 평균 ' + change + '시간 ' + (metric.delta > 0 ? '길어졌어요.' : '짧아졌어요.');
-    return metric.label + (metric.proportion ? ' 비율은 ' : '은 ') + change + metric.unit + ' ' + (metric.delta > 0 ? '늘었어요.' : '줄었어요.');
+    const amount = changeAmount(metric);
+    const more = metric.delta > 0;
+    if (metric.key === 'bed') return '평균 취침시각은 ' + amount + ' ' + (more ? '늦어졌어요.' : '빨라졌어요.');
+    if (metric.key === 'sleep') return '수면시간은 평균 ' + amount + ' ' + (more ? '길어졌어요.' : '짧아졌어요.');
+    if (metric.proportion) return metric.label + '은 ' + metric.before.n + '일 중 ' + metric.before.count + '일에서 ' +
+      metric.after.n + '일 중 ' + metric.after.count + '일로, 기록일 대비 비율이 ' + (more ? '높아졌어요.' : '낮아졌어요.');
+    return metric.label + '은 ' + amount + ' ' + (more ? '늘었어요.' : '줄었어요.');
+  }
+
+  function missedObservation(days) {
+    const options = [
+      ['자기 전 휴대폰을 60분 이상 썼다고 기록했어요.', day=>!day.open && day.habits.phone === '60분 이상'],
+      ['오후 3시 이후에 카페인을 마셨다고 기록했어요.', day=>lateIntake(day,900) === true],
+      ['자기 전 휴대폰을 30분 이상 썼다고 기록했어요.', day=>!day.open && ['30~60분','60분 이상'].includes(day.habits.phone)],
+    ];
+    const observation = options.map(([text,matches])=>({text,count:days.filter(matches).length}))
+      .filter(item=>item.count >= 2).sort((a,b)=>b.count-a.count)[0];
+    return observation ? ' 그중 ' + observation.count + '일은 ' + observation.text : '';
+  }
+
+  function practicePlan(rules) {
+    if (rules.length > 1) return '확인할 수 있는 목표를 함께 실천할 날을 미리 정해 보세요.';
+    const [rule] = rules;
+    if (rule.kind === 'phone') return '자기 전 휴대폰을 ' + (rule.value ? rule.value + '분 미만으로 쓰는' : '쓰지 않는') + ' 날을 미리 정해 보세요.';
+    return ruleLabel(rule) + ' 기준을 지킬 날을 미리 정해 보세요.';
   }
 
   function compare({periods, model = null, before, after}) {
-    const metrics = metricDefinitions.map(([key,label,read,direction,scale,unit,proportion])=>{
+    const metrics = metricDefinitions.map(([key,label,read,direction,scale,unit,tolerance,proportion])=>{
       const left = measure(before,read,proportion);
       const right = measure(after,read,proportion);
       const comparable = left.n >= 2 && right.n >= 2;
       const delta = comparable ? right.value - left.value : null;
-      return {key,label,before:left,after:right,comparable,delta,direction,scale,unit,proportion:!!proportion};
+      let verdict = null;
+      if (comparable) {
+        const distance = Math.abs(delta);
+        const similar = proportion ? distance <= 1 / Math.min(left.n,right.n) + 1e-9 : distance < tolerance - 1e-9;
+        const benefit = key === 'sleep' ? distanceFromRange(left.value)-distanceFromRange(right.value) : delta * direction;
+        verdict = similar || Math.abs(benefit) < 1e-9 ? 'same' : benefit > 0 ? 'good' : 'bad';
+      }
+      return {key,label,before:left,after:right,comparable,delta,scale,unit,proportion:!!proportion,verdict};
     });
-    const distanceFromRange = hours => Math.max(0,8-hours,hours-10);
-    const benefit = metric => metric.key === 'sleep' ? distanceFromRange(metric.before.value)-distanceFromRange(metric.after.value) :
-      metric.delta * metric.direction;
-    const available = metrics.filter(metric=>metric.comparable);
-    const changes = available.filter(metric=>changeText(metric))
+    const available = metrics.some(metric=>metric.comparable);
+    const changes = metrics.filter(metric=>metric.verdict === 'good' || metric.verdict === 'bad')
       .sort((a,b)=>Math.abs(b.delta)/b.scale-Math.abs(a.delta)/a.scale);
     const [strongest] = changes;
-    const resultText = strongest ? changeText(strongest) : available.length ? '비교 가능한 항목은 거의 그대로였어요.' : '';
+    const resultText = strongest ? changeText(strongest) : '';
     const summarizeGoal = (label, read, canCheckToday) => {
       const outcomes = after.map(read);
       return { label, before:measured(before.map(read)),after:measured(outcomes), outcomes,
@@ -240,26 +274,28 @@
         overall.before.measured + '일 중 ' + overall.before.kept + '일에서 ' + overall.after.measured + '일 중 ' + overall.after.kept + '일이었어요.' : '';
       plan = !overall ? '앱에서 확인할 수 있는 행동을 하나 골라 보세요.' : overall.after.measured < 2 ?
         '다음에는 목표에 해당하는 기록을 이틀 이상 남겨 보세요.' :
-        '다음에는 ‘' + overall.label + '’을 실천할 날을 미리 정해 보세요.';
+        practicePlan(activeRules);
     } else {
-      evaluation = available.length ? strongest && benefit(strongest) > 0 ? '좋아졌어요' : '조금 아쉬웠어요' : '기록이 조금 더 필요해요.';
+      evaluation = strongest ? (strongest.verdict === 'good' ? '좋아졌어요' : '조금 아쉬웠어요') :
+        (available ? '두 기간의 기록은 거의 그대로였어요.' : '기록이 조금 더 필요해요.');
       goalText = '';
-      plan = strongest ? '다음 비교 기간에도 같은 항목을 기록해 변화를 살펴보세요.' : '두 기간에 같은 항목을 이틀 이상 기록해 보세요.';
+      plan = available ? '다음 비교 기간에도 같은 항목을 기록해 변화를 살펴보세요.' : '두 기간에 같은 항목을 이틀 이상 기록해 보세요.';
     }
     const observation = goalText && resultText ? goalText.replace(/이었어요\.$/, '이었고, ') + resultText : goalText || resultText;
     const summary = [evaluation,observation,model && evaluation === '조금 아쉬웠어요.' ? plan : ''].filter(Boolean).join(' ');
     const keptConditions = measure(after,(day,index)=>!day.open && overall?.outcomes[index] === true ? day.sleep.condition : null);
     const missedConditions = measure(after,(day,index)=>!day.open && overall?.outcomes[index] === false ? day.sleep.condition : null);
     const condition = overall ? { kept:keptConditions,missed:missedConditions } : null;
-    const better = changes.find(metric=>benefit(metric)>0);
-    const harder = changes.find(metric=>benefit(metric)<0);
+    const better = changes.find(metric=>metric.verdict === 'good');
+    const harder = changes.find(metric=>metric.verdict === 'bad');
+    const missed = after.filter((_day,index)=>overall?.outcomes[index] === false);
     const reflection = model ? [
-      (improved && goalText) || (!model && resultText) || (overall?.after.kept ? '실천 기간에 확인할 수 있는 목표를 ' + overall.after.kept + '일 지켰어요.' : '비교 기간의 기록을 살펴봤어요.'),
-      overall && overall.after.measured > overall.after.kept ? '실천 기간에 같은 기준을 지키지 못한 날은 ' + (overall.after.measured-overall.after.kept) + '일이었어요.' :
+      (improved && goalText) || (overall?.after.kept ? '실천 기간에 확인할 수 있는 목표를 ' + overall.after.kept + '일 지켰어요.' : '비교 기간의 기록을 살펴봤어요.'),
+      missed.length ? '실천 기간에 같은 기준을 지키지 못한 날은 ' + missed.length + '일이었어요.' + missedObservation(missed) :
         comparable ? '비교에 사용한 기록에서 빠진 목표 항목을 확인해 보세요.' : '같은 항목의 기록이 더 쌓이면 두 기간을 비교할 수 있어요.',
       plan,
     ] : [better ? changeText(better) : '비교할 기록을 남겼어요.',
-      harder ? changeText(harder) : available.length ? '기록한 항목을 기간별로 함께 살펴보세요.' : '같은 항목의 기록이 더 쌓이면 두 기간을 비교할 수 있어요.',plan];
+      harder ? changeText(harder) : available ? '기록한 항목을 기간별로 함께 살펴보세요.' : '같은 항목의 기록이 더 쌓이면 두 기간을 비교할 수 있어요.',plan];
     return { periods,model,metrics,goals,overall,recorded,comparable,achieved,evaluation,summary,condition,reflection };
   }
 
@@ -282,19 +318,32 @@
     '.goal-compare-side strong small{font-size:12px;margin-left:6px}',
     '.goal-compare-track{display:block;position:relative;height:6px;margin:4px 0 1px;border-radius:5px;background:#e5e9f4}',
     '.goal-compare-track i{display:block;height:100%;border-radius:5px;background:#61779d}.goal-compare-track.after i{background:#5b4fc4}',
-    '.goal-compare-dot{display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:#61779d}.goal-compare-dot.after{background:#5b4fc4}',
-    '.goal-compare-slope{display:block;width:100%;height:27px;background:#f5f3fb;border-radius:5px}',
+    '.goal-compare-legend{display:flex;flex-wrap:wrap;gap:4px 10px}.goal-compare-legend span{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}',
+    '.goal-compare-legend i{width:9px;height:9px;border-radius:50%;background:var(--verdict);box-sizing:border-box}.goal-compare-legend .before{background:#fff;border:2px solid #9aa0b4}',
+    '.goal-compare-legend .reference{width:15px;border-radius:2px;background:#dfe8f7;border-left:2px dashed #8f96ad}',
+    '.goal-compare-dumbbell{padding-inline:7px}.goal-compare-axis{height:19px;position:relative}.goal-compare-axis i{position:absolute;display:block}',
+    '.goal-compare-axis .rail{top:8px;width:100%;height:2px;background:#e6e8ef}.goal-compare-axis .band{top:2px;height:14px;border-radius:4px;background:#dfe8f7}',
+    '.goal-compare-axis .reference{top:0;height:18px;border-left:2px dashed #8f96ad}.goal-compare-axis .bridge{top:7px;height:4px;border-radius:2px;background:var(--verdict)}',
+    '.goal-compare-axis .dot{top:2px;width:14px;height:14px;margin-left:-7px;border-radius:50%;background:var(--verdict)}',
+    '.goal-compare-axis .before{background:white;border:2px solid #9aa0b4}.goal-compare-axis .overlap{top:5px;width:8px;height:8px;margin-left:-4px}',
+    '.goal-compare-ticks{display:flex;justify-content:space-between;gap:2px;font-size:9px;color:#4a5470;white-space:nowrap}',
     '.goal-compare-section{display:grid;gap:6px}.goal-compare-section>p{font-size:11px;color:#4a5470}',
     '.goal-compare-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.goal-compare-days.compact{grid-template-columns:repeat(14,minmax(0,1fr))}.goal-compare-days.dense{grid-template-columns:repeat(21,minmax(0,1fr))}',
     '.goal-compare-day{display:grid;gap:2px;text-align:center;font-size:10px;color:#4a5470}.goal-compare-day b{border:1.5px solid transparent;border-radius:6px;background:#eef0f4;line-height:1.2;padding:3px 0;font-size:12px}',
     '.goal-compare-day .kept{background:#2f7d62;color:white}.goal-compare-day .missed{background:white;border-color:#d0743f;color:#9a3d0e}.goal-compare-day .open{border:1px dashed #b8bccb;background:white;color:#4a5470;font-size:10px}',
     '.goal-compare-metrics{border:1.5px solid #e2def3;border-radius:12px;overflow:hidden}.goal-compare-metrics table{width:100%;table-layout:fixed;border-collapse:collapse;text-align:left}',
-    '.goal-compare-metrics th,.goal-compare-metrics td{padding:5px 8px;font-size:12px;line-height:1.3;border-top:1px solid #ece9f6;overflow-wrap:anywhere}',
+    '.goal-compare-metrics .name-col,.goal-compare-metrics .result-col{width:148px}.goal-compare-metrics .value-col{width:84px}',
+    '.goal-compare-metrics th,.goal-compare-metrics td{padding:4px 6px;font-size:12px;line-height:1.25;border-top:1px solid #ece9f6;white-space:nowrap}',
     '.goal-compare-metrics thead th{background:#f1effb;border:0}.goal-compare-metrics tbody th{color:#1f4a85}.goal-compare-metrics tbody th.caf{color:#8a3b10}',
-    '.goal-compare-metrics small{color:#4a5470;font-size:10px;white-space:nowrap}.goal-compare-metrics .trend{font-weight:800;color:#3b3195}',
+    '.goal-compare-metrics small{color:#4a5470;font-size:10px}.goal-compare-metrics .trend{font-weight:800;color:var(--verdict)}',
+    '.goal-compare-metrics .before-value{text-align:right}.goal-compare-metrics .after-value{font-weight:700}',
     '.goal-compare-section .goal-compare-condition{background:#eef3fa;padding:6px 9px;border-radius:9px;color:#1f2a44}',
     '.goal-compare-page .summary-reflect-card{padding:8px 10px;font-size:12px}.goal-compare-page .summary-foot{margin-top:0!important}',
-    '@media(max-width:520px){.goal-compare-lead{align-items:flex-start;flex-direction:column;gap:4px}.goal-compare-days.compact,.goal-compare-days.dense{grid-template-columns:repeat(7,minmax(0,1fr))}.goal-compare-metrics th,.goal-compare-metrics td{padding:5px 4px;font-size:11px}}',
+    '@media(max-width:680px){.goal-compare-metrics table,.goal-compare-metrics tbody{display:block}.goal-compare-metrics colgroup{display:none}.goal-compare-metrics thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}',
+    '.goal-compare-metrics tbody tr{display:grid;grid-template-columns:max-content minmax(0,1fr) max-content;align-items:center;padding:4px;border-top:1px solid #ece9f6}.goal-compare-metrics tr:first-child{border:0}',
+    '.goal-compare-metrics tbody th,.goal-compare-metrics tbody td{border:0;padding:3px 4px;font-size:11px}.goal-compare-metrics tbody th{grid-column:1/3;grid-row:1}.goal-compare-metrics .trend{grid-column:2/4;grid-row:1;justify-self:end}',
+    '.goal-compare-metrics .before-value{grid-column:1;grid-row:2}.goal-compare-metrics .graph{grid-column:2;grid-row:2}.goal-compare-metrics .after-value{grid-column:3;grid-row:2}.goal-compare-metrics .hold{grid-column:1/-1;grid-row:2}}',
+    '@media(max-width:520px){.goal-compare-lead{align-items:flex-start;flex-direction:column;gap:4px}.goal-compare-days.compact,.goal-compare-days.dense{grid-template-columns:repeat(7,minmax(0,1fr))}}',
   ].join('\n');
 
 
@@ -303,21 +352,45 @@
       precise(fraction * 100) + '%"></i></span>';
   }
 
-  function metricChange(metric) {
-    const { key, delta, scale, unit, proportion } = metric;
-    const distance = Math.abs(delta);
-    const amount = key === 'bed' ? Math.round(distance) : precise(distance * (proportion ? 100 : 1));
-    const rise = amount ? precise(10 * delta / Math.max(distance, scale / 4)) : 0;
-    const start = precise(14 + rise);
-    const end = precise(14 - rise);
-    const graph = '<svg class="goal-compare-slope" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 28" aria-hidden="true">' +
-      '<line x1="8" y1="' + start + '" x2="100" y2="' + end + '" stroke="#7775a4" stroke-width="2.5"/>' +
-      '<circle cx="8" cy="' + start + '" r="4" fill="#61779d"/><circle cx="100" cy="' + end + '" r="4" fill="#5b4fc4"/></svg>';
-    const direction = key === 'bed' ? (delta < 0 ? '빨라짐' : '늦어짐') : (delta > 0 ? '증가' : '감소');
-    return { graph, text: amount ? amount + unit + ' ' + direction : '변화 없음' };
+  function chartScale(metric, limitInfo) {
+    if (metric.key === 'sleep') return { min:5,max:11,minText:'5시간',maxText:'11시간',reference:'8~10시간',band:[8,10] };
+    if (metric.key === 'bed') return { min:1260,max:1560,minText:'21시',maxText:'02시',reference:'12시',line:1440 };
+    if (metric.key === 'condition') return { min:1,max:5,minText:'1점',maxText:'5점',reference:'보통 3점',line:3 };
+    if (metric.key === 'caffeine') {
+      const limit = limitInfo.basis !== 'noWeight' && limitInfo.amountMg > 0 ? limitInfo.amountMg : null;
+      const max = Math.ceil(Math.max(200,metric.before.value,metric.after.value,limit ?? 0));
+      const reference = limit ? '일일 최대 ' + precise(limit) + 'mg' : limitInfo.basis === 'noWeight' ? '체중 정보 없음' : '';
+      return { min:0,max,minText:'0mg',maxText:max + 'mg',reference,line:limit };
+    }
+    return { min:0,max:1,minText:'0%',maxText:'100%' };
   }
 
-  function renderPage(data, name) {
+  function dumbbell(metric, limitInfo) {
+    const scale = chartScale(metric,limitInfo);
+    const position = value => precise(Math.min(100,Math.max(0,100 * (value-scale.min) / (scale.max-scale.min))));
+    const before = position(metric.before.value), after = position(metric.after.value);
+    const element = (name,left,width) => '<i class="' + name + '" style="left:' + left + '%' +
+      (width === undefined ? '' : ';width:' + width + '%') + '"></i>';
+    const band = scale.band ? element('band',position(scale.band[0]),position(scale.band[1])-position(scale.band[0])) : '';
+    const line = Number.isFinite(scale.line) ? element('reference',position(scale.line)) : '';
+    return '<div class="goal-compare-dumbbell"><div class="goal-compare-axis" aria-hidden="true">' +
+      '<i class="rail"></i>' + band + line + element('bridge',Math.min(before,after),Math.abs(after-before)) +
+      element('dot before',before) + element(Math.abs(after-before) < 5 ? 'dot overlap' : 'dot',after) +
+      '</div><div class="goal-compare-ticks"><span>' + scale.minText + '</span><span>' + (scale.reference || '') +
+      '</span><span>' + scale.maxText + '</span></div></div>';
+  }
+
+  function verdictText(metric) {
+    const [label] = verdicts[metric.verdict];
+    if (metric.verdict === 'same') return label;
+    const more = metric.delta > 0;
+    const direction = metric.key === 'sleep' ? (more ? '길어짐' : '짧아짐') :
+      metric.key === 'bed' ? (more ? '늦게' : '일찍') :
+      metric.key === 'condition' ? (more ? '높음' : '낮음') : (more ? '많음' : '적음');
+    return label + ' · ' + changeAmount(metric) + ' ' + direction;
+  }
+
+  function renderPage(data, name, limitInfo = {}) {
     const {periods, model, overall, goals, comparable, achieved, recorded, condition} = data;
     const beforePeriod = span(periods.baselineStart,periods.baselineEnd);
     const afterPeriod = span(periods.start,periods.end);
@@ -358,19 +431,25 @@
       : (recorded.every(n=>n>=2) ? value('기록 ' + recorded[0] + '일','기록 ' + recorded[1] + '일') : '<p>' + compareHold + '</p>');
     const metricValue = (metric, side) => metric.proportion ? side.count + ' / ' + side.n + '일' :
       (metric.key === 'bed' ? clock(side.value) : side.value.toFixed(1) + metric.unit) + ' <small>(' + side.n + '일)</small>';
-    const legend = data.metrics.some(metric => metric.comparable) ?
-      '<p>선은 왼쪽 ‘' + beforeLabel + '’에서 오른쪽 ‘' + afterLabel + '’로의 변화 방향을 보여 줘요.</p>' : '';
-    const table = legend + '<div class="goal-compare-metrics"><table><colgroup><col style="width:29%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:17%"></colgroup>' +
-      '<thead><tr><th scope="col">항목</th><th scope="col"><span class="goal-compare-dot" aria-hidden="true"></span>' + beforeLabel +
-      '</th><th scope="col">변화 그래프</th><th scope="col"><span class="goal-compare-dot after" aria-hidden="true"></span>' + afterLabel +
-      '</th><th scope="col">변화량</th></tr></thead><tbody>' +
+    const legendItem = (label,style,color) => '<span><i aria-hidden="true" class="' + style + '"' +
+      (color ? ' style="--verdict:' + color + '"' : '') + '></i>' + label + '</span>';
+    const legend = data.metrics.some(metric=>metric.comparable) ? '<p class="goal-compare-legend">' +
+      legendItem(beforeLabel,'before') + legendItem(afterLabel + ' · 좋아짐','',verdicts.good[1]) +
+      legendItem('아쉬움','',verdicts.bad[1]) + legendItem('비슷해요','',verdicts.same[1]) +
+      legendItem('권장 범위 · 기준선','reference') + '</p>' : '';
+    const table = legend + '<div class="goal-compare-metrics"><table role="table"><colgroup><col class="name-col"><col class="value-col"><col><col class="value-col"><col class="result-col"></colgroup>' +
+      '<thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">항목</th><th scope="col" role="columnheader" class="before-value">' + beforeLabel +
+      '</th><th scope="col" role="columnheader">변화 그래프</th><th scope="col" role="columnheader">' + afterLabel +
+      '</th><th scope="col" role="columnheader">결과</th></tr></thead><tbody role="rowgroup">' +
       data.metrics.map(metric => {
-        const heading = '<tr><th scope="row" class="' + (['caffeine','drinking','late'].includes(metric.key) ? 'caf' : 'sleep') +
+        const heading = '<th scope="row" role="rowheader" class="' + (['caffeine','drinking','late'].includes(metric.key) ? 'caf' : 'sleep') +
           '">' + metric.label + '</th>';
-        if (!metric.comparable) return heading + '<td colspan="4">비교 보류 <small>(기준 ' + metric.before.n + '일 · 비교 ' + metric.after.n + '일)</small></td></tr>';
-        const { graph, text } = metricChange(metric);
-        return heading + '<td>' + metricValue(metric,metric.before) + '</td><td>' + graph + '</td><td><b>' +
-          metricValue(metric,metric.after) + '</b></td><td class="trend">' + text + '</td></tr>';
+        if (!metric.comparable) return '<tr role="row">' + heading + '<td role="cell" colspan="4" class="hold">비교 보류 <small>(기준 ' +
+          metric.before.n + '일 · 비교 ' + metric.after.n + '일, 양쪽 2일 필요)</small></td></tr>';
+        return '<tr role="row" style="--verdict:' + verdicts[metric.verdict][1] + '">' + heading +
+          '<td role="cell" class="before-value">' + metricValue(metric,metric.before) + '</td><td role="cell" class="graph">' + dumbbell(metric,limitInfo) +
+          '</td><td role="cell" class="after-value">' + metricValue(metric,metric.after) + '</td><td role="cell" class="trend">' +
+          verdictText(metric) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
     const conditionText = condition ? '<p class="goal-compare-condition"><b>실천 기간 안에서</b> ' +
       (condition.kept.n >= 2 && condition.missed.n >= 2 ? '지킨 날(' + condition.kept.n + '일)의 다음 날 아침 컨디션은 평균 ' +
@@ -384,7 +463,7 @@
       '</h1><p class="summary-sub">' + beforeLabel + ' ' + escape(beforePeriod) + ' · ' + afterLabel + ' ' + escape(afterPeriod) +
       ' · 날짜는 그날 밤 기준</p></div></header><section class="goal-compare-lead"><span>한 줄 정리</span><p><b>' + escape(data.evaluation) +
       punctuation + '</b>' + escape(data.summary.slice(data.evaluation.length)) + '</p></section>' + plan +
-      chapter('② 같은 기준으로 본 전후',comparison) + chapter('③ 수면과 카페인도 함께 보기',table + conditionText) +
+      chapter(model ? '② 같은 기준으로 본 전후' : '② 기록한 날',comparison) + chapter('③ 수면과 카페인도 함께 보기',table + conditionText) +
       chapter('④ 돌아보기',reflection) + '<footer class="summary-foot"><p>함께 변했다고 목표 행동이 원인이라고 할 수는 없어요. 비교는 양쪽 모두 유효 기록이 2일 이상일 때 보여 줘요. ‘안 마심’은 0mg으로 계산해요.</p></footer></article>';
   }
 

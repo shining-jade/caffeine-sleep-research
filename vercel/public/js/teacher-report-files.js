@@ -1073,7 +1073,7 @@
       </div><div class="summary-teacher"><b>선생님 한마디</b><p data-summary-text="memo">${reportTextHtml(memo)}</p></div></section>
     </article>`;
     const comparison = report.goalComparison && window.teacherGoalComparison;
-    const firstPage = comparison ? comparison.renderPage(report.goalComparison, student?.이름 || '학생') : page1;
+    const firstPage = comparison ? comparison.renderPage(report.goalComparison, student?.이름 || '학생', limitInfo) : page1;
     const styles = comparison ? summaryStyles + comparison.styles : summaryStyles;
     return { styles, content: `<main class="summary-report" aria-label="카페인과 수면 기록 요약">${firstPage}${page2}</main>` };
   }
