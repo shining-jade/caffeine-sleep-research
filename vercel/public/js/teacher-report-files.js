@@ -567,9 +567,7 @@
       .summary-weekly-area[data-dense="true"] .summary-ratio{font-size:13px}
     }
     .summary-foot{margin-top:auto!important;font-size:10.5px;color:#4a5470;display:grid;gap:4px}
-    .summary-foot-standards{display:flex;flex-wrap:wrap;gap:3px 14px}
-    .summary-foot-standards>p:first-child:not(:last-child){flex:2 1 300px}
-    .summary-foot-standards>p:last-child{flex:1 0 210px}
+    .summary-foot-standards{display:grid;gap:2px}
     .summary-goal-row .summary-goal-total.no-weight,.summary-weekly-area .summary-ratio.no-weight{font-size:10px;line-height:1.25;white-space:normal;word-break:keep-all}
     .summary-page[data-page="2"] .summary-header{align-items:baseline}
     .summary-intakes{border:1.5px solid #ecd9cb;border-radius:12px;max-height:195px}
@@ -731,15 +729,6 @@
     const maximumText = noWeight ? null : Number.isFinite(limitInfo.amountMg) && limitInfo.amountMg > 0
       ? String(limitInfo.amountMg)
       : standards.find(row => row.id === 'caffeineMax')?.label.match(/([\d.]+)mg/)?.[1];
-    const guidance = '식품의약품안전처의 어린이·청소년 카페인 최대 섭취 권고량(체중 1kg당 2.5mg 이하)';
-    const maximumNote = noWeight
-      ? '일일 최대 섭취량 = 내 체중(kg) × 2.5mg. ' + guidance + '이에요. 체중 정보가 없어 계산하지 않았어요.'
-      : limitInfo.basis === 'fixed' && maximumText
-        ? '일일 최대 섭취량 ' + maximumText + 'mg(설정에서 정한 값). 식품의약품안전처는 어린이·청소년에게 체중 1kg당 2.5mg 이하를 권고해요.'
-        : ['weight', 'weightCapped'].includes(limitInfo.basis) && maximumText
-          ? '일일 최대 섭취량 ' + maximumText + 'mg: ' + guidance + '으로 계산한 값' +
-            (limitInfo.basis === 'weightCapped' ? ' (성인 기준 400mg을 넘지 않게 맞춤)' : '')
-          : maximumText ? '일일 최대 섭취량 ' + maximumText + 'mg.' : '';
     const displayGoal = goal => {
       const threshold = goal.label?.match(/([\d.]+)mg/)?.[1];
       return goal.criterion === 'caffeineMax' && threshold && /이하로 마시기/.test(goal.label) ? `하루 ${threshold}mg 넘지 않기`
@@ -808,7 +797,7 @@
       ${block('B. 수면을 위한 행동과 결과', calendar + callout(bNote, 'mint'), weeks.length ? '지킨 날 / 판정 가능한 날 · 비율이 높을수록 진하게 표시' : `✓ 지킴 · × 못 지킴 · – ${noWeight ? '판정 없음' : '기록 없음'} · 아직 = 지나지 않은 밤`, !weeks.length && n > 7)}
       <footer class="summary-foot">
         <p>날짜는 그날 밤 기준이에요. 12시를 넘겨 잠든 날도 전날 밤에 넣어요. 잔 시간은 잠든 시각부터 일어난 시각까지예요. 비교는 양쪽 모두 유효 기록이 2일 이상일 때만 보여 줘요.</p>
-        <div class="summary-foot-standards">${maximumNote ? `<p>${pdfText(maximumNote)}</p>` : ''}<p>청소년 권장 수면 8~10시간(미국수면의학회, 2016).</p></div>
+        <div class="summary-foot-standards"><p>청소년 일일 최대 섭취량 = 내 체중 × 2.5mg(식품의약품안전처)</p><p>청소년 권장 수면 8~10시간(미국수면의학회, 2016)</p></div>
       </footer>
     </article>`;
 
