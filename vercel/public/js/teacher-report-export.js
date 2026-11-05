@@ -5,7 +5,7 @@
   const height = 1123;
   const scale = 2;
   const quality = .85;
-  const pdfLimit = 3 * 1024 * 1024;
+  const deliveryPdfLimit = 3 * 1024 * 1024;
   const vendor = '/public/vendor/report-export/';
   let libraries;
   let queue = Promise.resolve();
@@ -42,23 +42,59 @@
     return (identity || '기록_요약') + '_' + report.start + '_' + report.end;
   }
 
-  function fitIntakes(page) {
-    const table = page.querySelector('.summary-intakes table');
-    const rows = [...(table?.tBodies[0]?.rows || [])];
-    if (!rows.length) return;
-    const container = table.closest('.summary-intakes');
-    const note = page.ownerDocument.createElement('p');
+  function paginateIntakes(page) {
+    const container = page.querySelector('.summary-intakes');
+    const body = container?.querySelector('tbody');
+    if (!body?.rows.length || page.scrollHeight <= height + 1) return [];
+
+    const doc = page.ownerDocument;
+    const rows = [...body.rows];
+    body.replaceChildren();
+    const tableTemplate = container.cloneNode(true);
+    const note = doc.createElement('p');
     note.className = 'summary-note export-intake-note';
+    note.textContent = '카페인 섭취 내역은 3쪽부터 이어집니다.';
     container.after(note);
-    // Show the most recent entries that fit on the page; the on-screen report keeps the full table.
-    let hidden = 0;
-    function omitFirst() {
-      rows[hidden++].remove();
-      note.textContent = '최근 ' + (rows.length - hidden) + '건 표시 · 나머지 ' + hidden + '건은 앱의 기록 화면에서 확인할 수 있어요.';
+
+    let nextRow = 0;
+    function fillPage(target, targetBody) {
+      while (nextRow < rows.length) {
+        const row = rows[nextRow];
+        targetBody.append(row);
+        if (target.scrollHeight > height + 1) {
+          row.remove();
+          break;
+        }
+        nextRow++;
+      }
     }
-    while (rows.length - hidden > 8) omitFirst();
-    while (page.scrollHeight > height + 1 && rows.length - hidden > 1) omitFirst();
-    if (!hidden) note.remove();
+
+    fillPage(page, body);
+    if (nextRow === 0) container.remove();
+
+    const extraPages = [];
+    while (nextRow < rows.length) {
+      const continuation = doc.createElement('article');
+      continuation.className = 'summary-page';
+      const header = page.querySelector('.summary-header').cloneNode(true);
+      header.querySelector('.summary-kicker').textContent = `카페인·수면 기록 요약 · ${extraPages.length + 3}쪽 섭취 내역`;
+      const section = doc.createElement('section');
+      section.className = 'summary-section';
+      const title = doc.createElement('h2');
+      title.textContent = 'C. 카페인을 마신 날 (계속)';
+      const table = tableTemplate.cloneNode(true);
+      section.append(title, table);
+      continuation.append(header, section);
+      page.parentElement.append(continuation);
+      extraPages.push(continuation);
+
+      const continuationBody = table.querySelector('tbody');
+      const firstRow = nextRow;
+      fillPage(continuation, continuationBody);
+      // Let the existing capture scaling handle an unusually tall individual row.
+      if (nextRow === firstRow) continuationBody.append(rows[nextRow++]);
+    }
+    return extraPages;
   }
 
   async function capturePages(report, capture) {
@@ -77,20 +113,20 @@
         .summary-report{display:block;width:${width}px}
         .summary-page{width:${width}px;height:${height}px;min-height:${height}px;border-radius:0;box-shadow:none;overflow:visible}
         .summary-page>*{flex-shrink:0}
-        .summary-intakes,.summary-page[data-late="true"] .summary-intakes{max-height:none;overflow:visible}
+        .summary-intakes{overflow:visible}
         .export-intake-note{margin-top:-4px!important}
         </style></head><body>` + content + '</body></html>');
       doc.close();
       await doc.fonts.ready;
       const pages = [...doc.querySelectorAll('.summary-page')];
-      if (pages.length !== 2) throw new Error('출력할 보고서가 두 쪽인지 확인해 주세요.');
+      if (pages.length !== 2) throw new Error('출력할 기본 보고서가 두 쪽인지 확인해 주세요.');
+      pages.push(...paginateIntakes(pages[1]));
       const files = [];
       for (const [index, page] of pages.entries()) {
-        fitIntakes(page);
         const sourceHeight = Math.max(height, page.scrollHeight);
         // Long week tables can use more vertical space before fitting into the same A4 image.
         const heightLimit = page.dataset.size === 'many-weeks' ? 2 : 1.5;
-        if (sourceHeight > height * heightLimit) throw new Error('보고서가 두 쪽에 담기 어렵습니다. 기간이나 교사 메모를 줄여 주세요.');
+        if (sourceHeight > height * heightLimit) throw new Error('보고서 한 쪽의 내용이 너무 깁니다. 기간이나 교사 메모를 줄여 주세요.');
         const source = await capture(page, {
           width, height: sourceHeight, windowWidth: width, windowHeight: sourceHeight,
           scale, backgroundColor: '#ffffff', logging: false, allowTaint: false, useCORS: false,
@@ -124,7 +160,6 @@
   }
 
   function checkPdf(bytes) {
-    if (bytes.length > pdfLimit) throw new Error('PDF가 3MB를 넘습니다. 기간을 줄여 다시 만들어 주세요.');
     if (String.fromCharCode(...bytes.subarray(0, 5)) !== '%PDF-') throw new Error('PDF 형식을 확인할 수 없습니다.');
   }
 
@@ -152,6 +187,7 @@
 
   function deliveryRequest(report, file, deliveryId) {
     checkPdf(file.bytes);
+    if (file.bytes.length > deliveryPdfLimit) throw new Error('PDF가 메시지 첨부 한도인 3MB를 넘습니다. 전체 보고서는 이미지 PDF로 저장할 수 있어요.');
     let binary = '';
     for (let index = 0; index < file.bytes.length; index += 0x8000) {
       binary += String.fromCharCode(...file.bytes.subarray(index, index + 0x8000));
@@ -177,7 +213,7 @@
     dialog.setAttribute('aria-label', '보고서 이미지 저장');
     dialog.style.cssText = 'border:1px solid #dbe4f0;border-radius:14px;padding:18px;color:#1f2a44;max-width:calc(100% - 32px)';
     const label = document.createElement('p');
-    label.textContent = '1쪽과 2쪽을 각각 저장할 수 있습니다.';
+    label.textContent = `전체 ${files.length}쪽의 이미지를 각각 저장할 수 있습니다.`;
     dialog.append(label);
     const urls = files.map((file, index) => {
       const url = URL.createObjectURL(new Blob([file.bytes], { type: file.type }));

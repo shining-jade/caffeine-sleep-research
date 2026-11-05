@@ -1,0 +1,98 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>
+*{box-sizing:border-box}body{margin:0;background:#e9e8f0;padding:20px;font:13px/1.55 "Noto Sans CJK KR","Noto Sans KR",sans-serif;color:#1f2a44}
+h1,h2,h3,p{margin:0}h2{font-size:17px;font-weight:800}h3{font-size:13px;font-weight:800}
+.page{width:794px;height:1123px;margin:0 auto 20px;padding:36px 44px 28px;background:#fff;display:flex;flex-direction:column;gap:13px;overflow:hidden}
+.page.part{height:auto}
+.hdr{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:12px;border-bottom:2px solid #5b4fc4}
+.kicker{font-size:12px;font-weight:700;color:#5b4fc4}.sub,.note{color:#4a5470}.note{font-size:11px}
+.sec{display:grid;gap:8px}.tl{display:flex;justify-content:space-between;align-items:baseline}
+.callout{padding:9px 14px;border-radius:12px;background:#fff4e9;font-size:13px}.callout.blue{background:#eef3fa}
+/* 새 그림 */
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.card{border:1.5px solid #ecd9cb;border-radius:12px;padding:8px 12px;display:grid;gap:4px;align-content:start}
+.card h3{color:#7a3a12;display:flex;justify-content:space-between;align-items:baseline}.card h3 small{font-size:10.5px;font-weight:500;color:#4a5470}
+.hb{display:grid;grid-template-columns:104px 1fr 40px;gap:6px;align-items:center;font-size:12px;line-height:1.35}.hb.wide{grid-template-columns:104px 1fr 92px}
+.hb .lb{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hb .tr{height:12px;background:#f8efe8;border-radius:4px;overflow:hidden}.hb .tr i{display:block;height:100%;background:#d98a55;border-radius:4px}
+.hb .tr i.soft{background:#efc3a1}.hb .tr i.sym{background:#d0743f}
+.hb .n{font-weight:800;color:#7a3a12;text-align:right;white-space:nowrap}.hb .n small{font-weight:500;color:#4a5470;font-size:10.5px}
+.cols{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;align-items:end;height:92px;padding-top:2px}
+.col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;height:100%;font-size:12px;font-weight:800;color:#7a3a12}
+.col i{display:block;width:34px;border-radius:5px 5px 0 0;background:#efc3a1}.col.late i{background:#d98a55}
+.axis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;font-size:11px;color:#4a5470;border-top:1px solid #ecd9cb;padding-top:4px}
+.axis b{color:#8a2f0c}
+.split{display:flex;height:20px;border-radius:6px;overflow:hidden;font-size:11px;font-weight:700}
+.split span{display:grid;place-items:center}.split .ok{background:#eef0f4;color:#4a5470}.split .bad{background:#d0743f;color:#fff}
+.days{font-size:12px;color:#4a5470}
+.none{display:grid;grid-template-columns:150px 1fr;gap:18px;align-items:center;border:1.5px solid #ecd9cb;background:#fffaf5;border-radius:14px;padding:16px 20px}
+.none .big{font-size:40px;font-weight:800;color:#7a3a12;line-height:1}.none .big small{font-size:16px;margin-left:2px}
+.none .lead{font-size:15px;font-weight:800;color:#1f2a44;margin-top:6px}
+.none .stats{display:flex;gap:8px;margin-top:10px}.none .st{background:#fff;border:1.5px solid #ecd9cb;border-radius:10px;padding:6px 12px;font-size:11px;color:#4a5470}.none .st b{display:block;font-size:17px;color:#7a3a12}
+.chips{display:flex;flex-wrap:wrap;gap:3px;margin-top:10px}.chips i{width:14px;height:14px;border-radius:4px;background:#d98a55}
+/* 표 */
+.tbl{border:1.5px solid #ecd9cb;border-radius:12px;overflow:hidden}.tbl table{width:100%;border-collapse:collapse;table-layout:fixed}
+.tbl th,.tbl td{padding:7px 6px;text-align:left}.tbl th{background:#fbeee4;color:#6b3a1c;font-size:11px}.tbl td{border-top:1px solid #f1e4da}
+.late{color:#8a2f0c;font-weight:800}.muted{color:#555e7a}.disc{color:#8a2f0c;font-weight:800}
+/* D·E·F 자리 */
+.habit{display:grid;grid-template-columns:140px 1fr;gap:10px;align-items:center;font-weight:700}
+.hbar{display:flex;gap:2px;border-radius:8px;overflow:hidden}.hbar span{display:grid;place-items:center;min-height:26px;min-width:44px;font-size:10.5px;line-height:1.15;text-align:center;background:#e6ecf8}
+.hbar .b1{background:#bccde9}.hbar .b2{background:#5978b4;color:#fff}.hbar .b3{background:#3f68ad;color:#fff}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.rc{border-radius:12px;padding:10px 14px;display:grid;gap:4px;font-size:12.5px}.rc.good{background:#eef6f2}.rc.good h3{color:#185a41}.rc.rev{border:1.5px dashed #d0a07f}.rc.rev h3{color:#8a3b10}
+.rf{border:1.5px solid #e2def3;border-radius:12px;padding:10px 12px;font-size:12.5px;display:grid;gap:4px}.rf h3{color:#3b3195}
+.teacher{border-radius:12px;background:#f1effb;padding:10px 14px;font-size:12.5px}.teacher b{color:#3b3195}
+.tag{position:absolute;margin:-30px 0 0 0;font-size:12px;font-weight:800;color:#fff;background:#5b4fc4;padding:3px 10px;border-radius:6px}
+.wrap{position:relative;width:794px;margin:40px auto 0}
+</style></head><body>
+<div id="out"></div>
+<script>
+const drinks=[['아이스 아메리카노',10,1200],['에너지음료',7,560],['카페라떼',5,500],['녹차',3,90],['기타 (콜라 등)',4,120]];
+const times=[['오전',6,0],['12~15시',9,0],['15~18시',10,1],['18시 이후',4,1]];
+const reasons=[['졸음을 깨려고',9],['공부·일에 집중',8],['몸이 너무 피곤해서',6],['맛이 좋아서',3],['기타 (습관 등)',3]];
+const syms=[['잠이 잘 안 왔다',5],['가슴이 두근거렸다',3],['손이 떨렸다',1],['두통이 있었다',1]];
+const total=29, none=19;
+const hb=(rows,cls='',unit='번',extra)=>{const m=Math.max(...rows.map(r=>r[1]));return rows.map(r=>`<div class="hb${extra?' wide':''}"><span class="lb">${r[0]}</span><span class="tr"><i class="${cls}" style="width:${r[1]/m*100}%"></i></span><span class="n">${r[1]}${unit}${extra?` <small>${extra(r)}</small>`:''}</span></div>`).join('')};
+const cMax=Math.max(...times.map(t=>t[1]));
+const charts=`<div class="grid">
+ <div class="card"><h3>① 자주 마신 음료 <small>횟수 · 합계</small></h3>${hb(drinks,'','번',r=>r[2].toLocaleString()+'mg')}</div>
+ <div class="card"><h3>② 마신 시각 <small>15시 이후 진하게</small></h3>
+   <div class="cols">${times.map(t=>`<div class="col${t[2]?' late':''}"><span>${t[1]}번</span><i style="height:${t[1]/cMax*62}px"></i></div>`).join('')}</div>
+   <div class="axis">${times.map(t=>t[2]?`<b>${t[0]}</b>`:`<span>${t[0]}</span>`).join('')}</div></div>
+ <div class="card"><h3>③ 마신 이유 <small>고른 횟수</small></h3>${hb(reasons,'soft')}</div>
+ <div class="card"><h3>④ 마신 뒤 불편함 <small>${total}번 중</small></h3>
+   <div class="split"><span class="ok" style="flex:${none}">없음 ${none}번</span><span class="bad" style="flex:${total-none}">있음 ${total-none}번</span></div>
+   ${hb(syms,'sym')}</div>
+</div>`;
+const cCall=`<p class="callout"><b>기록을 보면</b> 가장 자주 마신 건 아이스 아메리카노(10번)예요. 15시 이후에 마신 건 14번이고, ‘잠이 잘 안 왔다’고 적은 5번 중 4번이 15시 이후였어요.</p>`;
+const zeroLine=`<p class="days">안 마신 날 3일 (10.09, 10.18, 10.26)</p>`;
+const hdr=`<header class="hdr"><p class="kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="sub">테스트 학생 · 10.07 ~ 11.04</p></header>`;
+const D=`<section class="sec"><div class="tl"><h2>D. 수면과 생활습관</h2><span class="note">밤 기록 중 고른 답 · 숫자는 일수</span></div>
+${[['자기 전 스마트폰',[['안 함',3],['30분 미만',8],['30~60분',10],['60분 이상',6]]],['어제 신체활동',[['안 함',9],['30분 미만',11],['30~60분',5],['60분 이상',2]]],['잠들기까지 걸린 시간',[['15분 이내',12],['15~30분',9],['30~60분',4],['60분 이상',2]]],['자다가 깬 횟수',[['없음',15],['1번',8],['2번',3],['3회↑',1]]],['낮 졸음',[['없음',6],['조금 있었음',13],['꽤 힘들었음',6],['매우 심했음',2]]]].map(([t,r])=>`<div class="habit"><span>${t}</span><div class="hbar">${r.map((x,i)=>`<span class="b${i}" style="flex:${x[1]} 1 0">${x[0]}<br>${x[1]}일</span>`).join('')}</div></div>`).join('')}
+<p class="callout blue"><b>기록을 보면</b> 자기 전 스마트폰을 30분 이상 쓴 밤(16일)은 잔 시간이 평균 6.4시간, 그보다 적게 쓴 밤(11일)은 7.3시간이었어요.</p></section>`;
+const E=`<section class="two"><div class="rc good"><h3>E. 기록 · 잘한 점</h3><p>수면은 29일 중 27일 기록했어요.</p><p>카페인을 안 마신 날도 ‘안 마심’으로 3일 남겼어요.</p></div>
+<div class="rc rev"><h3>E. 기록 · 아쉬운 점</h3><p>수면 기록이 비어 있는 밤은 2일이에요 (10.21, 10.30).</p><p>아침 컨디션이 빠진 밤은 1일이에요 (10.15).</p></div></section>`;
+const F=`<section class="sec"><h2>F. 돌아보기</h2><div class="three"><div class="rf"><h3>잘된 점</h3><p>‘12시 전에 자기’는 확인한 27일 중 19일 지켰어요.</p></div><div class="rf"><h3>어려웠던 점</h3><p>‘8~10시간 취침’은 27일 중 9일 지켰어요.</p></div><div class="rf"><h3>다음 계획</h3><p>‘8~10시간 취침’을 지킨 10.12 밤의 잠든 시각(23:20)을 참고해 봐요.</p></div></div>
+<p class="teacher"><b>선생님 한마디</b> 꾸준히 기록해 줘서 고마워요.</p></section>`;
+const C=`<section class="sec"><div class="tl"><h2>C. 카페인을 마신 날</h2><span class="note">섭취 29번 · 마신 날 26일 · 안 마신 날 3일 (10.09, 10.18, 10.26)</span></div>${charts}${cCall}</section>`;
+// 시안 2: 섭취 적을 때 (3건) — 표 유지
+const few=[['10.08','08:10','아이스 아메리카노','120mg','졸음을 깨려고','없음'],['10.10','16:30','에너지음료','80mg','공부·일에 집중','잠이 잘 안 왔다'],['10.13','13:05','카페라떼','100mg','맛이 좋아서','없음']];
+const C2=`<section class="sec"><div class="tl"><h2>C. 카페인을 마신 날</h2><span class="note">섭취 3번 · 마신 날 3일</span></div>
+<div class="tbl"><table><colgroup><col style="width:10%"><col style="width:10%"><col style="width:22%"><col style="width:12%"><col style="width:25%"><col style="width:21%"></colgroup>
+<thead><tr>${['날짜','시각','마신 것','양','마신 이유','마신 뒤 불편함'].map(t=>`<th>${t}</th>`).join('')}</tr></thead>
+<tbody>${few.map(r=>`<tr><td><b>${r[0]}</b></td><td class="${r[1]>='15'?'late':''}">${r[1]}</td><td>${r[2]}</td><td><b>${r[3]}</b></td><td>${r[4]}</td><td class="${r[5]==='없음'?'muted':'disc'}">${r[5]}</td></tr>`).join('')}</tbody></table></div>
+<p class="days">안 마신 날 4일 (10.07, 10.09, 10.11, 10.12)</p>
+<p class="callout"><b>기록을 보면</b> 10.10에는 16:30에 카페인을 마시고 ‘잠이 잘 안 왔다’고 적었어요. 그날 밤 01:10에 잠들었어요.</p></section>`;
+const NONE=`<section class="sec"><div class="tl"><h2>C. 카페인을 마신 날</h2><span class="note">섭취 0번 · 안 마신 날 26일</span></div>
+<div class="none"><svg viewBox="0 0 120 120" width="140" height="140" aria-hidden="true"><circle cx="60" cy="60" r="56" fill="#fbeee4"/>
+<path d="M30 46h52l-6 44a8 8 0 0 1-8 7H44a8 8 0 0 1-8-7z" fill="#fff" stroke="#d98a55" stroke-width="4" stroke-linejoin="round"/>
+<path d="M82 54h6a10 10 0 0 1 0 20h-8" fill="none" stroke="#d98a55" stroke-width="4"/>
+<text x="56" y="80" text-anchor="middle" font-size="22" font-weight="800" fill="#7a3a12" font-family="Noto Sans CJK KR">0</text>
+</svg><div><div class="big">0<small>mg</small></div><p class="lead">이 기간에는 카페인을 마시지 않았어요</p>
+<div class="stats"><span class="st"><b>26일</b>‘안 마심’ 기록</span><span class="st"><b>14일</b>가장 길게 이어진 날</span></div>
+<div class="chips"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div>
+<p class="callout"><b>기록을 보면</b> 26일 ‘안 마심’을 남겼고, 가장 길게는 10.14부터 10.27까지 14일 이어졌어요.</p></section>`;
+const mode=location.hash.slice(1);
+document.getElementById('out').innerHTML = mode==='none' ? `<article class="page part">${hdr}${NONE}</article>` : mode==='few'
+ ? `<article class="page part">${hdr}${C2}</article>`
+ : `<article class="page">${hdr}${C}${D}${E}${F}</article>`;
+</script></body></html>

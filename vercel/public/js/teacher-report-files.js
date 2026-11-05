@@ -580,7 +580,7 @@
     .summary-page[data-page="2"]{gap:11px}
     .summary-page[data-page="2"] .summary-section{gap:7px}
     .summary-page[data-page="2"] .summary-header{align-items:baseline}
-    .summary-intakes{border:1.5px solid #ecd9cb;border-radius:12px;max-height:195px}
+    .summary-intakes{border:1.5px solid #ecd9cb;border-radius:12px}
     .summary-intakes table{width:100%;min-width:570px;border-collapse:collapse;table-layout:fixed}
     .summary-intakes th,.summary-intakes td{padding:7px 6px;text-align:left;overflow-wrap:anywhere}
     .summary-intakes th{background:#fbeee4;color:#6b3a1c;font-size:11px}.summary-intakes td{border-top:1px solid #f1e4da}
@@ -644,9 +644,7 @@
 
     .summary-teacher{border-radius:12px;background:#f1effb;padding:10px 14px;min-height:42px;display:flex;gap:10px}
     .summary-teacher b{white-space:nowrap}
-    .summary-page[data-late="true"] .summary-intakes{max-height:146px}
     @media(min-width:681px){
-      .summary-page[data-period="weekly"] .summary-intakes{max-height:128px}
       .summary-page[data-late="true"]{gap:12px}
       .summary-page[data-late="true"] .summary-section{gap:8px}
       .summary-page[data-late="true"] .summary-record-card{padding:10px 12px;gap:4px}
@@ -1062,7 +1060,7 @@
       ? teacherNoteExamples[noteIndex % teacherNoteExamples.length] : teacherNoteExamples[1];
     const memo = edit?.memo ?? (reportPlainText(feedback.savedPdfFeedback?.summary).trim() ||
       reportPlainText(feedback.summary).trim() || defaultMemo);
-    const page2 = `<article class="summary-page" data-page="2"${weeks.length ? ' data-period="weekly"' : ''}${visibleLate.length ? ' data-late="true"' : ''}><header class="summary-header">
+    const page2 = `<article class="summary-page" data-page="2"${visibleLate.length ? ' data-late="true"' : ''}><header class="summary-header">
       <p class="summary-kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="summary-sub">${name} · ${period}</p></header>
       ${block('C. 카페인을 마신 날', caffeineContent.content + callout('caffeineDays', 'C. 카페인을 마신 날 설명', caffeineContent.note), caffeineNote)}
       ${block('D. 수면과 생활습관', (habitBars || '<p class="summary-note">표시할 생활습관 응답이 없어요.</p>') + callout('sleepHabits', 'D. 수면과 생활습관 설명', dNote, 'blue'), '밤 기록 중 고른 답 · 숫자는 일수')}
