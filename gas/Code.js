@@ -2268,7 +2268,10 @@ function buildFeedbackReport_(input) {
       action: '점심시간이나 하교 후에 10분 걷기부터 해 봐요.' }, goals),
   ];
   const late = feedbackLateCaffeine_(days, minimum, goals);
-  const limit = feedbackNumber_(input.caffeineLimitMg);
+  const limitBasis = input.caffeineLimitBasis;
+  const limit = limitBasis === 'noWeight' ? null : feedbackNumber_(input.caffeineLimitMg);
+  const hasLimitBasis = limitBasis === 'noWeight' ||
+    (limit > 0 && ['weight', 'weightCapped', 'fixed'].includes(limitBasis));
   const weekday = feedbackWeekdayPattern_(days, goals, minimum);
   const findings = [record, goal, late, ...habits, weekday, feedbackHealthStandards_(days, limit), feedbackOverLimit_(days, limit, goals),
     feedbackShortNextDay_(days, minimum), feedbackLongSleep_(days, minimum), feedbackSideEffect_(days), feedbackBestDay_(days, minimum),
@@ -2320,6 +2323,7 @@ function buildFeedbackReport_(input) {
     items: actions.length ? actions.slice(0, mode === 'final' || tier === 'week' || tier === 'first' ? 1 : 3) : [defaultAction] });
   const refs = new Set(findings.filter(finding => used.has(finding.id)).flatMap(finding => finding.refs));
   const summary = input.audience === 'student' ? {} : {
+    ...(hasLimitBasis ? { summaryCaffeineLimit: { basis: limitBasis, amountMg: limit } } : {}),
     summaryLateEntries: feedbackLateEntries_(input, days),
     summaryReflection: feedbackSummaryReflection_(days, goals, findings.find(finding => finding.id === 'healthStandards').data.rows),
   };
@@ -2767,7 +2771,8 @@ function analyzeTeacherBatch(request) {
       const student = matchReportStudent_(roster, entry);
       if (!student) return { studentId: entry?.studentId, error: '명단에서 학번과 이름을 확인해 주세요.' };
       const input = feedbackSourceInput_(source, student, start, end, feedbackClassGoals_(student, classRows),
-        { mode: request.reportMode, audience: 'teacher', caffeineLimitMg: Number.isFinite(entry.limit) && entry.limit > 0 ? entry.limit : null });
+        { mode: request.reportMode, audience: 'teacher', caffeineLimitBasis: entry.limitBasis,
+          caffeineLimitMg: Number.isFinite(entry.limit) && entry.limit > 0 ? entry.limit : null });
       const engine = buildFeedbackReport_(input);
       const tones = { record: 'habit', goals: 'goal', transition: 'sleep', findings: 'sleep', similar: 'sleep', why: 'caffeine', action: 'next' };
       const sections = engine.sections.map(section => {
@@ -5957,10 +5962,13 @@ function getTeacherData() {
       const ownerKey = JSON.stringify([id, name]);
       if (seenInfo.has(ownerKey)) continue;
       seenInfo.add(ownerKey);
+      const weight = typeof r[6] === 'number' || typeof r[6] === 'string' ? Number(r[6]) : NaN;
+      const hasRecordedWeight = Number.isFinite(weight) && weight > 0;
       info.push({
         학번: id,
         name: name,
-        몸무게: parseFloat(r[6]) || 60,        // G열: 몸무게
+        몸무게: hasRecordedWeight ? weight : parseFloat(r[6]) || 60, // G열: 몸무게
+        hasRecordedWeight,
         목표카페인: parseFloat(r[7]) || null,  // H열: 목표 카페인
         목표취침: toProfileHHMM_(r[8]),           // I열: 목표 취침
         목표기상: toProfileHHMM_(r[9])            // J열: 목표 기상

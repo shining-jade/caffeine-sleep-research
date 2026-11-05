@@ -566,7 +566,11 @@
       .summary-weekly-area[data-dense="true"] td strong,.summary-weekly-area[data-dense="true"] td small{display:block;font-size:11px}
       .summary-weekly-area[data-dense="true"] .summary-ratio{font-size:13px}
     }
-    .summary-foot{margin-top:auto!important;font-size:10.5px;color:#4a5470}
+    .summary-foot{margin-top:auto!important;font-size:10.5px;color:#4a5470;display:grid;gap:4px}
+    .summary-foot-standards{display:flex;flex-wrap:wrap;gap:3px 14px}
+    .summary-foot-standards>p:first-child:not(:last-child){flex:2 1 300px}
+    .summary-foot-standards>p:last-child{flex:1 0 210px}
+    .summary-goal-row .summary-goal-total.no-weight,.summary-weekly-area .summary-ratio.no-weight{font-size:10px;line-height:1.25;white-space:normal;word-break:keep-all}
     .summary-page[data-page="2"] .summary-header{align-items:baseline}
     .summary-intakes{border:1.5px solid #ecd9cb;border-radius:12px;max-height:195px}
     .summary-intakes table{width:100%;min-width:570px;border-collapse:collapse;table-layout:fixed}
@@ -589,14 +593,14 @@
       .summary-page[data-late="true"]{gap:12px}
       .summary-page[data-late="true"] .summary-section{gap:8px}
       .summary-page[data-late="true"] .summary-record-card{padding:10px 12px;gap:4px}
-      .summary-page[data-size="week"]{gap:24px;--bar-scale:1.25}
-      .summary-page[data-size="week"] .summary-section{gap:13px}
+      .summary-page[data-size="week"]{gap:16px;--bar-scale:1.25}
+      .summary-page[data-size="week"] .summary-section{gap:12px}
       .summary-page[data-size="week"] .summary-chart{padding:16px 12px}
       .summary-page[data-size="week"] .summary-axis-row+.summary-axis-row{margin-top:7px}
       .summary-page[data-size="week"] .summary-chart-bar{height:82px}
       .summary-page[data-size="week"] .summary-hours-band{bottom:44px;height:11px}
       .summary-page[data-size="week"] .summary-compare{padding:15px 12px;gap:7px}
-      .summary-page[data-size="week"] .summary-mark{min-height:36px}
+      .summary-page[data-size="week"] .summary-mark{min-height:34px}
     }
     @media(max-width:680px){.summary-page{padding:22px 18px;min-height:0}.summary-header{align-items:flex-start;flex-wrap:wrap}.summary-page[data-page="2"] .summary-header{flex-wrap:wrap}.summary-scroll:focus-visible{outline:2px solid #5b4fc4;outline-offset:2px}}
     @media(max-width:480px){.summary-three,.summary-two{grid-template-columns:1fr}.summary-report h1{font-size:22px}.summary-habit{grid-template-columns:1fr;gap:3px}}
@@ -722,7 +726,20 @@
     const availableMetric = metrics.find(item => item.means);
     const aNote = availableMetric ? `카페인을 마신 날 밤의 ${availableMetric.title}은 ${availableMetric.format(availableMetric.means[0])}, 안 마신 날 밤은 ${availableMetric.format(availableMetric.means[1])}였어요.` : '';
     const standards = finding('healthStandards')?.rows || [];
-    const maximumText = standards.find(row => row.id === 'caffeineMax')?.label.match(/([\d.]+)mg/)?.[1];
+    const limitInfo = feedback.engine.summaryCaffeineLimit || { basis: report.limitBasis, amountMg: report.limit };
+    const noWeight = limitInfo.basis === 'noWeight';
+    const maximumText = noWeight ? null : Number.isFinite(limitInfo.amountMg) && limitInfo.amountMg > 0
+      ? String(limitInfo.amountMg)
+      : standards.find(row => row.id === 'caffeineMax')?.label.match(/([\d.]+)mg/)?.[1];
+    const guidance = '식품의약품안전처의 어린이·청소년 카페인 최대 섭취 권고량(체중 1kg당 2.5mg 이하)';
+    const maximumNote = noWeight
+      ? '일일 최대 섭취량 = 내 체중(kg) × 2.5mg. ' + guidance + '이에요. 체중 정보가 없어 계산하지 않았어요.'
+      : limitInfo.basis === 'fixed' && maximumText
+        ? '일일 최대 섭취량 ' + maximumText + 'mg(설정에서 정한 값). 식품의약품안전처는 어린이·청소년에게 체중 1kg당 2.5mg 이하를 권고해요.'
+        : ['weight', 'weightCapped'].includes(limitInfo.basis) && maximumText
+          ? '일일 최대 섭취량 ' + maximumText + 'mg: ' + guidance + '으로 계산한 값' +
+            (limitInfo.basis === 'weightCapped' ? ' (성인 기준 400mg을 넘지 않게 맞춤)' : '')
+          : maximumText ? '일일 최대 섭취량 ' + maximumText + 'mg.' : '';
     const displayGoal = goal => {
       const threshold = goal.label?.match(/([\d.]+)mg/)?.[1];
       return goal.criterion === 'caffeineMax' && threshold && /이하로 마시기/.test(goal.label) ? `하루 ${threshold}mg 넘지 않기`
@@ -736,31 +753,35 @@
       date: day.date, kept: Number.isFinite(day.hours) ? inRange(day.hours) : null,
       outcome: Number.isFinite(day.hours) && !inRange(day.hours) ? (day.hours < 8 ? 'short' : 'long') : null,
     })) };
-    const defaults = standards.filter(row => row.id !== 'sleepMin').map(row => ({ ...row,
+    const defaults = standards.filter(row => row.id !== 'sleepMin' && !(noWeight && row.id === 'caffeineMax')).map(row => ({ ...row,
       label: row.id === 'caffeineMax' && maximumText ? `일일 최대 섭취량(${maximumText}mg) 넘지 않기` : '12시 전에 자기' }));
     const goalEligible = (goal, day) => !day.open || (goal.criterion || goal.id) === 'caffeineMax';
-    const goals = [...(selected.length ? selected.map(goal => ({ ...goal, label: displayGoal(goal) })) : defaults), range]
+    const unavailableMaximum = { id: 'caffeineMax', label: '일일 최대 섭취량 넘지 않기',
+      source: 'default', days: [], unavailable: true };
+    const goals = [...(selected.length ? selected.map(goal => ({ ...goal, label: displayGoal(goal) })) : defaults),
+      ...(noWeight ? [unavailableMaximum] : []), range]
       .map(goal => {
         const states = new Map(goal.days.filter(day => typeof day.kept === 'boolean').map(day => [day.date, day]));
         const measured = days.filter(day => states.has(day.date) && goalEligible(goal, day));
         return { ...goal, states, measured: measured.length, kept: measured.filter(day => states.get(day.date).kept).length };
       });
-    const goalsShown = [...goals.filter(goal => goal.id !== 'range').slice(0, 4), goals.at(-1)];
+    const goalsShown = [...goals.filter(goal => goal.id !== 'range' && !goal.unavailable).slice(0, 4),
+      ...goals.filter(goal => goal.id === 'range' || goal.unavailable)];
     const markLabels = { ok: '✓', no: '×', short: '짧음', long: '김', none: '–', wait: '아직' };
     const goalLabel = goal => `<span class="summary-goal-tag">${goal.source === 'class' || goal.source === 'student' ? '내 목표' : '기본 기준'}</span>${pdfText(goal.label)}`;
     const goalMark = (goal, day) => {
       const state = goal.states.get(day.date);
       const canCheckToday = (goal.criterion || goal.id) === 'caffeineMax' && state;
-      const mark = day.open && !canCheckToday ? 'wait' : !state ? 'none' : state.outcome || (state.kept ? 'ok' : 'no');
+      const mark = goal.unavailable ? 'none' : day.open && !canCheckToday ? 'wait' : !state ? 'none' : state.outcome || (state.kept ? 'ok' : 'no');
       return `<span ${markDate(day)} class="summary-mark ${mark}">${markLabels[mark]}</span>`;
     };
     const dailyCalendar = () => `<div class="summary-scroll" role="region" tabindex="0" aria-label="날짜별 목표 실천 달력">
       <div class="summary-goal-row${compact}" style="--days:${n}"><span></span>${shown.map(day => `<span class="summary-note">${pdfDay(day.date)}</span>`).join('')}<span class="summary-note">지킨 날</span></div>
-      ${goalsShown.map(goal => `<div class="summary-goal-row${compact}" style="--days:${n}">
+      ${goalsShown.map(goal => `<div class="summary-goal-row${compact}" style="--days:${n}" data-daily-goal="${pdfText(goal.id)}">
         <div class="summary-goal-label">${goalLabel(goal)}</div>
-        ${shown.map(day => goalMark(goal, day)).join('')}<span class="summary-goal-total">${goal.measured ? `${goal.kept}/${goal.measured}` : '–'}</span></div>`).join('')}
+        ${shown.map(day => goalMark(goal, day)).join('')}<span class="summary-goal-total${goal.unavailable ? ' no-weight' : ''}">${goal.unavailable ? '체중 정보 없음' : goal.measured ? `${goal.kept}/${goal.measured}` : '–'}</span></div>`).join('')}
     </div>`;
-    const goalLimitNote = goals.length > goalsShown.length ? `<p class="summary-note">개인 목표 ${selected.length}개 중 처음 ${goalsShown.length - 1}개를 표시했어요.</p>` : '';
+    const goalLimitNote = goals.length > goalsShown.length ? `<p class="summary-note">개인 목표 ${selected.length}개 중 처음 ${selected.length - (goals.length - goalsShown.length)}개를 표시했어요.</p>` : '';
     const ratioCell = (kept, measured) => {
       const tone = measured ? 'rate-' + Math.floor(4 * kept / measured) : 'no-data';
       return `<span class="summary-ratio ${tone}">${kept}/${measured}</span>`;
@@ -768,10 +789,11 @@
     const calendar = weeks.length ? renderSummaryWeeks(weeks, goals.map(goal => ({
       id: goal.id, title: goalLabel(goal),
       cell: week => {
+        if (goal.unavailable) return '<span class="summary-ratio no-data">–</span>';
         const judged = week.filter(day => goalEligible(goal, day) && goal.states.has(day.date));
         return ratioCell(judged.filter(day => goal.states.get(day.date).kept).length, judged.length);
       },
-      total: ratioCell(goal.kept, goal.measured),
+      total: goal.unavailable ? '<span class="summary-ratio no-data no-weight">체중 정보 없음</span>' : ratioCell(goal.kept, goal.measured),
     })), { goals: true }) : dailyCalendar() + goalLimitNote;
     const conditionCompare = compare([validSleep.filter(day => Number.isFinite(day.hours) && inRange(day.hours)),
       validSleep.filter(day => Number.isFinite(day.hours) && !inRange(day.hours))], 'condition');
@@ -783,8 +805,11 @@
       <p class="summary-sub">${pdfText(plainPeriod)} · 날짜는 그날 밤 기준</p></div>
       <div class="summary-header-counts">${counts('수면 기록', validSleep.length, closed.length)}${counts('카페인 기록', cafDays.filter(day => day.caf?.recorded).length, cafDays.length, 'caf')}</div></header>
       ${block('A. 카페인과 수면', chart + comparisons + callout(aNote), weeks.length ? '주차별 평균 · 각 숫자 아래는 계산에 사용한 일수' : '')}
-      ${block('B. 수면을 위한 행동과 결과', calendar + callout(bNote, 'mint'), weeks.length ? '지킨 날 / 판정 가능한 날 · 비율이 높을수록 진하게 표시' : '✓ 지킴 · × 못 지킴 · – 기록 없음 · 아직 = 지나지 않은 밤', !weeks.length && n > 7)}
-      <p class="summary-foot">날짜는 그날 밤 기준이에요. 12시를 넘겨 잠든 날도 전날 밤에 넣어요. 잔 시간은 잠든 시각부터 일어난 시각까지예요. 비교는 양쪽 모두 유효 기록이 2일 이상일 때만 보여 줘요.${maximumText ? ` 일일 최대 섭취량 ${maximumText}mg.` : ''} 청소년 권장 수면 8~10시간(미국수면의학회, 2016).</p>
+      ${block('B. 수면을 위한 행동과 결과', calendar + callout(bNote, 'mint'), weeks.length ? '지킨 날 / 판정 가능한 날 · 비율이 높을수록 진하게 표시' : `✓ 지킴 · × 못 지킴 · – ${noWeight ? '판정 없음' : '기록 없음'} · 아직 = 지나지 않은 밤`, !weeks.length && n > 7)}
+      <footer class="summary-foot">
+        <p>날짜는 그날 밤 기준이에요. 12시를 넘겨 잠든 날도 전날 밤에 넣어요. 잔 시간은 잠든 시각부터 일어난 시각까지예요. 비교는 양쪽 모두 유효 기록이 2일 이상일 때만 보여 줘요.</p>
+        <div class="summary-foot-standards">${maximumNote ? `<p>${pdfText(maximumNote)}</p>` : ''}<p>청소년 권장 수면 8~10시간(미국수면의학회, 2016).</p></div>
+      </footer>
     </article>`;
 
     const intakes = days.flatMap(day => (day.caf?.intakes || []).filter(item => item.mg !== 0)

@@ -2231,7 +2231,17 @@ function setFullStudentReportPeriod() {
 
 function setModalPeriod(mode){modalPeriodMode=mode;['7','14','30','custom'].forEach(m=>{const btn=document.getElementById('modalPeriodBtn'+m);if(btn)btn.classList.toggle('active',m===mode);});const wrap=document.getElementById('modalStartDateWrap');if(wrap)wrap.style.display=mode==='custom'?'flex':'none';refreshModalData();}
 
-function getLimit(id, info=getPersonalInfo(id)){if(S.cafMaxFixed>0)return S.cafMaxFixed;return Math.min((info?info.몸무게:60)*2.5,400);}
+function getLimit(id, info=getPersonalInfo(id), { withBasis = false } = {}) {
+    const fixed = Number(S.cafMaxFixed);
+    if (Number.isFinite(fixed) && fixed > 0) return withBasis ? { limit: fixed, limitBasis: 'fixed' } : fixed;
+    // Reports require a recorded weight; the other dashboard views keep their existing default.
+    if (withBasis && (info?.hasRecordedWeight !== true || !Number.isFinite(info.몸무게) || info.몸무게 <= 0)) {
+        return { limit: null, limitBasis: 'noWeight' };
+    }
+    const calculated = (info ? info.몸무게 : 60) * 2.5;
+    const limit = Math.min(calculated, 400);
+    return withBasis ? { limit, limitBasis: calculated > 400 ? 'weightCapped' : 'weight' } : limit;
+}
 function getPersonalInfo(id){return infoData.find(i=>i.학번===id)||null;}
 function getTargetCafLimit(id, info=getPersonalInfo(id)){
     return info&&Number.isFinite(info.목표카페인)&&info.목표카페인>0?info.목표카페인:null;
@@ -2610,6 +2620,7 @@ function loadDataFromSheet(onReady,onError){
                     학번:String(i.학번),
                     name:String(i.name||'').trim(),
                     몸무게:parseFloat(i.몸무게)||60,
+                    hasRecordedWeight:i.hasRecordedWeight===true,
                     목표카페인:parseFloat(i.목표카페인)||0,
                     목표취침:String(i.목표취침||''),
                     목표기상:String(i.목표기상||'')
@@ -7916,9 +7927,9 @@ function renderJourneyStatus(){
 }
 
 </script>
-<script src="/public/js/teacher-report-files.js?v=report-view-8"></script>
+<script src="/public/js/teacher-report-files.js?v=report-view-9"></script>
 <script src="/public/js/teacher-report-export.js?v=image-report-2"></script>
-<script src="/public/js/teacher-batch-reports.js?v=report-view-4"></script>
+<script src="/public/js/teacher-batch-reports.js?v=report-view-5"></script>
 <script type="module" src="/public/js/caffeine-companies.js"></script>
 </body>
 </html>

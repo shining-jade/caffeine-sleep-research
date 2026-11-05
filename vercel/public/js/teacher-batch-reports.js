@@ -170,7 +170,8 @@
       const value = topObservations(report.mainSleep, field, '일');
       if (value) observations[key] = value;
     }
-    const input = { studentId: report.student.학번, studentName: report.student.이름, daily: report.daily, limit: report.limit };
+    const input = { studentId: report.student.학번, studentName: report.student.이름, daily: report.daily, limit: report.limit,
+      limitBasis: report.limitBasis };
     if (Object.keys(observations).length) input.observations = observations;
     return input;
   }
@@ -230,7 +231,7 @@
       student, dates, daily, cafRecords, caffeineDays, studentCaffeine, sleepRecords, sleepGroups, studentSleep, info,
       awards: getManualAwardsFor(student.학번).filter(award => award.studentName === name),
       mainSleep: dates.map(date => sleepGroups.get(date)?.record?.source).filter(Boolean),
-      limit: getLimit(student.학번, info),
+      ...getLimit(student.학번, info, { withBasis: true }),
       caffeineAverage: average(daily, 0),
       sleepAverage: average(daily, 1),
       sleepDays: daily.filter(day => day[1] !== null).length,

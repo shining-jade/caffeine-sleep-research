@@ -284,3 +284,63 @@ test('weekly tables include all goals, including goals beyond the daily display 
   for (let i = 0; i < 4; i++) assert.match(html, new RegExp('data-weekly-goal="fixture-goal-' + i + '"'));
   assert.doesNotMatch(html, /처음 4개를 표시/);
 });
+
+test('teacher report classifies the caffeine limit without forwarding a weight', () => {
+  const source = fs.readFileSync(path.join(root, 'vercel/teacher/index.html'), 'utf8');
+  const fn = source.slice(source.indexOf('function getLimit('), source.indexOf('function getPersonalInfo('));
+  const context = vm.createContext({ S: { cafMaxFixed: 0 } });
+  vm.runInContext(fn, context);
+  const get = (weight, recorded) => JSON.parse(JSON.stringify(context.getLimit('0',
+    { 몸무게: weight, hasRecordedWeight: recorded }, { withBasis: true })));
+  assert.deepEqual(get(68, true), { limit: 170, limitBasis: 'weight' });
+  assert.deepEqual(get(160, true), { limit: 400, limitBasis: 'weight' });
+  assert.deepEqual(get(165, true), { limit: 400, limitBasis: 'weightCapped' });
+  assert.deepEqual(get(60, false), { limit: null, limitBasis: 'noWeight' });
+  assert.deepEqual(get(60, undefined), { limit: null, limitBasis: 'noWeight' });
+  assert.deepEqual(get(0, true), { limit: null, limitBasis: 'noWeight' });
+  context.S.cafMaxFixed = 185;
+  assert.deepEqual(get(0, false), { limit: 185, limitBasis: 'fixed' });
+});
+
+function reportWithLimit(basis, amount, options = {}) {
+  const { gas } = require('./fixtures/summary-report.cjs');
+  return makeSummaryFixture({ ...options, buildEngine: input =>
+    gas.buildFeedbackReport_({ ...input, caffeineLimitBasis: basis, caffeineLimitMg: amount }) });
+}
+
+for (const [basis, amount, note] of [
+  ['weight', 170, '일일 최대 섭취량 170mg: 식품의약품안전처의 어린이·청소년 카페인 최대 섭취 권고량(체중 1kg당 2.5mg 이하)으로 계산한 값'],
+  ['weightCapped', 400, '일일 최대 섭취량 400mg: 식품의약품안전처의 어린이·청소년 카페인 최대 섭취 권고량(체중 1kg당 2.5mg 이하)으로 계산한 값 (성인 기준 400mg을 넘지 않게 맞춤)'],
+  ['fixed', 185, '일일 최대 섭취량 185mg(설정에서 정한 값). 식품의약품안전처는 어린이·청소년에게 체중 1kg당 2.5mg 이하를 권고해요.'],
+]) {
+  test('report shows the ' + basis + ' amount and its own footnote', () => {
+    const report = reportWithLimit(basis, amount, { personal: false });
+    assert.deepEqual(JSON.parse(JSON.stringify(report.feedback.engine.summaryCaffeineLimit)), { basis, amountMg: amount });
+    const html = render(report);
+    assert.ok(html.includes(note));
+    assert.match(html, new RegExp('일일 최대 섭취량\\('+amount+'mg\\) 넘지 않기'));
+    assert.match(html, /청소년 권장 수면 8~10시간\(미국수면의학회, 2016\)/);
+    assert.doesNotMatch(html, /\b(?:60|68|165)\s*kg/);
+  });
+}
+
+test('noWeight shows an unjudged row for daily and weekly reports while personal goals still count', () => {
+  for (const length of [7, 15]) {
+    const report = reportWithLimit('noWeight', 150, { length });
+    const engine = report.feedback.engine;
+    assert.deepEqual(JSON.parse(JSON.stringify(engine.summaryCaffeineLimit)), { basis: 'noWeight', amountMg: null });
+    assert.ok(engine.findings.find(x => x.id === 'healthStandards').data.rows.every(x => x.id !== 'caffeineMax'));
+    const html = render(report);
+    const row = length === 7
+      ? html.match(/data-daily-goal="caffeineMax">([\s\S]*?)<\/div>\s*<div class="summary-goal-row/)[1]
+      : html.match(/data-weekly-goal="caffeineMax">([\s\S]*?)<\/tr>/)[1];
+    assert.match(row, /일일 최대 섭취량 넘지 않기/);
+    assert.match(row, /체중 정보 없음/);
+    assert.match(row, />–</);
+    assert.doesNotMatch(row, />✓<|>×<|>아직<|>0\/0<|150mg/);
+    assert.match(html, /하루 150mg 넘지 않기/);
+    if (length === 7) assert.match(html, /summary-goal-total">5\/5/);
+    assert.match(html, /일일 최대 섭취량 = 내 체중\(kg\) × 2\.5mg\./);
+    assert.match(html, /체중 정보가 없어 계산하지 않았어요/);
+  }
+});
