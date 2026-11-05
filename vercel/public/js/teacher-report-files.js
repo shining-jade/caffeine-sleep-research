@@ -261,9 +261,10 @@
   function pdfBedtimePlot(series, phone) {
     const days = series.days.slice(phone ? -14 : -21);
     if (!days.length) return '<p>기록 없음</p>';
-    const dates = [...days.map(day => day.date), pdfWakeDate(days.at(-1))];
+    // 한 칸 = 수면 대상일(그날 밤). 취침 시각과 다음 날 아침 컨디션을 같은 칸에 놓는다.
+    const dates = days.map(day => day.date);
     const width = phone ? 330 : 690;
-    const spacing = (width - 61) / (dates.length - 1);
+    const spacing = (width - 61) / Math.max(1, dates.length - 1);
     const x = i => 39 + i * spacing;
     const y = min => 12 + (Math.min(1620, Math.max(1260, min)) - 1260) / 5;
     const line = (left, top, right, bottom, color) => `<line x1="${left}" y1="${top}" x2="${right}" y2="${bottom}" stroke="${color}" />`;
@@ -275,21 +276,20 @@
     }).join('');
     const points = days.map((day, i) => {
       const previous = days[i - 1];
-      const bed = day.bed === null ? label(x(i) - 2, 95, '–') :
+      const bed = day.bed === null ? (day.open ? label(x(i) - 8, 95, '아직') : label(x(i) - 2, 95, '–')) :
         (previous?.bed != null ? line(x(i - 1), y(previous.bed), x(i), y(day.bed), '#655ab5') : '')
         + `<circle cx="${x(i)}" cy="${y(day.bed)}" r="3" fill="#655ab5" />`;
-      const wakeX = x(i + 1);
-      const wakeDate = dates[i + 1];
-      const score = day.condition == null ? label(wakeX - 2, 127, '–')
-        : `<rect x="${wakeX - 3}" y="${129 - day.condition * 5}" width="6" height="${day.condition * 5}" fill="#4c9780" data-wake-date="${pdfText(wakeDate)}"><title>${pdfDay(wakeDate)} 기상 후 컨디션 ${day.condition}점</title></rect>`;
+      const wakeDate = pdfWakeDate(day);
+      const score = day.condition == null ? (day.open ? '' : label(x(i) - 2, 127, '–'))
+        : `<rect x="${x(i) - 3}" y="${129 - day.condition * 5}" width="6" height="${day.condition * 5}" fill="#4c9780" data-sleep-date="${pdfText(day.date)}" data-wake-date="${pdfText(wakeDate)}"><title>${pdfDay(day.date)} 밤 수면 → 다음 날(${pdfDay(wakeDate)}) 아침 컨디션 ${day.condition}점</title></rect>`;
       return bed + score;
     }).join('');
     const last = dates.length - 1;
     const step = Math.ceil(30 / spacing);
     const dateLabels = dates.map((date, i) => i === 0 || i === last || (i % step === 0 && (last - i) * spacing >= 30)
       ? label(x(i) - 10, 146, pdfDay(date)) : '').join('');
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 152" width="100%" role="img" aria-label="취침 시각과 기상일별 컨디션">${guides}${targets}${label(1, 118, '컨디션')}${points}${dateLabels}</svg>`
-      + '<small>보라색 점은 그날 밤에 잠자리에 든 시각이에요. 자정을 넘겨 잠자리에 든 시각은 전날 밤에 표시해요. 초록색 막대는 기상일의 컨디션(1~5점), 갈색 선은 목표 취침 시각이에요. –는 기록이 없음을 뜻해요. 21시 전이나 03시 후에 잠자리에 든 시각은 그래프 끝에 표시해요.</small>'
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 152" width="100%" role="img" aria-label="그날 밤 취침 시각과 다음 날 아침 컨디션">${guides}${targets}${label(1, 118, '컨디션')}${points}${dateLabels}</svg>`
+      + '<small>날짜는 그날 밤(수면 대상일)이에요. 보라색 점은 그날 밤에 잠자리에 든 시각이고, 자정을 넘겨 잠자리에 든 시각도 전날 밤에 표시해요. 초록색 막대는 같은 칸의 잠을 자고 일어난 다음 날 아침 컨디션(1~5점), 갈색 선은 목표 취침 시각이에요. –는 기록이 없음, ‘아직’은 아직 지나지 않은 밤이에요. 21시 전이나 03시 후에 잠자리에 든 시각은 그래프 끝에 표시해요.</small>'
       + (days.length < series.days.length ? '<p>최근 ' + days.length + '일의 밤 기록과 다음 날 컨디션을 표시했어요.</p>' : '');
   }
 
@@ -329,16 +329,17 @@
     const displayDays = sleep.days.slice(phone ? -7 : -14);
     const dateSet = new Set(displayDays.map(day => day.date));
     const goalsShown = (goals.length ? goals : standards.data.rows).slice(0, phone ? 3 : 5);
-    const mark = decision => decision === true ? '✓' : decision === false ? '×' : '–';
+    const openDates = new Set(sleep.days.filter(day => day.open).map(day => day.date));
+    const mark = (decision, date) => decision === true ? '✓' : decision === false ? '×' : openDates.has(date) ? '아직' : '–';
     const markSummary = goal => goal.source === 'class' && !goal.criterion ? '앱 기록으로 확인할 수 없는 목표예요.'
       : goal.measured ? goal.kept + ' / ' + goal.measured + '일' : '확인할 기록 없음';
     const calendar = '<div class="goal-calendar">' + displayDays.map(day => {
       const decision = goals[0]?.days.find(item => item.date === day.date)?.kept;
-      return '<span class="score-' + (day.condition ?? 0) + '" data-mark="' + mark(decision) + '">'
-        + pdfDay(pdfWakeDate(day)) + '<br>' + (day.condition == null ? '–' : day.condition + '점')
-        + (goals.length ? ' ' + mark(decision) : '') + '</span>';
-    }).join('') + '</div><small>날짜와 점수는 기상일과 기상 후 컨디션이에요.'
-      + (goals.length ? ' 목표 표시는 기상 전날 기준이에요. ✓ 지킴, × 못 지킴, – 확인할 기록 없음 또는 목표 기간 외.' : ' – 컨디션 기록 없음.') + '</small>';
+      return '<span class="score-' + (day.condition ?? 0) + '" data-mark="' + mark(decision, day.date) + '">'
+        + pdfDay(day.date) + '<br>' + (day.condition == null ? (day.open ? '아직' : '–') : day.condition + '점')
+        + (goals.length ? ' ' + mark(decision, day.date) : '') + '</span>';
+    }).join('') + '</div><small>날짜는 그날 밤(수면 대상일), 점수는 그 잠을 자고 일어난 다음 날 아침 컨디션이에요.'
+      + (goals.length ? ' 목표 표시도 같은 날짜 기준이에요. ✓ 지킴, × 못 지킴, – 확인할 기록 없음 또는 목표 기간 외, ‘아직’ 지나지 않은 밤.' : ' – 컨디션 기록 없음, ‘아직’ 지나지 않은 밤.') + '</small>';
     const mainGoal = goals[0];
     const percent = mainGoal?.measured ? Math.round(mainGoal.rate * 100) : null;
     const ring = percent === null ? '' : '<svg class="goal-ring" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52" aria-label="목표 달성 '
@@ -355,7 +356,7 @@
     if (!goals.length) used.add('healthStandards');
     const check = pdfCard(goals.length ? '목표 체크표' : '건강 기준 체크',
       pdfTable(['항목', '확인 결과', '최근 ' + displayDays.length + '일'], goalsShown.map(goal => [
-        pdfShort(goal.label, phone ? 40 : 72), markSummary(goal), goal.days.filter(day => dateSet.has(day.date)).map(day => pdfDay(day.date) + ' ' + mark(day.kept)).join('  '),
+        pdfShort(goal.label, phone ? 40 : 72), markSummary(goal), goal.days.filter(day => dateSet.has(day.date)).map(day => pdfDay(day.date) + ' ' + mark(day.kept, day.date)).join('  '),
       ])) + (goals.length > goalsShown.length ? '<small>이 표에는 처음 ' + goalsShown.length + '개 목표를 표시했어요.</small>' : '')
       + (goalsShown.some(goal => goal.source === 'class' && !goal.criterion) ? '<p>목표를 지키기 쉬웠던 날에는 무엇을 했나요?</p>' : ''));
     const late = find('lateCaffeine');

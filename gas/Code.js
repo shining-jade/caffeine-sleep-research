@@ -1519,6 +1519,7 @@ function feedbackNormalizeDays_(input) {
     if (byDate.has(day.date)) throw new Error('같은 날짜의 기록을 먼저 정리해 주세요.');
     byDate.set(day.date, day);
   }
+  const today = typeof input.today === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.today) ? input.today : null;
   const days = [];
   for (let time = start; time <= end; time += FEEDBACK_DAY_MS_) {
     const date = new Date(time).toISOString().slice(0, 10);
@@ -1536,7 +1537,8 @@ function feedbackNormalizeDays_(input) {
     const condition = usable && Number.isInteger(sleep.condition) ? feedbackNumber_(sleep.condition, 1, 5) : null;
     const wake = usable ? feedbackNumber_(feedbackClock_(sleep.wake), 0, 1439) : null;
     days.push({
-      date, dow: new Date(time).getUTCDay(),
+      // date = 수면 대상일(기상일 전날). open = 그날 밤 수면이 아직 끝나지 않음(기상일이 오늘 이후).
+      date, dow: new Date(time).getUTCDay(), open: today !== null && date >= today,
       caffeine: { recorded, status, totalMg, intakes: recorded ? intakes : [] },
       sleep: { recorded: sleep.recorded === true || sleep.held === true, held: sleep.held === true,
         bed: usable ? (sleep.bedOnTimeline !== undefined ? feedbackNumber_(sleep.bedOnTimeline, 0, 2159) : feedbackBed_(sleep.bed)) : null,
@@ -1644,17 +1646,19 @@ function feedbackFinding_(id, topic, data, options = {}) {
 
 function feedbackRecordHabit_(days) {
   const recorded = day => day.caffeine.recorded || day.sleep.recorded;
-  const count = days.filter(recorded).length;
-  const rate = count / days.length;
-  const half = Math.floor(days.length / 2);
-  const halves = half ? [days.slice(0, half), days.slice(-half)].map(group => group.filter(recorded).length / group.length) : [];
-  const misses = FEEDBACK_WEEKDAY_.map((label, dow) => ({ label, n: days.filter(day => day.dow === dow && !recorded(day)).length }))
+  // 아직 끝나지 않은 날(open)은 기록이 없어도 분모에서 뺀다.
+  const counted = days.filter(day => recorded(day) || !day.open);
+  const count = counted.filter(recorded).length;
+  const rate = counted.length ? count / counted.length : 0;
+  const half = Math.floor(counted.length / 2);
+  const halves = half ? [counted.slice(0, half), counted.slice(-half)].map(group => group.filter(recorded).length / group.length) : [];
+  const misses = FEEDBACK_WEEKDAY_.map((label, dow) => ({ label, n: counted.filter(day => day.dow === dow && !recorded(day)).length }))
     .sort((a, b) => b.n - a.n);
   const advice = rate >= .8 ? '꾸준히 남겨 줬어요.' : rate >= .5
     ? (misses[0].n ? misses[0].label + '요일에 빠진 기록이 가장 많았어요. 기록하기 편한 시간을 하나 정해 봐요.' : '기록을 잘 이어 가고 있어요.')
     : '오늘은 잠자리에 든 시각처럼 기억하기 쉬운 한 가지부터 남겨 봐요.';
-  const text = days.length + '일 중 ' + count + '일을 기록했어요. ' + advice
-    + (days.length >= 7 && halves[1] > halves[0] ? ' 기간 후반에는 전반보다 더 자주 기록했어요.' : '');
+  const text = counted.length + '일 중 ' + count + '일을 기록했어요. ' + advice
+    + (counted.length >= 7 && halves[1] > halves[0] ? ' 기간 후반에는 전반보다 더 자주 기록했어요.' : '');
   return feedbackFinding_('recordHabit', 'record', { count, rate, halves,
     streak: feedbackStreak_(days, recorded), zeroDays: days.filter(day => day.caffeine.status === 'zero').length },
   { text, featured: false });
@@ -1848,16 +1852,18 @@ function feedbackLateCaffeine_(days, minimum, goals) {
 function feedbackLongSleep_(days, minimum) {
   const longDays = days.filter(day => day.sleep.hours > 10);
   const longest = longDays.reduce((best, day) => !best || day.sleep.hours > best.sleep.hours ? day : best, null);
-  const weekdays = longest ? days.filter(day => day !== longest && day.dow >= 1 && day.dow <= 5 && day.sleep.hours !== null) : [];
+  // 등교일 전날 밤 = 수면 대상일 일~목(기상일 월~금)
+  const weekdays = longest ? days.filter(day => day !== longest && day.dow >= 0 && day.dow <= 4 && day.sleep.hours !== null) : [];
   const weekdayMean = minimum && weekdays.length >= minimum ? feedbackAverage_(weekdays.map(day => day.sleep.hours)) : null;
   const gap = weekdayMean === null ? null : longest.sleep.hours - weekdayMean;
   let text = '';
   if (longest) {
-    text = feedbackDateLabel_(longest.date) + '에는 잠자리에 든 뒤 일어나기까지 '
+    text = feedbackDateLabel_(longest.date) + ' 밤에는 잠자리에 든 뒤 일어나기까지 '
       + feedbackMinutesText_(longest.sleep.hours * 60) + '이 걸렸어요.';
-    if (gap !== null && gap > 0) text = feedbackDateLabel_(longest.date) + '에는 잠자리에 든 뒤 일어나기까지 걸린 시간이 평일 평균보다 '
+    if (gap !== null && gap > 0) text = feedbackDateLabel_(longest.date) + ' 밤에는 잠자리에 든 뒤 일어나기까지 걸린 시간이 등교일 전날 밤 평균보다 '
       + feedbackMinutesText_(gap * 60) + ' 길었어요.';
-    if (longest.sleep.condition !== null) text += ' 그날 아침 컨디션은 ' + feedbackScoreText_(longest.sleep.condition) + '이었어요.';
+    if (longest.sleep.condition !== null) text += ' 다음 날(' + feedbackDateLabel_(shiftRecordDate_(longest.date, 1)) + ') 아침 컨디션은 '
+      + feedbackScoreText_(longest.sleep.condition) + '이었어요.';
   }
   return feedbackFinding_('longSleep', 'sleep', { count: longDays.length, longest: longest?.date || null,
     hours: longest?.sleep.hours ?? null, weekdayN: weekdays.length, weekdayMean, condition: longest?.sleep.condition ?? null },
@@ -2162,7 +2168,7 @@ function buildFeedbackReport_(input) {
         id: entry.id, minutes: feedbackBed_(inputs.find(goal => goal.id === entry.id)?.threshold),
         start: entry.days[0]?.date, end: entry.days[entry.days.length - 1]?.date,
       })),
-      days: days.map(day => ({ date: day.date, ...day.sleep })) }, { featured: false })];
+      days: days.map(day => ({ date: day.date, open: day.open, ...day.sleep })) }, { featured: false })];
   for (const finding of findings) finding.refs = finding.refs.filter(id => Object.prototype.hasOwnProperty.call(FEEDBACK_REFS_, id));
   const goalComparisons = goals.map(entry => entry.condition);
   const featured = selectFeedbackFindings_(findings, tier === 'first' || tier === 'week' ? 1 : 3, goalComparisons);
@@ -2283,7 +2289,7 @@ function feedbackSourceInput_(source, student, start, end, classGoals, options =
     for (const [criterion, field, label] of values) goals.push({ ...period, id: 'class-' + index + '-' + criterion,
       source: 'class', criterion, threshold: goal[criterion], label: values.length === 1 ? goal.goal : field + ' · ' + label(goal[criterion]) });
   }
-  return { start, end, days, goals, ...options };
+  return { start, end, days, goals, today: Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd'), ...options };
 }
 
 function feedbackClassGoals_(student, rows) {
