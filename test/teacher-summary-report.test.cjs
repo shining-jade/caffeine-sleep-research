@@ -101,3 +101,115 @@ test('reports missing and held sleep even if all past caffeine days were recorde
   assert.match(html, /수면 분석을 보류한 밤은 1일/);
   assert.doesNotMatch(html, /확인한 기록에서 빠진 항목이 없어요/);
 });
+
+test('reports delayed caffeine from intake date and sleep from actual wake date in KST', () => {
+  const report = makeSummaryFixture({ editDays(days) {
+    // 11.01 intake saved at midnight on 11.02 KST, despite the UTC date being 11.01.
+    days[2].caffeine.intakes[0].enteredAt = '2026-11-01T15:00:00Z';
+    // 11.01 night ends on 11.02; same-wake-day saves are not delayed.
+    days[2].sleep.wakeDate = '2026-11-02';
+    days[2].sleep.enteredAt = '2026-11-01T14:59:59-01:00';
+    days[3].sleep.wakeDate = '2026-11-03';
+    days[3].sleep.enteredAt = '2026-11-03T15:00:00Z';
+    days[4].caffeine.intakes[0].enteredAt = 'invalid';
+  } });
+  const late = report.feedback.engine.summaryLateEntries;
+  assert.deepEqual(JSON.parse(JSON.stringify(late)), [
+    { kind: 'caffeine', date: '2026-11-01', delayDays: 1, count: 1 },
+    { kind: 'sleep', date: '2026-11-02', delayDays: 1, count: 1 },
+  ]);
+  const html = render(report);
+  assert.match(html, /11\.01 카페인은 다음 날 입력했어요/);
+  assert.match(html, /11\.02 밤 수면은 일어난 다음 날 입력했어요/);
+  assert.doesNotMatch(render(makeSummaryFixture()), /다음 날 입력했어요|저장 시각 기준/);
+});
+
+test('uses sheet timestamps in the report input and does not output raw timestamps', () => {
+  const { gas } = require('./fixtures/summary-report.cjs');
+  const student = { id: 'synthetic', dashboardId: 'synthetic_가상', name: '가상' };
+  const caffeine = [['2026-11-01T15:00:00Z', '', '', '', student.id, student.name, '가상 음료', 40, '2026-11-01 17:30:00']];
+  const sleep = [['2026-11-02 09:00:00', '', '', '', student.id, student.name, '2026-11-01', '23:00', '2026-11-02', '07:00', 8, 3, '', 'synthetic-record']];
+  const source = { caffeine, sleep, sleepMetadata: { groups: new Map() }, sleepIds: new Map(), info: [] };
+  const input = gas.feedbackSourceInput_(source, student, '2026-11-01', '2026-11-01', [], { today: '2026-11-05' });
+  assert.equal(input.days[0].caffeine.intakes[0].enteredAt, caffeine[0][0]);
+  assert.equal(input.days[0].sleep.enteredAt, sleep[0][0]);
+  assert.equal(input.days[0].sleep.wakeDate, '2026-11-02');
+  const report = gas.buildFeedbackReport_(input);
+  assert.equal(report.summaryLateEntries.length, 1);
+  assert.doesNotMatch(JSON.stringify(report), /2026-11-01T15:00:00Z|2026-11-02 09:00:00/);
+});
+
+test('shows only three delayed groups and counts the hidden records', () => {
+  const report = makeSummaryFixture({ editDays(days) {
+    for (const day of days) {
+      day.sleep.wakeDate = new Date(Date.parse(day.date) + 86400000).toISOString().slice(0, 10);
+      day.sleep.enteredAt = '2026-11-06 09:00:00';
+    }
+  } });
+  const html = render(report);
+  assert.equal((html.match(/밤 수면은 일어난/g) || []).length, 3);
+  assert.match(html, /외 3건/);
+});
+
+test('adds a recorded overlap only when it occurred on at least two missed nights', () => {
+  const normal = makeSummaryFixture();
+  assert.match(normal.feedback.engine.summaryReflection.rule.difficulty, /4일 중 3일은 자기 전 스마트폰을 30분 이상/);
+  const sparse = makeSummaryFixture({ editDays(days) {
+    days.forEach((day, i) => {
+      day.habits.phone = i === 2 ? '60분 이상' : null;
+      day.caffeine?.intakes.forEach(item => { item.time = i === 2 ? '17:30' : '12:00'; });
+    });
+  } });
+  assert.equal(sparse.feedback.engine.summaryReflection.facts.difficulty.observation, null);
+  assert.doesNotMatch(sparse.feedback.engine.summaryReflection.rule.difficulty, /스마트폰|오후 3시/);
+});
+
+test('AI receives only allowed aggregate facts; rejects novel wording and retains the three rules on failure', async () => {
+  const { createTeacherOpenAI } = await import('../vercel/api/_lib/teacher-openai.js');
+  const report = makeSummaryFixture();
+  const makeData = () => structuredClone({ success: true, reports: [{ ...report, studentId: 'synthetic-only' }] });
+  const rule = report.feedback.engine.summaryReflection.rule;
+  const safeChoices = { praise: 'warm', difficulty: 'warm', plan: 'warm' };
+  const completed = value => new Response(JSON.stringify({ status: 'completed', output: [
+    { type: 'message', content: [{ type: 'output_text', text: JSON.stringify(value) }] },
+  ] }));
+  let calls = 0;
+  const success = createTeacherOpenAI({ readKey: () => 'fixture-only', fetchImpl: async (_url, options) => {
+    calls++;
+    const request = JSON.parse(options.body);
+    assert.equal(request.store, false);
+    assert.doesNotMatch(request.input, /synthetic-only|테스트 학생|가상|2026-|하루 150mg/);
+    assert.deepEqual(Object.keys(JSON.parse(request.input)[0]), ['praise', 'difficulty', 'plan']);
+    return completed({ choices: [safeChoices] });
+  } });
+  const polished = await success(makeData());
+  assert.equal(calls, 1);
+  assert.equal(polished.reports[0].feedback.mode, 'ai');
+  assert.equal(polished.reports[0].feedback.aiFallback, false);
+  assert.notEqual(polished.reports[0].feedback.summaryReflection.praise, rule.praise);
+  assert.deepEqual(polished.reports[0].feedback.sections, makeData().reports[0].feedback.sections);
+  for (const fetchImpl of [async () => { throw Error('offline'); },
+    async () => completed({ choices: [{ ...safeChoices, difficulty: '진단: 99시간' }] })]) {
+    const fallback = await createTeacherOpenAI({ readKey: () => 'fixture-only', fetchImpl })(makeData());
+    const { feedback } = fallback.reports[0];
+    assert.equal(feedback.aiFallback, true);
+    assert.equal(feedback.mode, 'rule');
+    assert.deepEqual(feedback.summaryReflection, structuredClone(rule));
+    assert.match(render(fallback.reports[0]), /스마트폰을 30분 이상/);
+  }
+});
+
+test('recognizes a numeric Seoul sheet timestamp and uses observed kept-day facts for a caffeine plan', () => {
+  const { gas } = require('./fixtures/summary-report.cjs');
+  const day = '2026-11-01';
+  const entry = 25569 + Date.parse('2026-11-02T00:01:00Z') / 86400000;
+  const input = { start: day, end: '2026-11-03', today: '2026-11-05',
+    goals: [{ id: 'caffeine-goal', source: 'class', criterion: 'caffeineMax', label: '하루 100mg 넘지 않기', threshold: 100 }],
+    days: [40, 150, 160].map((mg, i) => ({ date: '2026-11-0' + (i + 1),
+      caffeine: { recorded: true, totalMg: mg, intakes: [{ time: '14:00', mg, enteredAt: i === 0 ? entry : null }] } })) };
+  const result = gas.buildFeedbackReport_(input);
+  assert.equal(result.summaryLateEntries.length, 1);
+  assert.equal(result.summaryLateEntries[0].delayDays, 1);
+  assert.equal(result.summaryReflection.facts.plan.kind, 'recordedCaffeine');
+  assert.match(result.summaryReflection.rule.plan, /11\.01 낮의 카페인 섭취량\(40mg\)/);
+});

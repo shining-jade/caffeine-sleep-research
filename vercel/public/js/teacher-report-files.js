@@ -121,7 +121,8 @@
     const result = node('div', 'report-feedback');
     if (feedback.mode) {
       const mode = feedback.aiFallback ? 'AI 분석을 사용할 수 없어 규칙 기반으로 분석했어요.'
-        : feedback.mode === 'ai' ? (feedback.engine ? 'AI 분석 · 설명 문장 다듬기' : 'AI 분석 · 실천 제안 우선순위 반영') : '규칙 기반 분석';
+        : feedback.mode === 'ai' ? (feedback.summaryReflection ? 'AI 분석 · 돌아보기 문장 다듬기'
+          : feedback.engine ? 'AI 분석 · 설명 문장 다듬기' : 'AI 분석 · 실천 제안 우선순위 반영') : '규칙 기반 분석';
       const periodMode = feedback.reportMode === 'final' ? '마무리 분석 · ' : feedback.reportMode === 'ongoing' ? '진행 분석 · ' : '';
       result.append(node('p', 'report-feedback-mode', periodMode + mode));
     }
@@ -540,6 +541,20 @@
     .summary-reflections{flex:1;grid-template-rows:auto 1fr auto}.summary-reflect-card h3,.summary-teacher b{color:#3b3195}
     .summary-teacher{border-radius:12px;background:#f1effb;padding:10px 14px;min-height:42px;display:flex;gap:10px}
     .summary-teacher b{white-space:nowrap}
+    .summary-page[data-late="true"] .summary-intakes{max-height:146px}
+    @media(min-width:681px){
+      .summary-page[data-late="true"]{gap:12px}
+      .summary-page[data-late="true"] .summary-section{gap:8px}
+      .summary-page[data-late="true"] .summary-record-card{padding:10px 12px;gap:4px}
+      .summary-page[data-size="week"]{gap:24px;--bar-scale:1.25}
+      .summary-page[data-size="week"] .summary-section{gap:13px}
+      .summary-page[data-size="week"] .summary-chart{padding:16px 12px}
+      .summary-page[data-size="week"] .summary-axis-row+.summary-axis-row{margin-top:7px}
+      .summary-page[data-size="week"] .summary-chart-bar{height:82px}
+      .summary-page[data-size="week"] .summary-chart-bar.hours::before{bottom:44px;height:11px}
+      .summary-page[data-size="week"] .summary-compare{padding:15px 12px;gap:7px}
+      .summary-page[data-size="week"] .summary-mark{min-height:36px}
+    }
     @media(max-width:680px){.summary-page{padding:22px 18px;min-height:0}.summary-header{align-items:flex-start;flex-wrap:wrap}.summary-page[data-page="2"] .summary-header{flex-wrap:wrap}.summary-scroll:focus-visible{outline:2px solid #5b4fc4;outline-offset:2px}}
     @media(max-width:480px){.summary-three,.summary-two{grid-template-columns:1fr}.summary-report h1{font-size:22px}.summary-habit{grid-template-columns:1fr;gap:3px}}
   `;
@@ -583,13 +598,13 @@
         : status === 'known' ? `<span>${pdfText(amount)}</span>`
         : day.open ? `<span class="summary-muted">${day.date === today ? '오늘' : '아직'}</span>`
         : '<span class="summary-caf-missing">기록 없음</span>';
-      return `<div ${markDate(day)} class="summary-chart-bar">${text}${amount > 0 ? `<i aria-hidden="true" style="height:${Math.max(4, Math.round(44 * amount / maxCaffeine))}px"></i>` : ''}</div>`;
+      return `<div ${markDate(day)} class="summary-chart-bar">${text}${amount > 0 ? `<i aria-hidden="true" style="height:calc(${Math.max(4, Math.round(44 * amount / maxCaffeine))}px * var(--bar-scale,1))"></i>` : ''}</div>`;
     };
     const inRange = h => h >= 8 && h <= 10;
     const hoursBar = day => {
       const value = !day.open && Number.isFinite(day.hours) ? day.hours : null;
       return `<div ${markDate(day)} class="summary-chart-bar hours"><span>${day.open ? '아직' : value === null ? '–' : value.toFixed(1)}</span>${value === null ? ''
-        : `<i aria-hidden="true" class="${inRange(value) ? 'in-range' : ''}" style="height:${Math.round(Math.min(value, 11) / 11 * 48)}px"></i>`}</div>`;
+        : `<i aria-hidden="true" class="${inRange(value) ? 'in-range' : ''}" style="height:calc(${Math.round(Math.min(value, 11) / 11 * 48)}px * var(--bar-scale,1))"></i>`}</div>`;
     };
     const condition = day => {
       const value = day.condition;
@@ -665,7 +680,7 @@
     const bNote = conditionCompare.means
       ? `8~10시간 잔 밤(${conditionCompare.size[0]}일)의 다음 날 아침 컨디션은 평균 ${fixed(conditionCompare.means[0], '점')}, 그렇지 않은 밤(${conditionCompare.size[1]}일)은 ${fixed(conditionCompare.means[1], '점')}이었어요.`
       : '8~10시간 잔 밤과 그렇지 않은 밤의 컨디션 비교는 양쪽 기록이 각각 2일 이상일 때 보여 줘요.';
-    const page1 = `<article class="summary-page"><header class="summary-header"><div>
+    const page1 = `<article class="summary-page"${n <= 7 ? ' data-size="week"' : ''}><header class="summary-header"><div>
       <p class="summary-kicker">카페인·수면 기록 요약 · 1쪽 한눈에 보기</p><h1>${name}의 기록</h1>
       <p class="summary-sub">${pdfText(plainPeriod)} · 날짜는 그날 밤 기준</p></div>
       <div class="summary-header-counts">${counts('수면 기록', validSleep.length, closed.length)}${counts('카페인 기록', cafDays.filter(day => day.caf?.recorded).length, cafDays.length, 'caf')}</div></header>
@@ -723,6 +738,15 @@
       held.length ? `겹치거나 충돌해 수면 분석을 보류한 밤은 ${held.length}일이에요${dates(held)}.` : '',
       conditionMissing.length ? `아침 컨디션이 빠진 밤은 ${conditionMissing.length}일이에요${dates(conditionMissing)}.` : '',
       quantityMissing || timeMissing ? `섭취 기록에서 ${[quantityMissing ? `함량 ${quantityMissing}건` : '', timeMissing ? `시각 ${timeMissing}건` : ''].filter(Boolean).join('과 ')}이 빠졌어요.` : ''].filter(Boolean);
+    const lateEntries = feedback.engine.summaryLateEntries || [];
+    const visibleLate = lateEntries.slice(0, 3);
+    const hiddenLate = lateEntries.slice(3).reduce((total, item) => total + item.count, 0);
+    const lateText = visibleLate.map(({ kind, date, delayDays, count }) => {
+      const when = delayDays === 1 ? '다음 날' : delayDays + '일 뒤';
+      const topic = kind === 'sleep' ? '밤 수면' : '카페인';
+      return pdfDay(date) + ' ' + topic + (count === 1 ? '은' : ' 기록 ' + count + '건은')
+        + (kind === 'sleep' ? ' 일어난 ' : ' ') + when + ' 입력했어요.';
+    }).join(' ') + (hiddenLate ? ' 외 ' + hiddenLate + '건' : '');
     const ranked = goals.filter(goal => goal.measured > 0).sort((a, b) => b.kept / b.measured - a.kept / a.measured);
     const best = ranked[0];
     const hardest = ranked.filter(goal => goal.kept < goal.measured).at(-1);
@@ -730,19 +754,20 @@
     const sample = hardest && validSleep.find(day => hardest.states.get(day.date)?.kept && Number.isFinite(day.bed));
     const plan = sample && ['range', 'bedtime', 'sleepMin'].includes(hardest.criterion || hardest.id) ?
       `‘${hardest.label}’를 지킨 ${pdfDay(sample.date)} 밤의 잠든 시각(${pdfClock(sample.bed)})을 다음 계획에 참고해 봐요.` : '';
+    const reflectionText = feedback.summaryReflection || feedback.engine.summaryReflection?.rule;
     const reflection = [
-      ['잘된 점', best ? ratio(best) : good[0]],
-      ['어려웠던 점', hardest ? ratio(hardest) : ''],
-      ['다음 계획', plan],
+      ['잘된 점', reflectionText?.praise ?? (best ? ratio(best) : good[0])],
+      ['어려웠던 점', reflectionText?.difficulty ?? (hardest ? ratio(hardest) : '')],
+      ['다음 계획', reflectionText?.plan ?? plan],
     ];
     const memo = feedback.savedPdfFeedback?.summary ?? feedback.summary ?? '';
-    const page2 = `<article class="summary-page" data-page="2"><header class="summary-header">
+    const page2 = `<article class="summary-page" data-page="2"${visibleLate.length ? ' data-late="true"' : ''}><header class="summary-header">
       <p class="summary-kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="summary-sub">${name} · ${period}</p></header>
       ${block('C. 카페인을 마신 날', intakeTable + `<p class="summary-sub">안 마신 날 ${zero.length}일${dates(zero)} · 기록 없는 날 ${missing.length}일${dates(missing)}</p>` + callout(cNote))}
       ${block('D. 수면과 생활습관', (habitBars || '<p class="summary-note">표시할 생활습관 응답이 없어요.</p>') + callout(dNote, 'blue'), '밤 기록 중 고른 답 · 숫자는 일수')}
       <section class="summary-two">
         <div class="summary-record-card good"><h2>E. 기록 · 잘한 점</h2>${pdfParagraphs(good.length ? good : ['아직 확인할 기록이 없어요.'])}</div>
-        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${pdfParagraphs(review.length ? review : ['확인한 기록에서 빠진 항목이 없어요.'])}</div>
+        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${pdfParagraphs(lateText ? [...review, lateText] : review.length ? review : ['확인한 기록에서 빠진 항목이 없어요.'])}${visibleLate.length ? '<small class="summary-note">저장 시각 기준이라 나중에 수정한 기록도 포함될 수 있어요.</small>' : ''}</div>
       </section>
       <section class="summary-section summary-reflections"><h2>F. 돌아보기</h2><div class="summary-three">
         ${reflection.map(([title, value]) => `<div class="summary-reflect-card"><h3>${title}</h3><p${value ? '' : ' class="summary-note"'}>${pdfText(value || '기록에서 확인할 내용이 없어요.')}</p></div>`).join('')}

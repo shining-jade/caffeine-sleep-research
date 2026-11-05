@@ -125,8 +125,90 @@ export function createTeacherOpenAI({ fetchImpl = fetch, readKey = () => process
     }
   }
 
+  async function refineSummaryReflections(data) {
+    const eligible = data.reports.filter(report => report.feedback?.engine?.summaryReflection);
+    const summaries = eligible.map(report => report.feedback.engine.summaryReflection);
+    // Forward only aggregate counts and allowlisted categories. No identities, dates, labels or report text.
+    const allowed = ['caffeineMax', 'bedtime', 'sleepMin', 'wakeTime', 'phone', 'activity', 'range', 'other', 'sleepRecords', 'caffeineRecords'];
+    const count = value => Number.isSafeInteger(value) && value >= 0 && value <= 366;
+    const goal = fact => fact && allowed.includes(fact.kind) && count(fact.measured) && count(fact.kept) && fact.measured > 0 && fact.kept <= fact.measured
+      ? { kind: fact.kind, measured: fact.measured, kept: fact.kept } : null;
+    const facts = summaries.map(({ facts }) => {
+      const difficulty = goal(facts?.difficulty);
+      const observation = facts?.difficulty?.observation;
+      return {
+        praise: goal(facts?.praise),
+        difficulty: difficulty && { ...difficulty, observation: ['phone30', 'afternoonCaffeine'].includes(observation?.kind) &&
+          count(observation.count) && observation.count >= 2 && observation.count <= difficulty.measured - difficulty.kept
+          ? { kind: observation.kind, count: observation.count } : null },
+        plan: ['recordedBedtime', 'recordedCaffeine', 'recordedWake', 'recordedPhone', 'recordedActivity'].includes(facts?.plan?.kind)
+          ? { kind: facts.plan.kind } : null,
+      };
+    });
+    const slots = ['praise', 'difficulty', 'plan'];
+    const options = ['rule', 'warm'];
+    const fallback = state => {
+      for (const report of data.reports) {
+        if (!report.feedback) continue;
+        const summary = report.feedback.engine?.summaryReflection;
+        if (summary) report.feedback.summaryReflection = { ...summary.rule };
+        report.feedback.mode = 'rule';
+        report.feedback.aiFallback = true;
+      }
+      return { ...data, aiVerification: { state } };
+    };
+    try {
+      const key = readKey()?.trim();
+      if (!key) return fallback('missing_key');
+      if (!facts.some(entry => slots.some(slot => entry[slot]))) return fallback('reflection_no_facts');
+      const response = await fetchImpl('https://api.openai.com/v1/responses', {
+        method: 'POST', redirect: 'error', signal: AbortSignal.timeout(6500),
+        headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: MODEL, store: false, max_output_tokens: 1800,
+          instructions: 'For each set of Korean student reflection facts, choose the phrasing style for praise, difficulty and plan: rule (direct) or warm (conversational). Return exactly one set of choices per input, in the same order. Choose rule for null facts. Do not return prose, facts, numbers, diagnoses or advice. The application will insert only the original facts in approved wording.',
+          input: JSON.stringify(facts),
+          text: { format: { type: 'json_schema', name: 'teacher_reflection_wording', strict: true, schema: {
+            type: 'object', additionalProperties: false, required: ['choices'], properties: {
+              choices: { type: 'array', items: { type: 'object', additionalProperties: false, required: slots,
+                properties: Object.fromEntries(slots.map(slot => [slot, { type: 'string', enum: options }])) } },
+            },
+          } } },
+        }),
+      });
+      if (!response.ok) return fallback([401, 403].includes(response.status) ? 'authentication_failed' : 'reflection_failed');
+      const body = await response.json();
+      const output = body.output?.flatMap(item => item.type === 'message' ? item.content : [])
+        .find(item => item.type === 'output_text')?.text;
+      const parsed = JSON.parse(output);
+      const choices = parsed?.choices;
+      if (body.status !== 'completed' || Object.keys(parsed).length !== 1 || !Array.isArray(choices) ||
+          choices.length !== summaries.length || choices.some(choice => !choice || Object.keys(choice).length !== slots.length ||
+            !slots.every(slot => options.includes(choice[slot])))) return fallback('reflection_failed');
+      for (const report of data.reports) {
+        if (!report.feedback) continue;
+        const index = eligible.indexOf(report);
+        const summary = summaries[index];
+        if (!summary || !slots.some(slot => facts[index][slot])) {
+          if (summary) report.feedback.summaryReflection = { ...summary.rule };
+          report.feedback.mode = 'rule';
+          report.feedback.aiFallback = true;
+          continue;
+        }
+        report.feedback.summaryReflection = Object.fromEntries(slots.map(slot =>
+          [slot, choices[index][slot] === 'warm' && facts[index][slot] ? summary.warm[slot] : summary.rule[slot]]));
+        report.feedback.mode = 'ai';
+        report.feedback.aiFallback = false;
+      }
+      return { ...data, aiVerification: { state: 'reflection_refined' } };
+    } catch {
+      return fallback('reflection_failed');
+    }
+  }
+
   return async function applyTeacherAI(data) {
     if (!data?.success || !Array.isArray(data.reports) || !data.reports.some(report => report.feedback)) return data;
+    if (data.reports.some(report => report.feedback?.engine?.summaryReflection)) return refineSummaryReflections(data);
     const { priorities, ...verification } = await getVerification();
     const explanations = new Map();
     for (const { feedback } of data.reports) {

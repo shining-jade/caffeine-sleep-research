@@ -3,10 +3,15 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const root = path.join(__dirname, '../..');
-const gas = vm.createContext({});
+const { createHash } = require('node:crypto');
+const gas = vm.createContext({ Utilities: {
+  formatDate: value => new Date(Number(value) + 9 * 3600000).toISOString().slice(0, 10),
+  DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
+  computeDigest: (algorithm, value, encoding) => [...createHash(algorithm).update(value, encoding).digest()],
+} });
 vm.runInContext(fs.readFileSync(path.join(root, 'gas/Code.js'), 'utf8'), gas);
 
-function makeSummaryFixture({ length = 7, personal = true, empty = false } = {}) {
+function makeSummaryFixture({ length = 7, personal = true, empty = false, editDays = () => {}, buildEngine = input => gas.buildFeedbackReport_(input) } = {}) {
   const end = '2026-11-05';
   const date = offset => new Date(Date.parse(end) + offset * 86400000).toISOString().slice(0, 10);
   const start = date(1 - length);
@@ -32,12 +37,13 @@ function makeSummaryFixture({ length = 7, personal = true, empty = false } = {})
       caffeine: mg === null ? undefined : { recorded: true, totalMg: mg,
         intakes: mg === 0 ? [] : [{ time, drink, mg, reason, symptom }] } };
   });
+  editDays(days);
   const goals = personal ? [
     { id: 'class-caffeine', source: 'class', criterion: 'caffeineMax', threshold: 150, label: '하루 150mg 넘지 않기' },
     { id: 'class-bedtime', source: 'class', criterion: 'bedtime', threshold: '23:59', label: '12시 전에 자기' },
   ] : [];
-  const engine = gas.buildFeedbackReport_({ start, end, today: end, days, goals, caffeineLimitMg: 170 });
+  const engine = buildEngine({ start, end, today: end, days, goals, caffeineLimitMg: 170 });
   return { student: { 이름: '테스트 학생' }, start, end, feedback: { engine, sections: engine.sections }, awards: [] };
 }
 
-module.exports = { root, makeSummaryFixture };
+module.exports = { root, gas, makeSummaryFixture };

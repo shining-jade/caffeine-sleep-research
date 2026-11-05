@@ -2130,6 +2130,112 @@ function selectFeedbackFindings_(findings, max, goalComparisons = []) {
   }).slice(0, max);
 }
 
+function feedbackLateEntries_(input, days) {
+  const original = new Map((input.days || []).map(day => [day.date, day]));
+  const groups = new Map();
+  const add = (kind, date, expected, enteredAt) => {
+    const expectedDay = feedbackDate_(expected);
+    if (expectedDay === null) return;
+    // Unformatted sheet cells can return a Sheets serial representing Seoul wall time.
+    const entered = typeof enteredAt === 'number'
+      ? (enteredAt >= 25569 && enteredAt < 2958466 ? (Math.floor(enteredAt) - 25569) * FEEDBACK_DAY_MS_ : null)
+      : feedbackDate_(SleepRecordPolicy.date(enteredAt));
+    const delayDays = entered === null ? 0 : (entered - expectedDay) / FEEDBACK_DAY_MS_;
+    if (delayDays <= 0) return;
+    const key = [kind, date, delayDays].join(':');
+    if (!groups.has(key)) groups.set(key, { kind, date, delayDays, count: 0 });
+    groups.get(key).count++;
+  };
+  for (const day of days) {
+    const raw = original.get(day.date);
+    if (day.caffeine.recorded && Array.isArray(raw?.caffeine?.intakes)) {
+      for (const item of raw.caffeine.intakes) add('caffeine', day.date, day.date, item?.enteredAt);
+    }
+    if (!day.open && day.sleep.recorded && !day.sleep.held && raw?.sleep) {
+      add('sleep', day.date, raw.sleep.wakeDate, raw.sleep.enteredAt);
+    }
+  }
+  return [...groups.values()];
+}
+
+function feedbackSummaryReflection_(days, goals, standards) {
+  const dayByDate = new Map(days.map(day => [day.date, day]));
+  const registered = goals.filter(goal => goal.source === 'class' ||
+    !goals.some(other => other.source === 'class' && other.criterion && other.criterion === goal.criterion));
+  const kindFor = goal => goal.criterion || goal.id;
+  const titleFor = goal => {
+    const kind = kindFor(goal);
+    const amount = goal.label.match(/([\d.]+)mg/)?.[1];
+    if (kind === 'caffeineMax' && amount) {
+      if (goal.source === 'default') return '일일 최대 섭취량(' + amount + 'mg) 넘지 않기';
+      if (/이하로 마시기/.test(goal.label)) return '하루 ' + amount + 'mg 넘지 않기';
+    }
+    if (kind === 'bedtime' && (goal.source === 'default' || goal.label === '23:59까지 잠자리에 들기')) return '12시 전에 자기';
+    return goal.label.replace('잠자리에 들기', '자기');
+  };
+  const range = { id: 'range', label: '8~10시간 취침', days: days.map(day => ({
+    date: day.date, kept: day.sleep.hours === null ? null : day.sleep.hours >= 8 && day.sleep.hours <= 10,
+  })) };
+  const ranked = [...(registered.length ? registered : standards.filter(goal => goal.id !== 'sleepMin')), range].map(goal => {
+    const kind = kindFor(goal);
+    const judged = goal.days.filter(item => typeof item.kept === 'boolean' &&
+      dayByDate.has(item.date) && (kind === 'caffeineMax' || !dayByDate.get(item.date).open));
+    return { kind, label: titleFor(goal), measured: judged.length,
+      kept: judged.filter(item => item.kept).length, judged };
+  }).filter(goal => goal.measured).sort((a, b) => b.kept / b.measured - a.kept / a.measured);
+  const best = ranked.find(goal => goal.kept > 0);
+  const hardest = ranked.filter(goal => goal.kept < goal.measured).at(-1);
+  const goalFact = goal => ({ kind: ['caffeineMax', 'bedtime', 'sleepMin', 'wakeTime', 'phone', 'activity', 'range'].includes(goal.kind)
+    ? goal.kind : 'other', measured: goal.measured, kept: goal.kept });
+  const closed = days.filter(day => !day.open);
+  const sleepRecorded = closed.filter(day => day.sleep.recorded && !day.sleep.held).length;
+  const caffeineRecorded = days.filter(day => day.caffeine.recorded).length;
+  const praise = best ? goalFact(best) : sleepRecorded ? { kind: 'sleepRecords', kept: sleepRecorded, measured: closed.length }
+    : caffeineRecorded ? { kind: 'caffeineRecords', kept: caffeineRecorded, measured: days.filter(day => !day.open || day.caffeine.recorded).length } : null;
+  const missed = hardest?.judged.filter(item => !item.kept).map(item => dayByDate.get(item.date)) || [];
+  const overlapOptions = [
+    ['phone30', day => !day.open && ['30~60분', '60분 이상'].includes(day.habits.phone), '자기 전 스마트폰을 30분 이상 썼다고 기록했어요.', 'phone'],
+    ['afternoonCaffeine', day => day.caffeine.intakes.some(item => item.mg > 0 && item.time !== null && item.time >= 900), '오후 3시 이후에 카페인을 마신 기록이 있어요.', 'caffeineMax'],
+  ];
+  const overlap = overlapOptions.map(([kind, matches, text, sameGoal]) => ({
+    kind, text, count: hardest?.kind === sameGoal ? 0 : missed.filter(matches).length,
+  })).filter(option => option.count >= 2).sort((a, b) => b.count - a.count)[0];
+  const difficulty = hardest ? { ...goalFact(hardest), observation: overlap ? { kind: overlap.kind, count: overlap.count } : null } : null;
+  const example = (day, kind) => {
+    if (kind === 'caffeineMax' && day.caffeine.totalMg !== null) return ['recordedCaffeine', '낮', '카페인 섭취량',
+      day.caffeine.status === 'zero' ? '안 마심(0mg)' : day.caffeine.totalMg + 'mg'];
+    if (day.open) return null;
+    if (['range', 'bedtime', 'sleepMin'].includes(kind) && day.sleep.bed !== null) {
+      return ['recordedBedtime', '밤', '잠든 시각', reportAverageClock_([day.sleep.bed])];
+    }
+    if (kind === 'wakeTime' && day.sleep.wake !== null) {
+      return ['recordedWake', '밤의 다음 날 아침', '일어난 시각', reportAverageClock_([day.sleep.wake])];
+    }
+    if (kind === 'phone' && day.habits.phone !== null) return ['recordedPhone', '밤', '자기 전 스마트폰 사용', day.habits.phone];
+    if (kind === 'activity' && day.habits.activity !== null) return ['recordedActivity', '낮', '신체활동', day.habits.activity];
+    return null;
+  };
+  const sample = hardest?.judged.filter(item => item.kept)
+    .map(item => ({ date: item.date, basis: example(dayByDate.get(item.date), hardest.kind) })).find(item => item.basis);
+  const plan = sample ? { kind: sample.basis[0] } : null;
+  const when = sample ? feedbackDateLabel_(sample.date) + ' ' + sample.basis[1] : '';
+  const observed = sample ? sample.basis[2] + '(' + sample.basis[3] + ')' : '';
+  const overlapText = overlap ? ' 지키지 못한 ' + missed.length + '일 중 ' + overlap.count + '일은 ' + overlap.text : '';
+  const praiseText = praise?.kind === 'sleepRecords' ? '수면은 ' + praise.measured + '일 중 ' + praise.kept + '일 기록했어요.'
+    : praise?.kind === 'caffeineRecords' ? '카페인은 ' + praise.measured + '일 중 ' + praise.kept + '일 기록했어요.' : '';
+  const rule = {
+    praise: best ? '‘' + best.label + '’ 항목은 확인한 ' + best.measured + '일 중 ' + best.kept + '일 지켰어요.' : praiseText,
+    difficulty: hardest ? '‘' + hardest.label + '’ 항목은 확인한 ' + hardest.measured + '일 중 ' + hardest.kept + '일 지켰어요.' + overlapText : '',
+    plan: sample ? '‘' + hardest.label + '’ 항목을 지킨 ' + when + '의 ' + observed + ' 기록을 다음 계획에 참고해 봐요.' : '',
+  };
+  const warm = {
+    praise: best ? '확인한 ' + best.measured + '일 가운데 ' + best.kept + '일에 ‘' + best.label + '’ 항목을 지켰어요.' : praiseText,
+    difficulty: hardest ? '‘' + hardest.label + '’ 항목을 지킨 날은 확인한 ' + hardest.measured + '일 중 ' + hardest.kept + '일이었어요.' + overlapText : '',
+    plan: sample ? when + '에 ‘' + hardest.label + '’ 항목을 지켰어요. 그때 남긴 ' + observed + ' 기록을 다음 계획에 참고해 봐요.' : '',
+  };
+  return { facts: { praise, difficulty, plan }, rule, warm };
+}
+
 function buildFeedbackReport_(input) {
   const days = feedbackNormalizeDays_(input);
   const minimum = feedbackMinimum_(days.length);
@@ -2209,7 +2315,11 @@ function buildFeedbackReport_(input) {
   sections.push({ id: 'action', title: mode === 'final' ? '🌱 앞으로 이어 갈 한 가지' : '🧪 이번 주 해 볼 것',
     items: actions.length ? actions.slice(0, mode === 'final' || tier === 'week' || tier === 'first' ? 1 : 3) : [defaultAction] });
   const refs = new Set(findings.filter(finding => used.has(finding.id)).flatMap(finding => finding.refs));
-  return { tier, mode, minimum, sections, findings, featuredFindingIds: featured.map(finding => finding.id),
+  const summary = input.audience === 'student' ? {} : {
+    summaryLateEntries: feedbackLateEntries_(input, days),
+    summaryReflection: feedbackSummaryReflection_(days, goals, findings.find(finding => finding.id === 'healthStandards').data.rows),
+  };
+  return { ...summary, tier, mode, minimum, sections, findings, featuredFindingIds: featured.map(finding => finding.id),
     explanationFindingIds: explanations.map(finding => finding.id),
     usedFindingIds: [...used], references: [...refs].map(id => ({ id, ...FEEDBACK_REFS_[id] })),
     availableReferences: [...new Set(findings.flatMap(finding => finding.refs))].map(id => ({ id, ...FEEDBACK_REFS_[id] })), period };
@@ -2239,14 +2349,14 @@ function feedbackSourceInput_(source, student, start, end, classGoals, options =
     const time = row[8] instanceof Date || /(?:Z|[+-]\d{2}:?\d{2})$/i.test(String(row[8]))
       ? (Number.isFinite(SleepRecordPolicy.instant(row[8])) ? new Date(SleepRecordPolicy.instant(row[8]) + 9 * 3600000).toISOString().slice(11, 16) : null)
       : String(row[8]).match(/[ T](\d{1,2}:[0-5]\d)(?::[0-5]\d)?(?:$|\s)/)?.[1];
-    items.push({ time: time && recordTimeText_(time), drink: row[6], mg: recordNumber_(row[7]), reason: row[10], symptom: row[11] });
+    items.push({ time: time && recordTimeText_(time), drink: row[6], mg: recordNumber_(row[7]), reason: row[10], symptom: row[11], enteredAt: row[0] });
     caffeine.set(date, items);
   }
   const sleep = SleepRecordPolicy.days(source.sleep.filter(row => owned(row[4], row[5])).map(row => {
     const metadata = preservedSleepMetadataView_(row, preservedSleepMetadataForRow_(row, source.sleepMetadata));
     return { ...preservedSleepRecordForPolicy_(row), ...metadata,
       identityConflict: metadata.identityConflict || (source.sleepIds.get(SleepRecordPolicy.id(row[13])) || 0) > 1,
-      smartphone: row[14], activity: row[15], latency: row[16], awakenings: row[17], daytime: row[18] };
+      smartphone: row[14], activity: row[15], latency: row[16], awakenings: row[17], daytime: row[18], enteredAt: row[0] };
   }));
   const days = [];
   for (let date = start; date <= end; date = shiftRecordDate_(date, 1)) {
@@ -2259,7 +2369,7 @@ function feedbackSourceInput_(source, student, start, end, classGoals, options =
       caffeine: intakes && { recorded: true, totalMg: intakes.some(item => item.mg === null) ? null : intakes.reduce((sum, item) => sum + item.mg, 0), intakes },
       sleep: group && { recorded: true, held: group.status === 'held',
         bedOnTimeline: record ? Math.floor((record.bed - Date.parse(date) + 9 * 3600000) / 60000) : null, wake: clock(record?.wake),
-        hours: record?.intervalHours, condition: record?.condition, latency: raw?.latency, awakenings: raw?.awakenings, drowsy: raw?.daytime },
+        hours: record?.intervalHours, condition: record?.condition, wakeDate: record?.wakeDate, enteredAt: raw?.enteredAt, latency: raw?.latency, awakenings: raw?.awakenings, drowsy: raw?.daytime },
       habits: raw && { phone: raw.smartphone, activity: raw.activity } });
   }
   const profile = source.info.find(row => owned(row[5], row[4]));
