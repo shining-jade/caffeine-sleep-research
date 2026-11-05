@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>목표 전후 비교 보고서</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4b3fb0}a:hover{color:#352b8a}
+</style>
+</helmet>
+<div style="width: 794px; height: 1123px; box-sizing: border-box; padding: 36px 44px 28px; display: flex; flex-direction: column; gap: 16px; background: #ffffff; color: #1f2a44; font-family: 'Noto Sans KR', system-ui, sans-serif;">
+
+  <header style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; padding-bottom: 12px; border-bottom: 2px solid #5b4fc4;">
+    <div style="display: flex; flex-direction: column; gap: 4px;">
+      <p style="margin: 0; font-size: 12px; font-weight: 700; color: #5b4fc4;">카페인·수면 기록 요약 · 목표 전후 비교</p>
+      <h1 style="margin: 0; font-size: 26px; font-weight: 800;">예시학생의 목표 실천</h1>
+      <p style="margin: 0; font-size: 13px; color: #4a5470;">목표 세우기 전 10.23~10.29 · 실천 기간 10.30~11.05 · 날짜는 그날 밤 기준</p>
+    </div>
+  </header>
+
+  <section style="display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-radius: 14px; background: #2f2a6b; color: #ffffff;">
+    <span style="flex-shrink: 0; padding: 4px 10px; border-radius: 999px; background: #ffffff; color: #2f2a6b; font-size: 12px; font-weight: 800;">한 줄 정리</span>
+    <p style="margin: 0; font-size: 14px; line-height: 1.55; font-weight: 500;">목표를 세운 뒤 ‘자기 전 휴대폰 30분 미만’을 지킨 날이 6일 중 2일에서 6일 중 4일로 늘었고, 같은 기간 잔 시간은 평균 1.2시간 길어졌어요.</p>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; background: #f1effb;">
+    <h2 style="margin: 0; font-size: 16px; font-weight: 800;">① 내 목표</h2>
+    <p style="margin: 0; font-size: 14px; line-height: 1.6;">“밤 11시에 휴대폰을 무음으로 바꿔 책상에 두고, 잠들기 전 30분 동안 쓰지 않는 것을 7일 중 4일 이상 지키겠다.”</p>
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <span style="padding: 4px 10px; border-radius: 999px; background: #ffffff; border: 1.5px solid #5b4fc4; font-size: 12px; font-weight: 700; color: #3b3195;">앱 기록으로 확인: 자기 전 휴대폰 ‘안 함’ 또는 ‘30분 미만’</span>
+      <span style="padding: 4px 10px; border-radius: 999px; background: #ffffff; border: 1.5px solid #5b4fc4; font-size: 12px; font-weight: 700; color: #3b3195;">목표 일수: 7일 중 4일</span>
+      <span style="padding: 4px 10px; border-radius: 999px; background: #ffffff; border: 1.5px dashed #9aa0b4; font-size: 12px; color: #4a5470;">기록으로 확인할 수 없는 부분: 무음으로 바꾸기, 책상에 두기</span>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 10px;">
+    <h2 style="margin: 0; font-size: 17px; font-weight: 800;">② 같은 기준으로 본 전후</h2>
+    <div style="display: grid; grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr); gap: 10px; align-items: center;">
+      <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; border: 1.5px solid #e2def3;">
+        <span style="font-size: 12px; font-weight: 700; color: #4a5470;">목표 세우기 전 (10.23~10.29)</span>
+        <span style="font-size: 28px; font-weight: 800;">2 <span style="font-size: 15px; font-weight: 700; color: #4a5470;">/ 6일</span></span>
+        <span style="font-size: 11px; color: #4a5470;">기록 없는 날 1일은 빼고 계산</span>
+      </div>
+      <span style="text-align: center; font-size: 24px; font-weight: 800; color: #5b4fc4;" aria-hidden="true">→</span>
+      <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 14px; background: #e3f3ec;">
+        <span style="font-size: 12px; font-weight: 700; color: #185a41;">실천 기간 (10.30~11.05)</span>
+        <span style="font-size: 28px; font-weight: 800; color: #185a41;">4 <span style="font-size: 15px; font-weight: 700;">/ 6일</span></span>
+        <span style="font-size: 11px; color: #185a41;">계획한 ‘7일 중 4일’ 달성 · 11.05 밤은 아직</span>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 112px repeat(7, minmax(0, 1fr)); gap: 6px; align-items: center;">
+      <span style="font-size: 12px; font-weight: 700; color: #4a5470;">실천 기간</span>
+      <sc-for list="{{days}}" as="day" hint-placeholder-count="7">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 3px;">
+          <span style="font-size: 11px; color: #4a5470;">{{day.d}} ({{day.w}})</span>
+          <span style="{{day.style}}">{{day.mark}}</span>
+          <span style="font-size: 10px; color: #4a5470;">{{day.phone}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 10px;">
+    <h2 style="margin: 0; font-size: 17px; font-weight: 800;">③ 수면과 카페인도 함께 보기</h2>
+    <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr) 70px; border: 1.5px solid #e2def3; border-radius: 12px; overflow: hidden;">
+      <span style="padding: 8px 12px; font-size: 12px; font-weight: 700; background: #f1effb;">항목</span>
+      <span style="padding: 8px 12px; font-size: 12px; font-weight: 700; background: #f1effb;">목표 세우기 전</span>
+      <span style="padding: 8px 12px; font-size: 12px; font-weight: 700; background: #f1effb;">실천 기간</span>
+      <span style="padding: 8px 12px; font-size: 12px; font-weight: 700; background: #f1effb;">변화</span>
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+        <span style="{{r.labelStyle}}">{{r.label}}</span>
+        <span style="padding: 9px 12px; font-size: 14px; border-top: 1px solid #ece9f6;">{{r.before}} <span style="font-size: 11px; color: #4a5470;">{{r.nb}}</span></span>
+        <span style="padding: 9px 12px; font-size: 14px; font-weight: 700; border-top: 1px solid #ece9f6;">{{r.after}} <span style="font-size: 11px; font-weight: 400; color: #4a5470;">{{r.na}}</span></span>
+        <span style="padding: 9px 12px; font-size: 15px; font-weight: 800; color: #3b3195; border-top: 1px solid #ece9f6;">{{r.arrow}}</span>
+      </sc-for>
+    </div>
+    <p style="margin: 0; font-size: 13px; line-height: 1.6; padding: 10px 14px; border-radius: 12px; background: #eef3fa;"><b>실천 기간 안에서</b> 목표를 지킨 밤(3일)의 다음 날 아침 컨디션은 평균 3.3점, 못 지킨 밤(2일)은 2.0점이었어요.</p>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 10px; flex-grow: 1;">
+    <h2 style="margin: 0; font-size: 17px; font-weight: 800;">④ 돌아보기</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; flex-grow: 1;">
+      <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1.5px solid #d6d2ee; border-radius: 12px;">
+        <span style="font-size: 13px; font-weight: 800; color: #3b3195;">잘된 점</span>
+        <span style="font-size: 13px; line-height: 1.6;">목표를 세우기 전에는 6일 중 2일이던 날이 실천 기간에는 6일 중 4일로 늘었어요. 계획한 7일 중 4일을 지켰어요.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1.5px solid #d6d2ee; border-radius: 12px;">
+        <span style="font-size: 13px; font-weight: 800; color: #3b3195;">어려웠던 점</span>
+        <span style="font-size: 13px; line-height: 1.6;">못 지킨 11.01(일)과 11.03(화) 밤은 둘 다 자기 전 휴대폰을 30분 넘게 썼고, 11.01은 01:21에 잠들었어요.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1.5px solid #d6d2ee; border-radius: 12px;">
+        <span style="font-size: 13px; font-weight: 800; color: #3b3195;">다음 계획</span>
+        <span style="font-size: 13px; line-height: 1.6;">지킨 날처럼 휴대폰을 책상에 두는 시각을 일요일 밤에도 똑같이 지켜 보기.</span>
+      </div>
+    </div>
+    <p style="margin: 0; font-size: 11px; color: #4a5470;">함께 변했다고 해서 목표 행동이 원인이라고 할 수는 없어요. 비교는 양쪽 모두 2일 이상 기록이 있을 때만 보여 줘요. 기록 없는 날은 계산에서 뺐고, 카페인 ‘안 마심’은 0mg으로 넣었어요.</p>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":794,"height":1123}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var cell = 'display: flex; align-items: center; justify-content: center; width: 100%; height: 32px; border-radius: 8px; font-size: 15px; font-weight: 800; box-sizing: border-box;';
+    var st = {
+      ok: cell + ' background: #2f7d62; color: #ffffff;',
+      no: cell + ' background: #ffffff; border: 2px solid #d0743f; color: #9a3d0e;',
+      wait: cell + ' background: #ffffff; border: 1.5px dashed #b8bccb; color: #6b7390; font-size: 11px;'
+    };
+    var raw = [
+      ['10.30', '금', 'ok', '30분 미만'], ['10.31', '토', 'ok', '안 함'], ['11.01', '일', 'no', '60분 이상'],
+      ['11.02', '월', 'ok', '30분 미만'], ['11.03', '화', 'no', '30~60분'], ['11.04', '수', 'ok', '30분 미만'], ['11.05', '목', 'wait', '']
+    ];
+    return {
+      days: raw.map(function (x) { return { d: x[0], w: x[1], style: st[x[2]], mark: x[2] === 'ok' ? '✓' : x[2] === 'no' ? '×' : '아직', phone: x[3] }; }),
+      rows: [
+        { label: '평균 잔 시간', before: '7.1시간', nb: '6일', after: '8.3시간', na: '6일', arrow: '↑' },
+        { label: '평균 잠든 시각', before: '00:12', nb: '6일', after: '23:30', na: '6일', arrow: '빨라짐' },
+        { label: '평균 아침 컨디션', before: '2.2점', nb: '5일', after: '2.5점', na: '5일', arrow: '→' },
+        { label: '하루 평균 카페인', kind: 'caf', before: '72mg', nb: '5일', after: '50mg', na: '5일', arrow: '↓' },
+        { label: '카페인 마신 날', kind: 'caf', before: '4 / 5일', nb: '', after: '3 / 5일', na: '', arrow: '↓' },
+        { label: '오후 3시 이후 마신 날', kind: 'caf', before: '3 / 5일', nb: '', after: '2 / 5일', na: '', arrow: '↓' }
+      ].map(function (r) { return Object.assign({}, r, { labelStyle: 'padding: 9px 12px; font-size: 13px; font-weight: 700; border-top: 1px solid #ece9f6; color: ' + (r.kind === 'caf' ? '#8a3b10' : '#1f4a85') + ';' }); })
+    };
+  }
+}
+</script>
+</body>
+</html>
