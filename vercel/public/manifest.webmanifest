@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "카페인·수면 기록",
+  "short_name": "카페인·수면",
+  "description": "매일 카페인 섭취와 수면을 간단히 기록합니다.",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f3ff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "/public/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/public/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

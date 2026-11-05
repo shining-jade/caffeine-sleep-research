@@ -1,0 +1,17 @@
+.env*
+node_modules/
+.git
+.vercel/
+apps-script/
+test/
+scripts/
+docs/
+outputs/
+.superpowers/
+.agents/
+.codex/
+.github/
+README.md
+*.zip
+*.log
+*.patch

@@ -1,0 +1,41 @@
+{
+  "cleanUrls": true,
+  "outputDirectory": ".",
+  "functions": {
+    "api/reminders/run.js": {
+      "maxDuration": 180
+    },
+    "api/teacher/reminders/*.js": {
+      "maxDuration": 150
+    },
+    "api/**/*.js": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    { "path": "/api/reminders/run?slot=23", "schedule": "0 23 * * *" },
+    { "path": "/api/reminders/run?slot=11", "schedule": "0 11 * * *" }
+  ],
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/teacher", "destination": "/teacher/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "no-referrer" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Permissions-Policy", "value": "camera=(self), microphone=(), geolocation=()" }
+      ]
+    },
+    {
+      "source": "/public/sw.js",
+      "headers": [
+        { "key": "Service-Worker-Allowed", "value": "/" },
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    }
+  ]
+}
