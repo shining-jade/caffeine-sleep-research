@@ -213,3 +213,74 @@ test('recognizes a numeric Seoul sheet timestamp and uses observed kept-day fact
   assert.equal(result.summaryReflection.facts.plan.kind, 'recordedCaffeine');
   assert.match(result.summaryReflection.rule.plan, /11\.01 낮처럼 카페인 섭취량을 40mg 정도로 맞춰 보기/);
 });
+
+test('keeps daily report cells through 14 days and switches both sections at 15', () => {
+  for (const length of [7, 14]) {
+    const html = render(makeSummaryFixture({ length }));
+    assert.match(html, /data-row="dates"/);
+    assert.match(html, /날짜별 목표 실천 달력/);
+    assert.doesNotMatch(html, /주차별 평균 표|주차별 목표 실천 표/);
+  }
+  const html = render(makeSummaryFixture({ length: 15 }));
+  assert.doesNotMatch(html, /data-row="dates"|날짜별 목표 실천 달력/);
+  assert.match(html, /주차별 평균 표/);
+  assert.match(html, /주차별 목표 실천 표/);
+  assert.match(html, /3주차<\/strong><small>[\s\S]*?>11\.05<\/span> <span class="summary-week-days">· 1일/);
+  assert.equal((html.match(/<article class="summary-page"(?:>| )/g) || []).length, 2);
+});
+
+test('uses independent weekly sample counts, midnight-safe bedtime and 0 mg for no intake', () => {
+  const report = makeSummaryFixture({ length: 15, editDays(days) {
+    days.forEach((day, i) => {
+      day.caffeine = undefined; day.sleep = undefined;
+      if (i === 0) day.caffeine = { recorded: true, totalMg: 0, intakes: [] };
+      if (i === 1) day.caffeine = { recorded: true, totalMg: 100, intakes: [{ time: '13:00', mg: 100 }] };
+      if (i === 2) day.caffeine = { recorded: true, totalMg: null, intakes: [{ time: '13:00', mg: null }] };
+      if (i < 2) day.sleep = { recorded: true, bedOnTimeline: i === 0 ? 1350 : 1530,
+        hours: i === 0 ? 8 : null, condition: i === 0 ? null : 4 };
+      if (i === 3) day.sleep = { recorded: true, held: true, bedOnTimeline: 1200, hours: 20, condition: 1 };
+    });
+  } });
+  const html = render(report);
+  const row = key => html.match(new RegExp('data-weekly-metric="'+key+'"[^>]*>(.*?)</tr>', 's'))[1];
+  assert.match(row('caffeine'), /<strong>50mg<\/strong><small>2일/);
+  assert.match(row('caffeine'), /<strong>–<\/strong><small>0일/);
+  assert.match(row('bedtime'), /<strong>00:00<\/strong><small>2일/);
+  assert.match(row('hours'), /<strong>8\.0시간<\/strong><small>1일/);
+  assert.match(row('condition'), /<strong>4\.0점<\/strong><small>1일/);
+  assert.match(html, /비교 보류/);
+});
+
+test('weekly goal rows use only eligible days, include weighted totals and distinguish 0/0', () => {
+  const report = makeSummaryFixture({ length: 30, editDays(days) {
+    days.forEach((day, i) => {
+      const amount = [0, 200, null, 0, 200, 200, null, 0][i] ?? null;
+      day.caffeine = amount === null ? undefined : { recorded: true, totalMg: amount, intakes: [] };
+    });
+  } });
+  const html = render(report);
+  const goal = html.match(/data-weekly-goal="class-caffeine"[^>]*>(.*?)<\/tr>/s)[1];
+  assert.match(goal, /class="summary-ratio rate-1">2\/5/);
+  assert.match(goal, /class="summary-ratio rate-4">1\/1/);
+  assert.match(goal, /class="summary-ratio no-data">0\/0/);
+  assert.match(goal, /class="summary-ratio rate-2">3\/6/);
+  assert.match(html, /5주차<\/strong><small>[\s\S]*?>11\.04~11\.05<\/span> <span class="summary-week-days">· 2일/);
+  assert.match(html, /scope="col" class="summary-week-total">전체/);
+});
+
+test('long selections keep every week and the total within the two report articles', () => {
+  const html = render(makeSummaryFixture({ length: 100, empty: true }));
+  assert.match(html, /15주차/);
+  assert.equal((html.match(/data-weekly-metric="caffeine"/g) || []).length, 3);
+  assert.equal((html.match(/scope="col" class="summary-week-total">전체/g) || []).length, 1);
+  assert.equal((html.match(/<article class="summary-page"(?:>| )/g) || []).length, 2);
+});
+
+test('weekly tables include all goals, including goals beyond the daily display limit', () => {
+  const report = makeSummaryFixture({ length: 15 });
+  const goals = report.feedback.engine.findings.find(item => item.id === 'goalProgress').data.goals;
+  for (let i = 0; i < 4; i++) goals.push({ ...goals[0], id: 'fixture-goal-' + i, label: '가짜 목표 ' + i });
+  const html = render(report);
+  for (let i = 0; i < 4; i++) assert.match(html, new RegExp('data-weekly-goal="fixture-goal-' + i + '"'));
+  assert.doesNotMatch(html, /처음 4개를 표시/);
+});

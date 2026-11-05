@@ -88,7 +88,9 @@
       for (const [index, page] of pages.entries()) {
         fitIntakes(page);
         const sourceHeight = Math.max(height, page.scrollHeight);
-        if (sourceHeight > height * 1.5) throw new Error('보고서가 두 쪽에 담기 어렵습니다. 기간이나 교사 메모를 줄여 주세요.');
+        // Long week tables can use more vertical space before fitting into the same A4 image.
+        const heightLimit = page.dataset.size === 'many-weeks' ? 2 : 1.5;
+        if (sourceHeight > height * heightLimit) throw new Error('보고서가 두 쪽에 담기 어렵습니다. 기간이나 교사 메모를 줄여 주세요.');
         const source = await capture(page, {
           width, height: sourceHeight, windowWidth: width, windowHeight: sourceHeight,
           scale, backgroundColor: '#ffffff', logging: false, allowTaint: false, useCORS: false,

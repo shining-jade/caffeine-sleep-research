@@ -519,12 +519,53 @@
     .summary-goal-row.compact{grid-template-columns:140px repeat(var(--days),minmax(0,1fr)) 40px;min-width:calc(180px + var(--days) * 33px)}
     .summary-goal-row+.summary-goal-row{margin-top:6px}.summary-goal-row .summary-goal-label{font-size:14px;font-weight:700;line-height:1.35}
     .summary-goal-tag{display:block;font-size:10px;font-weight:700;color:#5b4fc4}
-    .summary-goal-total{text-align:center;font-size:15px;font-weight:800}.summary-goal-row .summary-note{text-align:center}.summary-goal-row.compact .summary-note{font-size:9px}
+    .summary-goal-total{text-align:center;font-size:15px;font-weight:800}.summary-goal-row .summary-note{text-align:center}.summary-goal-row.compact .summary-note{font-size:9px}.summary-goal-row.compact .summary-goal-total{font-size:13px;white-space:nowrap}
     .summary-mark{display:grid;place-items:center;min-height:30px;border-radius:8px;background:#eef0f4;color:#4a5470;font-weight:800}
     .summary-mark.ok{background:#2f7d62;color:white}.summary-mark.no,.summary-mark.short{border:2px solid #d0743f;background:white;color:#8a3b10}
     .summary-mark.long{border:2px solid #8a7fd0;background:white;color:#3b3195}
     .summary-mark.short,.summary-mark.long,.summary-mark.wait{font-size:11px}
     .summary-mark.wait{border:1px dashed #b8bccb;background:white;color:#555e7a}
+    .summary-section{grid-template-columns:minmax(0,1fr)}
+    .summary-title-line>.summary-note{min-width:0;max-width:100%;overflow-wrap:anywhere}
+    .summary-title-line.stacked>.summary-note{flex:0 0 100%;text-align:right}
+    .summary-weekly-area{display:grid;grid-template-columns:minmax(0,1fr);gap:7px;min-width:0}
+    .summary-week-scroll{border:1px solid #e2def3;border-radius:12px}
+    .summary-week-table{width:100%;min-width:calc(143px + var(--week-cols) * 65px);table-layout:fixed;border-collapse:separate;border-spacing:0;color:#1f2a44;text-align:center;line-height:1.35}
+    .summary-week-table th,.summary-week-table td{padding:8px 5px;border-bottom:1px solid #eeedf5}
+    .summary-week-table thead th{background:#f1effb;font-size:12px;color:#3b3195}
+    .summary-week-table tr:last-child td,.summary-week-table tbody tr:last-child th{border-bottom:0}
+    .summary-week-table th:first-child{width:143px;text-align:left;padding-left:9px}
+    .summary-week-table tbody th{font-size:12px;background:#fbfafd}
+    .summary-week-table strong,.summary-week-table small{display:block}
+    .summary-week-table small{font-size:10px;font-weight:500;color:#4a5470}
+    .summary-week-range,.summary-week-days{display:inline-block;white-space:nowrap}
+    .summary-week-table td strong{font-size:14px}.summary-week-table td.summary-week-total{background:#faf8fe}
+    .summary-ratio{display:block;border-radius:7px;padding:5px 2px;font-size:13px;font-weight:800;color:#185a41}
+    .summary-ratio.rate-0{background:#f0f6f3}.summary-ratio.rate-1{background:#dbeee6}.summary-ratio.rate-2{background:#b7dccf}
+    .summary-ratio.rate-3{background:#307a63;color:#fff}.summary-ratio.rate-4{background:#22644f;color:#fff}
+    .summary-ratio.no-data{background:#eef0f4;color:#4a5470}
+    .summary-week-hint{display:none}
+    .summary-weekly-area[data-dense="true"]{gap:5px}
+    .summary-weekly-area[data-dense="true"] th,.summary-weekly-area[data-dense="true"] td{padding-block:2px;line-height:1.2;font-size:10px}
+    .summary-weekly-area[data-dense="true"] td strong,.summary-weekly-area[data-dense="true"] td small{display:inline;font-size:9px}
+    .summary-weekly-area[data-dense="true"] td small{margin-left:2px}
+    .summary-weekly-area[data-dense="true"] thead small,.summary-weekly-area[data-dense="true"] .summary-goal-tag{font-size:8.5px}
+    .summary-weekly-area[data-dense="true"] .summary-ratio{padding:2px;font-size:10px}
+    .summary-page[data-size="many-weeks"]{gap:12px}
+    .summary-page[data-size="many-weeks"] .summary-section{gap:5px}
+    .summary-page[data-size="many-weeks"] .summary-goal-tag{display:inline;margin-right:4px}
+    .summary-page[data-size="many-weeks"] .summary-weekly-area{gap:3px}
+    .summary-page[data-size="many-weeks"] .summary-week-table th,.summary-page[data-size="many-weeks"] .summary-week-table td{padding-block:1px}
+    @media(max-width:680px){
+      .summary-title-line.stacked>.summary-note{text-align:left}
+      .summary-week-table{min-width:calc(143px + var(--week-cols) * 78px)}
+      .summary-week-table th:first-child{position:sticky;left:0;z-index:1}
+      .summary-week-hint{display:block}
+      .summary-page[data-size="many-weeks"] .summary-week-table th,.summary-page[data-size="many-weeks"] .summary-week-table td{padding-block:7px}
+      .summary-weekly-area[data-dense="true"] th,.summary-weekly-area[data-dense="true"] td{padding-block:7px;font-size:12px}
+      .summary-weekly-area[data-dense="true"] td strong,.summary-weekly-area[data-dense="true"] td small{display:block;font-size:11px}
+      .summary-weekly-area[data-dense="true"] .summary-ratio{font-size:13px}
+    }
     .summary-foot{margin-top:auto!important;font-size:10.5px;color:#4a5470}
     .summary-page[data-page="2"] .summary-header{align-items:baseline}
     .summary-intakes{border:1.5px solid #ecd9cb;border-radius:12px;max-height:195px}
@@ -544,6 +585,7 @@
     .summary-teacher b{white-space:nowrap}
     .summary-page[data-late="true"] .summary-intakes{max-height:146px}
     @media(min-width:681px){
+      .summary-page[data-period="weekly"] .summary-intakes{max-height:128px}
       .summary-page[data-late="true"]{gap:12px}
       .summary-page[data-late="true"] .summary-section{gap:8px}
       .summary-page[data-late="true"] .summary-record-card{padding:10px 12px;gap:4px}
@@ -560,13 +602,41 @@
     @media(max-width:480px){.summary-three,.summary-two{grid-template-columns:1fr}.summary-report h1{font-size:22px}.summary-habit{grid-template-columns:1fr;gap:3px}}
   `;
 
+  function renderSummaryWeeks(weeks, rows, { goals = false } = {}) {
+    const label = goals ? '주차별 목표 실천 표' : '주차별 평균 표';
+    const weekHeading = week => {
+      const first = pdfDay(week.days[0].date), last = pdfDay(week.days.at(-1).date);
+      return `<th scope="col"><strong>${week.number}주차</strong><small><span class="summary-week-range">${first === last ? first : `${first}~${last}`}</span> <span class="summary-week-days">· ${week.days.length}일</span></small></th>`;
+    };
+    const chunks = [];
+    for (let i = 0; i < weeks.length; i += 7) chunks.push(weeks.slice(i, i + 7));
+    return `<div class="summary-weekly-area"${(chunks.length > 1 || rows.length > 5) ? ' data-dense="true"' : ''}>
+      ${chunks.map((chunk, index) => {
+        const total = goals && index === chunks.length - 1;
+        return `<div class="summary-scroll summary-week-scroll" role="region" tabindex="0" aria-label="${label}${chunks.length > 1 ? ` · ${chunk[0].number}~${chunk.at(-1).number}주차` : ''}">
+          <table class="summary-week-table ${goals ? 'is-goals' : 'is-averages'}" style="--week-cols:${chunk.length + Number(total)}">
+            <thead><tr><th scope="col">${goals ? '목표' : '항목'}</th>${chunk.map(weekHeading).join('')}${total ? '<th scope="col" class="summary-week-total">전체</th>' : ''}</tr></thead>
+            <tbody>${rows.map(row => `<tr data-weekly-${goals ? 'goal' : 'metric'}="${pdfText(row.id)}">
+              <th scope="row">${row.title}</th>${chunk.map(week => `<td>${row.cell(week.days)}</td>`).join('')}${total ? `<td class="summary-week-total">${row.total}</td>` : ''}
+            </tr>`).join('')}</tbody>
+          </table>
+        </div>`;
+      }).join('')}
+      <p class="summary-note summary-week-hint">표를 옆으로 밀어 나머지 주차를 볼 수 있어요.</p>
+    </div>`;
+  }
+
   function buildSummaryReportDocument(report, { now = Date.now() } = {}) {
     const { feedback, student, start, end } = report;
     const finding = id => feedback.engine.findings.find(item => item.id === id)?.data;
     const sleep = finding('bedtimeSeries')?.days || [];
     const caffeine = new Map((finding('caffeineSummary')?.days || []).map(day => [day.date, day]));
     const days = sleep.map(day => ({ ...day, caf: caffeine.get(day.date) }));
-    const shown = days.slice(-14);
+    const shown = days.length <= 14 ? days : [];
+    const weeks = [];
+    if (days.length > 14) {
+      for (let i = 0; i < days.length; i += 7) weeks.push({ number: weeks.length + 1, days: days.slice(i, i + 7) });
+    }
     const compact = shown.length > 7 ? ' compact' : '';
     const n = Math.max(1, shown.length);
     const today = days.find((day, i) => day.open && i > 0 && !days[i - 1].open)?.date
@@ -583,7 +653,7 @@
     const period = `${dateText(start)} ~ ${dateText(end)}`;
     const plainPeriod = start.slice(0, 4) === end.slice(0, 4) ? `${start.slice(0, 4)}년 · ${period}` : `${start} ~ ${end}`;
     const callout = (message, tone = '') => message ? `<p class="summary-callout ${tone}"><b>기록을 보면</b> ${pdfText(message)}</p>` : '';
-    const block = (title, body, note = '') => `<section class="summary-section"><div class="summary-title-line"><h2>${title}</h2>${note ? `<span class="summary-note">${pdfText(note)}</span>` : ''}</div>${body}</section>`;
+    const block = (title, body, note = '', stacked = false) => `<section class="summary-section"><div class="summary-title-line${stacked ? ' stacked' : ''}"><h2>${title}</h2>${note ? `<span class="summary-note">${pdfText(note)}</span>` : ''}</div>${body}</section>`;
     const axis = (key, label, render) => `<div class="summary-axis-row${compact}" style="--days:${n}" data-row="${key}">${label}${shown.map(render).join('')}</div>`;
     const markDate = day => `data-date="${pdfText(day.date)}"`;
     const label = (main, sub = '', tone = '') => `<span class="summary-axis-label ${tone}">${main}${sub ? `<small>${sub}</small>` : ''}</span>`;
@@ -612,7 +682,7 @@
       const score = !day.open && Number.isInteger(value) && value >= 1 && value <= 5;
       return `<div ${markDate(day)}><span class="summary-cond ${score ? (value < 3 ? 'low' : value > 3 ? 'high' : '') : 'summary-muted'}">${score ? `${value}점` : day.open ? '아직' : day.recorded && !day.held ? '빠짐' : '–'}</span></div>`;
     };
-    const chart = `<div class="summary-scroll summary-chart" role="region" tabindex="0" aria-label="날짜별 카페인과 수면">
+    const dailyChart = () => `<div class="summary-scroll summary-chart" role="region" tabindex="0" aria-label="날짜별 카페인과 수면">
       ${axis('dates', '<span></span>', day => `<span ${markDate(day)}>${pdfDay(day.date)} <span class="summary-dow">(${wd(day.date)})</span></span>`)}
       ${axis('caffeine', label('낮 · 카페인', 'mg', 'caf'), caffeineBar)}
       ${axis('bedtime', label('밤 · 잠든 시각'), day => sleepClock(day, 'bed'))}
@@ -637,6 +707,18 @@
     const comparisons = `<div class="summary-three">${metrics.map(item => `<article class="summary-compare" data-compare="${item.key === 'bed' ? 'bedtime' : item.key}"><h3>${item.title}</h3>
       ${['마신 날 밤', '안 마신 날 밤'].map((text, i) => `<div class="summary-compare-row${i === 0 ? ' drink' : ''}"><span>${text} (${item.size[i]}일)</span>${item.means ? `<strong>${item.format(item.means[i])}</strong>` : ''}</div>`).join('')}
       ${item.means ? '' : '<p class="summary-note"><b>비교 보류</b> · 양쪽 모두 유효 기록 2일 이상이 필요해요.</p>'}</article>`).join('')}</div>`;
+    const weeklyMetric = (id, title, field, format) => ({ id, title, cell: week => {
+      const values = week.map(field).filter(Number.isFinite);
+      return `<strong>${values.length ? format(mean(values)) : '–'}</strong><small>${values.length}일</small>`;
+    } });
+    const sleepField = key => day => !day.open && day.recorded && !day.held ? day[key] : null;
+    const chart = weeks.length ? renderSummaryWeeks(weeks, [
+      weeklyMetric('caffeine', '평균 카페인', day => ['known', 'zero'].includes(day.caf?.status) ? day.caf.totalMg : null,
+        value => Math.round(value * 10) / 10 + 'mg'),
+      weeklyMetric('bedtime', '평균 잠든 시각', sleepField('bed'), value => pdfClock(Math.round(value))),
+      weeklyMetric('hours', '평균 잔 시간', sleepField('hours'), value => fixed(value, '시간')),
+      weeklyMetric('condition', '평균 아침 컨디션', sleepField('condition'), value => fixed(value, '점')),
+    ]) : dailyChart();
     const availableMetric = metrics.find(item => item.means);
     const aNote = availableMetric ? `카페인을 마신 날 밤의 ${availableMetric.title}은 ${availableMetric.format(availableMetric.means[0])}, 안 마신 날 밤은 ${availableMetric.format(availableMetric.means[1])}였어요.` : '';
     const standards = finding('healthStandards')?.rows || [];
@@ -656,37 +738,52 @@
     })) };
     const defaults = standards.filter(row => row.id !== 'sleepMin').map(row => ({ ...row,
       label: row.id === 'caffeineMax' && maximumText ? `일일 최대 섭취량(${maximumText}mg) 넘지 않기` : '12시 전에 자기' }));
+    const goalEligible = (goal, day) => !day.open || (goal.criterion || goal.id) === 'caffeineMax';
     const goals = [...(selected.length ? selected.map(goal => ({ ...goal, label: displayGoal(goal) })) : defaults), range]
       .map(goal => {
         const states = new Map(goal.days.filter(day => typeof day.kept === 'boolean').map(day => [day.date, day]));
-        const measured = days.filter(day => states.has(day.date) && (!day.open || (goal.criterion || goal.id) === 'caffeineMax'));
+        const measured = days.filter(day => states.has(day.date) && goalEligible(goal, day));
         return { ...goal, states, measured: measured.length, kept: measured.filter(day => states.get(day.date).kept).length };
       });
     const goalsShown = [...goals.filter(goal => goal.id !== 'range').slice(0, 4), goals.at(-1)];
     const markLabels = { ok: '✓', no: '×', short: '짧음', long: '김', none: '–', wait: '아직' };
+    const goalLabel = goal => `<span class="summary-goal-tag">${goal.source === 'class' || goal.source === 'student' ? '내 목표' : '기본 기준'}</span>${pdfText(goal.label)}`;
     const goalMark = (goal, day) => {
       const state = goal.states.get(day.date);
       const canCheckToday = (goal.criterion || goal.id) === 'caffeineMax' && state;
       const mark = day.open && !canCheckToday ? 'wait' : !state ? 'none' : state.outcome || (state.kept ? 'ok' : 'no');
       return `<span ${markDate(day)} class="summary-mark ${mark}">${markLabels[mark]}</span>`;
     };
-    const calendar = `<div class="summary-scroll" role="region" tabindex="0" aria-label="날짜별 목표 실천 달력">
+    const dailyCalendar = () => `<div class="summary-scroll" role="region" tabindex="0" aria-label="날짜별 목표 실천 달력">
       <div class="summary-goal-row${compact}" style="--days:${n}"><span></span>${shown.map(day => `<span class="summary-note">${pdfDay(day.date)}</span>`).join('')}<span class="summary-note">지킨 날</span></div>
       ${goalsShown.map(goal => `<div class="summary-goal-row${compact}" style="--days:${n}">
-        <div class="summary-goal-label"><span class="summary-goal-tag">${goal.source === 'class' || goal.source === 'student' ? '내 목표' : '기본 기준'}</span>${pdfText(goal.label)}</div>
+        <div class="summary-goal-label">${goalLabel(goal)}</div>
         ${shown.map(day => goalMark(goal, day)).join('')}<span class="summary-goal-total">${goal.measured ? `${goal.kept}/${goal.measured}` : '–'}</span></div>`).join('')}
-    </div>${goals.length > goalsShown.length ? `<p class="summary-note">개인 목표 ${selected.length}개 중 처음 ${goalsShown.length - 1}개를 표시했어요.</p>` : ''}`;
+    </div>`;
+    const goalLimitNote = goals.length > goalsShown.length ? `<p class="summary-note">개인 목표 ${selected.length}개 중 처음 ${goalsShown.length - 1}개를 표시했어요.</p>` : '';
+    const ratioCell = (kept, measured) => {
+      const tone = measured ? 'rate-' + Math.floor(4 * kept / measured) : 'no-data';
+      return `<span class="summary-ratio ${tone}">${kept}/${measured}</span>`;
+    };
+    const calendar = weeks.length ? renderSummaryWeeks(weeks, goals.map(goal => ({
+      id: goal.id, title: goalLabel(goal),
+      cell: week => {
+        const judged = week.filter(day => goalEligible(goal, day) && goal.states.has(day.date));
+        return ratioCell(judged.filter(day => goal.states.get(day.date).kept).length, judged.length);
+      },
+      total: ratioCell(goal.kept, goal.measured),
+    })), { goals: true }) : dailyCalendar() + goalLimitNote;
     const conditionCompare = compare([validSleep.filter(day => Number.isFinite(day.hours) && inRange(day.hours)),
       validSleep.filter(day => Number.isFinite(day.hours) && !inRange(day.hours))], 'condition');
     const bNote = conditionCompare.means
       ? `8~10시간 잔 밤(${conditionCompare.size[0]}일)의 다음 날 아침 컨디션은 평균 ${fixed(conditionCompare.means[0], '점')}, 그렇지 않은 밤(${conditionCompare.size[1]}일)은 ${fixed(conditionCompare.means[1], '점')}이었어요.`
       : '8~10시간 잔 밤과 그렇지 않은 밤의 컨디션 비교는 양쪽 기록이 각각 2일 이상일 때 보여 줘요.';
-    const page1 = `<article class="summary-page"${n <= 7 ? ' data-size="week"' : ''}><header class="summary-header"><div>
+    const page1 = `<article class="summary-page"${weeks.length > 14 ? ' data-size="many-weeks"' : !weeks.length && n <= 7 ? ' data-size="week"' : ''}><header class="summary-header"><div>
       <p class="summary-kicker">카페인·수면 기록 요약 · 1쪽 한눈에 보기</p><h1>${name}의 기록</h1>
       <p class="summary-sub">${pdfText(plainPeriod)} · 날짜는 그날 밤 기준</p></div>
       <div class="summary-header-counts">${counts('수면 기록', validSleep.length, closed.length)}${counts('카페인 기록', cafDays.filter(day => day.caf?.recorded).length, cafDays.length, 'caf')}</div></header>
-      ${block('A. 카페인과 수면', chart + comparisons + callout(aNote), days.length > shown.length ? '띠 그림은 최근 14일, 비교는 선택 기간 전체' : '')}
-      ${block('B. 수면을 위한 행동과 결과', calendar + callout(bNote, 'mint'), '✓ 지킴 · × 못 지킴 · – 기록 없음 · 아직 = 지나지 않은 밤')}
+      ${block('A. 카페인과 수면', chart + comparisons + callout(aNote), weeks.length ? '주차별 평균 · 각 숫자 아래는 계산에 사용한 일수' : '')}
+      ${block('B. 수면을 위한 행동과 결과', calendar + callout(bNote, 'mint'), weeks.length ? '지킨 날 / 판정 가능한 날 · 비율이 높을수록 진하게 표시' : '✓ 지킴 · × 못 지킴 · – 기록 없음 · 아직 = 지나지 않은 밤', !weeks.length && n > 7)}
       <p class="summary-foot">날짜는 그날 밤 기준이에요. 12시를 넘겨 잠든 날도 전날 밤에 넣어요. 잔 시간은 잠든 시각부터 일어난 시각까지예요. 비교는 양쪽 모두 유효 기록이 2일 이상일 때만 보여 줘요.${maximumText ? ` 일일 최대 섭취량 ${maximumText}mg.` : ''} 청소년 권장 수면 8~10시간(미국수면의학회, 2016).</p>
     </article>`;
 
@@ -762,7 +859,7 @@
       ['다음 계획', reflectionText?.plan ?? plan],
     ];
     const memo = feedback.savedPdfFeedback?.summary ?? feedback.summary ?? '';
-    const page2 = `<article class="summary-page" data-page="2"${visibleLate.length ? ' data-late="true"' : ''}><header class="summary-header">
+    const page2 = `<article class="summary-page" data-page="2"${weeks.length ? ' data-period="weekly"' : ''}${visibleLate.length ? ' data-late="true"' : ''}><header class="summary-header">
       <p class="summary-kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="summary-sub">${name} · ${period}</p></header>
       ${block('C. 카페인을 마신 날', intakeTable + `<p class="summary-sub">안 마신 날 ${zero.length}일${dates(zero)} · 기록 없는 날 ${missing.length}일${dates(missing)}</p>` + callout(cNote))}
       ${block('D. 수면과 생활습관', (habitBars || '<p class="summary-note">표시할 생활습관 응답이 없어요.</p>') + callout(dNote, 'blue'), '밤 기록 중 고른 답 · 숫자는 일수')}
