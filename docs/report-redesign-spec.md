@@ -11,8 +11,8 @@
 | 보고서 디자인 시안(2쪽) | 연구자 확인 완료 | `docs/design/report-redesign/` (시안 원본) |
 | 1. 보고서 화면 재구성 | 완료, 미배포 | `vercel/public/js/teacher-report-files.js` · 7일/14일 A4 화면과 모바일 확인 |
 | 2. 피드백 엔진 계산 추가 | 완료, 미배포 | `gas/Code.js`, `vercel/api/_lib/teacher-openai.js` · 늦은 저장·돌아보기·7일/14일 화면 확인 |
-| 3. 이미지 출력·메시지 전송 | 할 일 | `teacher-report-files.js`, `teacher-batch-reports.js`, `gas/Code.js` |
-| 4. 확인·커밋 | 할 일 | 테스트 학생·가짜 자료로만 확인 |
+| 3. 이미지 출력·메시지 전송 | 완료, 미배포 | `vercel/public/js/teacher-report-export.js`, `teacher-batch-reports.js`, `gas/Code.js` |
+| 4. 확인·커밋 | 완료, 미배포 | 7일/14일 두 쪽, 가상 3명 ZIP, 로컬 테스트 학생 메시지 열람 |
 
 작업 기준: 운영 배포 보관본 `deploy/2026-11-05-gas-v43`에서 만든 브랜치 `fix/2026-11-05-sleep-feedback-dates` 위에서 계속한다(운영본 기준이라 Apps Script는 `gas/Code.js` 한 파일). 로컬 작업 폴더(`apps-script/` 여러 파일)는 운영본과 다르므로 섞지 않는다. 푸시·배포는 연구자 요청이 있을 때만.
 
@@ -93,13 +93,10 @@
 
 ## 5. 출력 방식 [확정: 이미지]
 
-현재: 보고서 HTML → Apps Script `getAs(MimeType.PDF)`(`makeTeacherReportPdf_`) → 글꼴·CSS·SVG 처리가 약해 흐리고 깨짐.
-
-바꿀 방식 [제안]:
-1. 교사 브라우저에서 보고서 HTML(2쪽)을 화면 밖에 그린 뒤 페이지별로 이미지화(html-to-image 또는 html2canvas, 배율 2, JPEG 품질 약 0.85 / 필요 시 PNG). 라이브러리는 정확한 버전으로 고정.
-2. 교사 '저장': 이미지 2장(PNG/JPEG) 저장, 또는 두 이미지를 넣은 PDF(jsPDF 등) 저장. 일괄 저장은 학생을 한 명씩 순서대로 그려 ZIP(`createPdfZip` 재사용).
-3. 메시지로 보내기 [확정: 이미지 방식]: 브라우저가 만든 '이미지 PDF'를 base64로 보내고, `sendPrivateTeacherReport`가 html 대신 이 PDF를 받아 기존처럼 비공개 Drive 파일 + `teacher_messages`(유형 `privatePdf`)로 저장한다. 학생 열람 경로(`/api` report 핸들러, `downloadStudentReportPdf`)는 바꾸지 않아도 된다. 서버 검증: `%PDF-` 시작, `REPORT_PDF_LIMIT_`(3MB) 이하. Vercel 요청 본문 크기 제한(약 4.5MB)도 고려해 JPEG로 용량을 줄인다.
-4. 기존 html → PDF 경로(`renderTeacherReportPdf`)는 당분간 남겨 두되 화면에서 쓰지 않는다.
+1. 교사 브라우저의 화면 밖 프레임에서 두 쪽을 렌더링한다. 프레임의 `document.fonts.ready`를 기다린 뒤 배율 2(1588×2246px), JPEG 품질 0.85로 찍는다. 앱에서 직접 제공하는 html2canvas 1.4.1과 jsPDF 4.2.1을 사용한다.
+2. 이미지는 두 장, 이미지 PDF는 A4 두 쪽 한 파일로 저장한다. 일괄 저장은 학생별로 순차 처리하고 `createPdfZip`으로 묶는다. 표가 한 쪽을 넘으면 최신 섭취 내역부터 가능한 만큼 표시하고 나머지 건수를 안내한다.
+3. 메시지 전송은 브라우저가 만든 PDF를 base64로 보낸다. `sendPrivateTeacherReport`는 디코딩된 파일이 `%PDF-`로 시작하고 3 MiB 이하인지 확인한 뒤 비공개 Drive 파일과 `privatePdf` 메시지로 저장한다. 학생 열람 경로는 유지한다.
+4. 기존 HTML → PDF 서버 경로(`renderTeacherReportPdf`)는 남겨 두고 교사 화면에서는 호출하지 않는다.
 
 ## 6. 확인 방법
 

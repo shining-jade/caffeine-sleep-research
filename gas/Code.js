@@ -2201,37 +2201,41 @@ function feedbackSummaryReflection_(days, goals, standards) {
     kind, text, count: hardest?.kind === sameGoal ? 0 : missed.filter(matches).length,
   })).filter(option => option.count >= 2).sort((a, b) => b.count - a.count)[0];
   const difficulty = hardest ? { ...goalFact(hardest), observation: overlap ? { kind: overlap.kind, count: overlap.count } : null } : null;
+  const clockWords = value => {
+    const minutes = Math.round(value) % 1440;
+    return Math.floor(minutes / 60) + '시' + (minutes % 60 ? ' ' + minutes % 60 + '분' : '');
+  };
   const example = (day, kind) => {
-    if (kind === 'caffeineMax' && day.caffeine.totalMg !== null) return ['recordedCaffeine', '낮', '카페인 섭취량',
-      day.caffeine.status === 'zero' ? '안 마심(0mg)' : day.caffeine.totalMg + 'mg'];
+    if (kind === 'caffeineMax' && day.caffeine.totalMg !== null) return ['recordedCaffeine', feedbackDateLabel_(day.date) + ' 낮',
+      day.caffeine.status === 'zero' ? '카페인 안 마시기' : '카페인 섭취량을 ' + day.caffeine.totalMg + 'mg 정도로 맞춰 보기'];
     if (day.open) return null;
     if (['range', 'bedtime', 'sleepMin'].includes(kind) && day.sleep.bed !== null) {
-      return ['recordedBedtime', '밤', '잠든 시각', reportAverageClock_([day.sleep.bed])];
+      return ['recordedBedtime', feedbackDateLabel_(day.date) + ' 밤', clockWords(day.sleep.bed) + '쯤 누워 보기'];
     }
     if (kind === 'wakeTime' && day.sleep.wake !== null) {
-      return ['recordedWake', '밤의 다음 날 아침', '일어난 시각', reportAverageClock_([day.sleep.wake])];
+      return ['recordedWake', feedbackDateLabel_(shiftRecordDate_(day.date, 1)) + ' 아침', clockWords(day.sleep.wake) + '쯤 일어나 보기'];
     }
-    if (kind === 'phone' && day.habits.phone !== null) return ['recordedPhone', '밤', '자기 전 스마트폰 사용', day.habits.phone];
-    if (kind === 'activity' && day.habits.activity !== null) return ['recordedActivity', '낮', '신체활동', day.habits.activity];
+    if (kind === 'phone' && day.habits.phone !== null) return ['recordedPhone', feedbackDateLabel_(day.date) + ' 밤',
+      day.habits.phone === '안 함' ? '자기 전 스마트폰을 쓰지 않기' : '자기 전 스마트폰을 ' + day.habits.phone + ' 사용해 보기'];
+    if (kind === 'activity' && day.habits.activity !== null) return ['recordedActivity', feedbackDateLabel_(day.date) + ' 낮', '신체활동을 ' + day.habits.activity + ' 해 보기'];
     return null;
   };
   const sample = hardest?.judged.filter(item => item.kept)
     .map(item => ({ date: item.date, basis: example(dayByDate.get(item.date), hardest.kind) })).find(item => item.basis);
   const plan = sample ? { kind: sample.basis[0] } : null;
-  const when = sample ? feedbackDateLabel_(sample.date) + ' ' + sample.basis[1] : '';
-  const observed = sample ? sample.basis[2] + '(' + sample.basis[3] + ')' : '';
+  const progress = goal => '기록한 ' + goal.measured + '일 ' + (goal.kept === goal.measured ? '모두' : '중 ' + goal.kept + '일');
   const overlapText = overlap ? ' 지키지 못한 ' + missed.length + '일 중 ' + overlap.count + '일은 ' + overlap.text : '';
   const praiseText = praise?.kind === 'sleepRecords' ? '수면은 ' + praise.measured + '일 중 ' + praise.kept + '일 기록했어요.'
     : praise?.kind === 'caffeineRecords' ? '카페인은 ' + praise.measured + '일 중 ' + praise.kept + '일 기록했어요.' : '';
   const rule = {
-    praise: best ? '‘' + best.label + '’ 항목은 확인한 ' + best.measured + '일 중 ' + best.kept + '일 지켰어요.' : praiseText,
-    difficulty: hardest ? '‘' + hardest.label + '’ 항목은 확인한 ' + hardest.measured + '일 중 ' + hardest.kept + '일 지켰어요.' + overlapText : '',
-    plan: sample ? '‘' + hardest.label + '’ 항목을 지킨 ' + when + '의 ' + observed + ' 기록을 다음 계획에 참고해 봐요.' : '',
+    praise: best ? '‘' + best.label + '’ 목표, ' + progress(best) + ' 지켰어요.' : praiseText,
+    difficulty: hardest ? '‘' + hardest.label + '’ 목표는 ' + progress(hardest) + ' 지켰어요.' + overlapText : '',
+    plan: sample ? sample.basis[1] + '처럼 ' + sample.basis[2] : '',
   };
   const warm = {
-    praise: best ? '확인한 ' + best.measured + '일 가운데 ' + best.kept + '일에 ‘' + best.label + '’ 항목을 지켰어요.' : praiseText,
-    difficulty: hardest ? '‘' + hardest.label + '’ 항목을 지킨 날은 확인한 ' + hardest.measured + '일 중 ' + hardest.kept + '일이었어요.' + overlapText : '',
-    plan: sample ? when + '에 ‘' + hardest.label + '’ 항목을 지켰어요. 그때 남긴 ' + observed + ' 기록을 다음 계획에 참고해 봐요.' : '',
+    praise: best ? progress(best) + ' ‘' + best.label + '’ 목표를 지켰네요.' : praiseText,
+    difficulty: hardest ? '‘' + hardest.label + '’ 목표를 지킨 날은 ' + progress(hardest) + '이었어요.' + overlapText : '',
+    plan: sample ? '다음에는 ' + sample.basis[1] + '처럼 ' + sample.basis[2] : '',
   };
   return { facts: { praise, difficulty, plan }, rule, warm };
 }
@@ -2810,12 +2814,16 @@ function analyzeTeacherBatch(request) {
   return { success: true, reports };
 }
 
+function teacherReportPdfName_(name) {
+  return (String(name || 'health-report.pdf').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+    .replace(/\.pdf$/i, '').slice(0, 180) || 'health-report') + '.pdf';
+}
+
 function makeTeacherReportPdf_(request) {
   if (typeof request?.html !== 'string' || !request.html.trim() || request.html.length > 4000000) {
     throw new Error('PDF 내용을 다시 만들어 주세요.');
   }
-  const fileName = (String(request.fileName || 'health-report.pdf').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
-    .replace(/\.pdf$/i, '').slice(0, 180) || 'health-report') + '.pdf';
+  const fileName = teacherReportPdfName_(request.fileName);
   const blob = Utilities.newBlob(request.html, 'text/html', 'report.html').getAs(MimeType.PDF).setName(fileName);
   const bytes = blob.getBytes();
   if (bytes.length > REPORT_PDF_LIMIT_) throw new Error('PDF 용량이 큽니다. 출력 기간을 줄여 주세요.');
@@ -2828,19 +2836,48 @@ function renderTeacherReportPdf(request) {
 }
 
 function sendPrivateTeacherReport(request) {
+  const encoded = request?.pdf;
+  if (typeof encoded !== 'string' || Object.prototype.hasOwnProperty.call(request, 'html')) {
+    throw new Error('PDF 내용을 다시 만들어 주세요.');
+  }
+  if (encoded.length > Math.ceil(REPORT_PDF_LIMIT_ / 3) * 4) {
+    throw new Error('PDF 용량이 큽니다. 출력 기간을 줄여 주세요.');
+  }
+  const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0;
+  const endOfData = encoded.length - padding;
+  const validPaddingBits = padding === 0 || (padding === 1 ? 'AEIMQUYcgkosw048' : 'AQgw').includes(encoded[endOfData - 1]);
+  // The base64 prefix for %PDF- ends in 0–3, depending on the next byte.
+  if (encoded.length % 4 !== 0 || !/^JVBERi[0-3]/.test(encoded) || /[^A-Za-z0-9+/=]/.test(encoded) ||
+      encoded.indexOf('=') !== (padding ? endOfData : -1) || !validPaddingBits) {
+    throw new Error('PDF 형식이 올바르지 않습니다.');
+  }
+  const size = encoded.length / 4 * 3 - padding;
+  if (size > REPORT_PDF_LIMIT_) throw new Error('PDF 용량이 큽니다. 출력 기간을 줄여 주세요.');
+  return storePrivateTeacherReport_(request, () => {
+    const bytes = Utilities.base64Decode(encoded);
+    if (bytes.length !== size || ![37, 80, 68, 70, 45].every((byte, index) => bytes[index] === byte)) {
+      throw new Error('PDF 형식이 올바르지 않습니다.');
+    }
+    const fileName = teacherReportPdfName_(request.fileName);
+    return { fileName, blob: Utilities.newBlob(bytes, MimeType.PDF, fileName) };
+  });
+}
+
+function storePrivateTeacherReport_(request, makePdf) {
   const { start, end, deliveryId } = request || {};
   teacherReportDates_(start, end);
-  if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(deliveryId)) throw new Error('전송 번호가 올바르지 않습니다.');
+  if (typeof deliveryId !== 'string' || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(deliveryId)) throw new Error('전송 번호가 올바르지 않습니다.');
   const student = matchReportStudent_(teacherReportRoster_(), request);
   if (!student) return { success: false, error: '학번과 이름이 명단과 일치하지 않습니다.' };
   const sheet = ensureTeacherMessageSheet_();
-  const prefix = deliveryId + ':';
-  const prior = sheet.getDataRange().getValues().slice(1).find(row => row[12] === PRIVATE_PDF_TYPE_ && String(row[11]).startsWith(prefix));
+  const prefix = deliveryId.toLowerCase() + ':';
+  const prior = sheet.getDataRange().getValues().slice(1).find(row => row[12] === PRIVATE_PDF_TYPE_
+    && String(row[11]).slice(0, prefix.length).toLowerCase() === prefix);
   if (prior) {
     if (!privateReportOwnerMatches_(prior, student.id, student.name)) throw new Error('전송 번호가 이미 사용되었습니다.');
     return { success: true };
   }
-  const { fileName, blob } = makeTeacherReportPdf_(request);
+  const { fileName, blob } = makePdf(request);
   const file = DriveApp.createFile(blob);
   try {
     if (file.getSharingAccess() !== DriveApp.Access.PRIVATE) throw new Error('PDF의 비공개 상태를 확인할 수 없습니다.');
@@ -4519,8 +4556,8 @@ function saveTeacherPdfAndSendMessage(data) {
   try {
     const dates = String(data?.fileName || '').match(/_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})\.pdf$/i);
     const today = Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd').slice(0, 10);
-    return sendPrivateTeacherReport({ ...data, start: dates?.[1] || today, end: dates?.[2] || today,
-      deliveryId: Utilities.getUuid() });
+    return storePrivateTeacherReport_({ ...data, start: dates?.[1] || today, end: dates?.[2] || today,
+      deliveryId: Utilities.getUuid() }, makeTeacherReportPdf_);
   } catch (err) {
     safeLog_('saveTeacherPdfAndSendMessage error: ' + err.message);
     return { success: false, error: err.message };

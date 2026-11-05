@@ -8,7 +8,6 @@
   const room = $('batchReportClass');
   const reportStart = $('batchReportStart');
   const reportEnd = $('batchReportEnd');
-  const comparison = $('batchReportComparison');
   const aiMode = $('batchAiMode');
   const goalStart = $('batchGoalStart');
   const goalEnd = $('batchGoalEnd');
@@ -17,12 +16,14 @@
   const status = $('batchReportStatus');
   const resultList = $('batchReportResults');
   const zipButton = $('batchReportZip');
+  const imageZipButton = $('batchReportImageZip');
   const zipFile = $('batchReportZipFile');
   const sendButton = $('batchReportSend');
   const goalStatus = $('batchGoalStatus');
   const goalFile = $('batchGoalFile');
   const goalSave = $('batchGoalSave');
-  const { parseGoalCsv, createPdfZip, goalColumns, loadReportPdf, renderFeedback } = window.teacherReportFiles;
+  const { parseGoalCsv, createPdfZip, goalColumns, renderFeedback } = window.teacherReportFiles;
+  const output = window.teacherReportExport;
   const previewDialog = $('batchPdfPreview');
   // Individual preview also uses this dialog while the batch tab is hidden.
   document.body.append(previewDialog);
@@ -36,10 +37,6 @@
   let previewVersion = 0;
   let previewUrl;
   let editing;
-  const pdfOptionsKey = 'teacherBatchPdfOptionsV2';
-  let batchPdfOptions = readPDFOptions(pdfOptionsKey);
-  comparison.checked = batchPdfOptions.includeMainChart;
-
   function call(action, params) {
     return new Promise((resolve, reject) => {
       google.script.run.withSuccessHandler(result => {
@@ -123,7 +120,7 @@
     const ready = reports.filter(report => !report.error);
     filters.disabled = busy;
     goalControls.disabled = busy;
-    zipButton.disabled = busy || !ready.length;
+    zipButton.disabled = imageZipButton.disabled = busy || !ready.length;
     sendButton.disabled = busy || !ready.some(report => !report.delivered);
     goalSave.disabled = busy || !pendingGoals;
   }
@@ -142,15 +139,6 @@
     if (zipFile.hasAttribute('href')) URL.revokeObjectURL(zipFile.href);
     zipFile.removeAttribute('href');
     zipFile.hidden = true;
-  }
-
-  function chooseBatchPdfOptions(mode, onConfirm) {
-    openPDFOptionsModal(mode, (options, layout) => {
-      if (JSON.stringify(options) !== JSON.stringify(batchPdfOptions)) clearZip();
-      batchPdfOptions = options;
-      comparison.checked = options.includeMainChart;
-      onConfirm(options, layout);
-    }, batchPdfOptions);
   }
 
   function average(daily, column) {
@@ -273,10 +261,10 @@
         const preview = document.createElement('button');
         preview.type = 'button';
         preview.className = 'btn report-preview-button';
-        preview.textContent = 'PDF 미리보기';
+        preview.textContent = '이미지 PDF 미리보기';
         preview.setAttribute('aria-label', report.student.이름 + ' PDF 미리보기');
         preview.addEventListener('click', () => {
-          if (!busy) chooseBatchPdfOptions('preview', (options, layout) => openPreview(report, options, layout));
+          if (!busy) void openPreview(report);
         });
         header.append(edit, preview);
       }
@@ -337,7 +325,6 @@
         report.analysis = summary;
       }
       report.edited = true;
-      report.pdf = undefined;
       clearZip();
       report.delivered = false;
       report.sendError = false;
@@ -350,18 +337,6 @@
     updateActions();
   }
 
-  function preparePdf(report, pdfOptions, layout = 'paper') {
-    const optionsKey = JSON.stringify([layout, pdfOptions]);
-    if (report.pdf?.optionsKey === optionsKey) return report.pdf;
-    try {
-      const { html, fileName } = exportPDF({ report, pdfOptions, pdfLayout: layout });
-      report.pdf = { html, fileName, optionsKey };
-      return report.pdf;
-    } finally {
-      $('pdfOnlyContent').style.cssText = 'display:none;';
-    }
-  }
-
   function clearPreview() {
     previewVersion++;
     $('batchPdfFrame').hidden = true;
@@ -372,17 +347,18 @@
     previewUrl = undefined;
   }
 
-  async function openPreview(report, options, layout, individual = false) {
-    if (busy || (!individual && !reports.includes(report))) return;
+  async function openPreview(report, isCurrent = () => reports.includes(report)) {
+    if (busy || !isCurrent()) return;
     clearPreview();
     const version = previewVersion;
-    $('batchPdfTitle').textContent = report.student.이름 + (layout === 'phone' ? ' 휴대폰용' : '') + ' PDF 미리보기';
+    $('batchPdfTitle').textContent = report.student.이름 + ' 이미지 PDF 미리보기';
     $('batchPdfPeriod').textContent = report.start + ' ~ ' + report.end;
     $('batchPdfStatus').textContent = 'PDF를 만드는 중입니다.';
     if (!previewDialog.open) previewDialog.showModal();
     try {
-      const file = await loadReportPdf(preparePdf(report, options, layout), params => call('renderTeacherReportPdf', params));
+      const [file] = await output.prepare(report);
       if (version !== previewVersion || !previewDialog.open) return;
+      if (!isCurrent()) { previewDialog.close(); return; }
       previewUrl = URL.createObjectURL(new Blob([file.bytes], { type: 'application/pdf' }));
       $('batchPdfFrame').src = previewUrl;
       $('batchPdfFrame').hidden = false;
@@ -391,6 +367,7 @@
       $('batchPdfStatus').textContent = 'PDF가 보이지 않으면 새 탭에서 열 수 있습니다.';
     } catch {
       if (version === previewVersion && previewDialog.open) {
+        if (!isCurrent()) { previewDialog.close(); return; }
         $('batchPdfStatus').textContent = 'PDF를 열 수 없습니다. 창을 닫고 미리보기를 다시 눌러 주세요.';
       }
     }
@@ -472,7 +449,8 @@
     }
   }
 
-  async function processReports(send, options) {
+  async function processReports(kind) {
+    const send = kind === 'send';
     const ready = reports.filter(report => !report.error && (!send || !report.delivered));
     if (busy || !ready.length) return;
     const { start, end } = ready[0];
@@ -482,16 +460,15 @@
     const files = [], failed = [];
     try {
       for (const [index, report] of ready.entries()) {
-        status.textContent = (send ? 'PDF 전송' : 'PDF 생성') + ' 중 ' + (index + 1) + '/' + ready.length + '명';
+        status.textContent = (send ? 'PDF 전송' : kind === 'images' ? '이미지 생성' : '이미지 PDF 생성') + ' 중 ' + (index + 1) + '/' + ready.length + '명';
         try {
-          const pdf = preparePdf(report, options, send ? 'phone' : 'paper');
+          const rendered = await output.prepare(report, kind === 'images' ? 'images' : 'pdf');
           if (send) {
-            await call('sendPrivateTeacherReport', { html: pdf.html, fileName: pdf.fileName, start, end, deliveryId: report.deliveryId,
-              studentId: report.student.학번, studentName: report.student.이름 });
+            await call('sendPrivateTeacherReport', output.deliveryRequest(report, rendered[0], report.deliveryId));
             report.delivered = true;
             report.sendError = false;
           } else {
-            files.push(await loadReportPdf(pdf, params => call('renderTeacherReportPdf', params)));
+            files.push(...rendered);
           }
         } catch {
           failed.push(report.student.학번 + ' ' + report.student.이름);
@@ -502,7 +479,7 @@
         clearZip();
         if (files.length) {
           zipFile.href = URL.createObjectURL(createPdfZip(files));
-          zipFile.download = '건강기록_' + start + '_' + end + '.zip';
+          zipFile.download = (kind === 'images' ? '기록_요약_이미지_' : '기록_요약_PDF_') + start + '_' + end + '.zip';
           zipFile.hidden = false;
           zipFile.click();
         }
@@ -571,11 +548,6 @@
 
   for (const input of [grade, room]) input.addEventListener('change', () => { clearReports(); refresh(); });
   for (const input of [reportStart, reportEnd]) input.addEventListener('change', () => clearReports());
-  comparison.addEventListener('change', () => {
-    batchPdfOptions = { ...batchPdfOptions, includeMainChart: comparison.checked };
-    savePDFOptions(pdfOptionsKey, batchPdfOptions);
-    clearZip();
-  });
   for (const input of [$('batchRuleMode'), aiMode, $('batchFinalMode')]) input?.addEventListener('change', () => {
     const final = $('batchFinalMode')?.checked;
     $('batchReportRun').textContent = final ? '📊 마무리 피드백 만들기' : '📊 피드백 만들기';
@@ -594,8 +566,9 @@
     new Blob(['\uFEFF' + goalColumns.join(',') + '\r\n'], { type: 'text/csv;charset=utf-8' }), '수업_목표_업로드_양식.csv'));
   goalSave.addEventListener('click', saveGoals);
   $('batchReportRun').addEventListener('click', analyze);
-  zipButton.addEventListener('click', () => chooseBatchPdfOptions('zip', options => processReports(false, options)));
-  sendButton.addEventListener('click', () => chooseBatchPdfOptions('send', options => processReports(true, options)));
+  zipButton.addEventListener('click', () => processReports('pdf'));
+  imageZipButton.addEventListener('click', () => processReports('images'));
+  sendButton.addEventListener('click', () => processReports('send'));
   $('batchReportEditForm').addEventListener('submit', applyEdit);
   $('batchReportEditCancel').addEventListener('click', () => editor.close());
   editor.addEventListener('close', () => { if (!editor.open) editing = undefined; });
@@ -604,5 +577,5 @@
   reportStart.value = goalStart.value = getLastNDates(today, 7)[0];
   reportEnd.value = goalEnd.value = today;
   window.teacherBatchReports = { refresh, analyzeStudent,
-    previewIndividual: (report, options, layout) => openPreview(report, options, layout, true) };
+    previewIndividual: (report, isCurrent) => openPreview(report, isCurrent) };
 }());

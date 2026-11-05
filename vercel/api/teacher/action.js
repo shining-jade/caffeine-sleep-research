@@ -4,9 +4,12 @@ import { DEFAULT_MAX_BYTES, readJson, sendJson } from '../_lib/http.js';
 import { readSessionCookie, verifySession } from '../_lib/session.js';
 import { normalizeTeacherRequest } from '../_lib/teacher-policy.js';
 
-// Chart images are embedded in PDF HTML; stay below Vercel's 4.5 MB request limit.
-const PDF_MAX_BYTES = 4 * 1024 * 1024;
-const PDF_ACTIONS = new Set(['saveTeacherPdfAndSendMessage', 'sendPrivateTeacherReport', 'renderTeacherReportPdf']);
+const LEGACY_PDF_MAX_BYTES = 4 * 1024 * 1024;
+const LEGACY_PDF_ACTIONS = new Set(['saveTeacherPdfAndSendMessage', 'renderTeacherReportPdf']);
+const IMAGE_PDF_ACTION = 'sendPrivateTeacherReport';
+// A 3 MiB PDF encodes to 4 MiB. Allow the JSON envelope below the platform's 4.5 MB limit.
+const ENCODED_PDF_MAX_LENGTH = 4 * 1024 * 1024;
+const IMAGE_PDF_REQUEST_MAX_BYTES = ENCODED_PDF_MAX_LENGTH + 16 * 1024;
 
 export function createActionHandler({
   callGas = defaultCallGas,
@@ -29,9 +32,10 @@ export function createActionHandler({
     let body;
     try {
       body = await readJson(req, {
-        maxBytes: PDF_MAX_BYTES,
+        maxBytes: IMAGE_PDF_REQUEST_MAX_BYTES,
         maxBytesForBody: (value) => {
-          if (PDF_ACTIONS.has(value?.action)) return PDF_MAX_BYTES;
+          if (value?.action === IMAGE_PDF_ACTION) return IMAGE_PDF_REQUEST_MAX_BYTES;
+          if (LEGACY_PDF_ACTIONS.has(value?.action)) return LEGACY_PDF_MAX_BYTES;
           if (['saveTeacherClassGoals', 'analyzeTeacherBatch'].includes(value?.action)) return 1024 * 1024;
           return DEFAULT_MAX_BYTES;
         },
@@ -47,6 +51,18 @@ export function createActionHandler({
     } catch (error) {
       sendJson(res, error?.code === 'INVALID_INPUT' ? 400 : 403, { success: false, error: error?.code === 'INVALID_INPUT' ? 'INVALID_INPUT' : 'ACTION_NOT_ALLOWED' });
       return;
+    }
+
+    if (normalized.action === IMAGE_PDF_ACTION) {
+      const report = normalized.params[0];
+      if (typeof report?.pdf !== 'string' || !report.pdf || Object.hasOwn(report, 'html')) {
+        sendJson(res, 400, { success: false, error: 'INVALID_INPUT' });
+        return;
+      }
+      if (report.pdf.length > ENCODED_PDF_MAX_LENGTH) {
+        sendJson(res, 413, { success: false, error: 'PAYLOAD_TOO_LARGE' });
+        return;
+      }
     }
 
     try {

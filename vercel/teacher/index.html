@@ -866,7 +866,6 @@
                     <label>반 <select id="batchReportClass"></select></label>
                     <label>분석 시작일 <input id="batchReportStart" type="date" required></label>
                     <label>분석 종료일 <input id="batchReportEnd" type="date" required></label>
-                    <label class="report-graph-option"><input id="batchReportComparison" type="checkbox"> PDF에 날짜별 비교 그래프 포함</label>
                 </div>
                 <label class="report-toggle"><input type="checkbox" id="batchReportAll"> <span id="batchReportSelection">학생 전체 선택</span></label>
                 <div id="batchReportStudents" class="report-checklist"></div>
@@ -897,7 +896,8 @@
             <h3 id="batchResultHeading">📊 피드백 결과</h3>
             <p id="batchReportStatus" role="status" style="white-space:pre-wrap">아직 분석한 학생이 없습니다.</p>
             <div class="report-controls">
-                <button type="button" id="batchReportZip" class="btn" disabled>PDF ZIP 받기</button>
+                <button type="button" id="batchReportZip" class="btn" disabled>이미지 PDF ZIP 받기</button>
+                <button type="button" id="batchReportImageZip" class="btn" disabled>이미지 ZIP 받기</button>
                 <a id="batchReportZipFile" class="btn" hidden>생성한 ZIP 다시 저장</a>
                 <button type="button" id="batchReportSend" class="btn btn-primary" disabled>학생에게 PDF 보내기</button>
             </div>
@@ -1711,12 +1711,14 @@
             </div>
             <div class="modal-actions">
                 <button class="btn btn-green" onclick="requestAIAnalysis()" id="aiBtn">📊 피드백 만들기</button>
-                <button class="btn btn-blue" onclick="openPDFOptionsModal('save')">📄 PDF 저장</button>
-                <button class="btn" onclick="openPDFOptionsModal('preview')">PDF 미리보기</button>
-                <button class="btn" style="background:#eff6ff;color:#1d4ed8;border:none;" onclick="openPDFOptionsModal('send')">📎 PDF 보내기</button>
+                <button class="btn btn-blue" data-report-output onclick="runIndividualReportOutput('pdf')">이미지 PDF 저장</button>
+                <button type="button" class="btn" data-report-output onclick="runIndividualReportOutput('images')">이미지 저장</button>
+                <button class="btn" data-report-output onclick="runIndividualReportOutput('preview')">이미지 PDF 미리보기</button>
+                <button class="btn" style="background:#eff6ff;color:#1d4ed8;border:none;" data-report-output onclick="runIndividualReportOutput('send')">이미지 PDF 보내기</button>
                 <button class="btn" style="background:#f5f3ff;color:#6d28d9;border:none;" onclick="openManualAwardModal('single')">🏅 뱃지 수여</button>
                 <button class="btn" style="background:#ecfdf5;color:#065f46;border:none;" onclick="openMsgSendModal()">📨 메시지 옆에서 열기</button>
             </div>
+            <p id="individualReportOutputStatus" role="status" hidden></p>
             <div style="margin-bottom:20px;">
                 <div class="ai-toggle-header" onclick="toggleAI()">
                     <span class="ai-toggle-title"><span id="individualFeedbackTitle">📊 피드백 결과</span> <span id="aiStatusBadge" style="font-size:12px;font-weight:500;color:#818cf8;">(분석 전)</span></span>
@@ -3870,6 +3872,8 @@ function isCurrentAIRequest(key,generation){
 function resetAIReportContext(){
     aiViewGeneration++;
     individualEngineReport = undefined;
+    const outputStatus = document.getElementById('individualReportOutputStatus');
+    if (outputStatus) { outputStatus.textContent = ''; outputStatus.hidden = true; }
     aiViewKey=getAIContextKey();
     aiReportContextKey='';
     const final = document.getElementById('individualFinalMode')?.checked;
@@ -4945,75 +4949,6 @@ function savePDFOptions(storageKey, options){
     try{ localStorage.setItem(storageKey, JSON.stringify(options)); }catch(e){}
 }
 
-function openPDFOptionsModal(mode, onConfirm, initialOptions){
-    const existing = document.getElementById('pdfOptionsModal');
-    if(existing) existing.remove();
-    const storageKey = onConfirm ? 'teacherBatchPdfOptionsV2' : 'teacherPdfOptionsV2';
-    const opts = initialOptions ?? readPDFOptions(storageKey);
-    const actionLabel = mode === 'send' ? 'PDF 보내기' : mode === 'zip' ? 'PDF ZIP 받기'
-        : mode === 'preview' ? 'PDF 미리보기' : 'PDF 저장';
-    const layoutHint = mode === 'send' ? '학생에게는 휴대폰에서 읽기 좋은 PDF로 전달됩니다.'
-        : '길어지는 기록표는 필요한 만큼만 넣을 수 있습니다.';
-    const overlay = document.createElement('div');
-    overlay.id = 'pdfOptionsModal';
-    overlay.setAttribute('role','dialog');
-    overlay.setAttribute('aria-modal','true');
-    overlay.setAttribute('aria-labelledby','pdfOptionsTitle');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1400;display:flex;align-items:center;justify-content:center;padding:18px;';
-    overlay.innerHTML = `
-        <div style="background:white;width:100%;max-width:440px;border-radius:18px;box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:calc(100dvh - 36px);overflow:auto;">
-            <div style="padding:22px 24px 14px;border-bottom:1px solid #e5e7eb;">
-                <div id="pdfOptionsTitle" style="font-size:18px;font-weight:800;color:#1f2937;">PDF 구성 선택</div>
-                <div style="font-size:13px;color:#6b7280;margin-top:6px;">${layoutHint}</div>
-            </div>
-            <div style="padding:18px 24px;">
-                ${[
-                    ['includeAi','기록 기반 건강 피드백'],
-                    ['includeMainChart','날짜별 비교 그래프 (카페인·수면)'],
-                    ['includeCaffeineRecords','카페인 섭취 내역 표'],
-                    ['includeSleepRecords','수면 기록 표'],
-                    ['includePattern','생활 패턴 분석']
-                ].map(([id,label])=>`
-                    <label style="display:flex;align-items:center;gap:10px;padding:9px 0;font-size:14px;color:#374151;font-weight:600;cursor:pointer;">
-                        <input type="checkbox" id="pdfOpt_${id}" ${opts[id]?'checked':''} style="width:17px;height:17px;accent-color:#6366f1;">
-                        <span>${label}</span>
-                    </label>
-                `).join('')}
-                ${mode === 'preview' ? `<label style="display:flex;align-items:center;gap:10px;padding:9px 0;font-size:14px;color:#374151;font-weight:600;">
-                    <input type="checkbox" id="pdfOpt_phoneLayout" style="width:17px;height:17px;accent-color:#6366f1;">
-                    휴대폰용 PDF 미리보기
-                </label>` : ''}
-                <div style="margin-top:14px;padding:14px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;">
-                    <label for="pdfOpt_maxRows" style="display:block;font-size:13px;font-weight:800;color:#374151;margin-bottom:8px;">기록표 최대 표시 개수</label>
-                    <input type="number" id="pdfOpt_maxRows" min="0" step="1" value="${opts.maxRecordRows}" style="width:100%;padding:10px 12px;border:2px solid #e5e7eb;border-radius:9px;font-size:14px;box-sizing:border-box;">
-                    <div style="font-size:11px;color:#6b7280;margin-top:6px;">요약 PDF에는 지면에 맞는 최근 기록만 표시합니다. 전체 기록이 필요하면 0을 입력해 상세 PDF를 만들 수 있습니다.</div>
-                </div>
-            </div>
-            <div style="display:flex;gap:10px;padding:0 24px 22px;">
-                <button onclick="document.getElementById('pdfOptionsModal').remove()" class="btn" style="flex:1;justify-content:center;background:#f3f4f6;color:#374151;">취소</button>
-                <button id="pdfOptionsRunBtn" class="btn btn-primary" style="flex:1;justify-content:center;">${actionLabel}</button>
-            </div>
-        </div>`;
-    document.body.appendChild(overlay);
-    document.getElementById('pdfOpt_includeAi').focus();
-    document.getElementById('pdfOptionsRunBtn').onclick = () => {
-        const picked = normalizePDFOptions({
-            includeAi: document.getElementById('pdfOpt_includeAi').checked,
-            includeMainChart: document.getElementById('pdfOpt_includeMainChart').checked,
-            includeCaffeineRecords: document.getElementById('pdfOpt_includeCaffeineRecords').checked,
-            includeSleepRecords: document.getElementById('pdfOpt_includeSleepRecords').checked,
-            includePattern: document.getElementById('pdfOpt_includePattern').checked,
-            maxRecordRows: document.getElementById('pdfOpt_maxRows').value
-        });
-        const layout = mode === 'send' || document.getElementById('pdfOpt_phoneLayout')?.checked ? 'phone' : 'paper';
-        savePDFOptions(storageKey, picked);
-        overlay.remove();
-        if(onConfirm) onConfirm(picked, layout);
-        else if(mode === 'send') void sendPDFToStudent(picked);
-        else void prepareIndividualPDF(mode, picked, layout);
-    };
-}
-
 async function individualPdfReport() {
     const student = studentsData.find(row => row.학번 === currentStudentId);
     if (!student || !window.teacherBatchReports) return undefined;
@@ -5027,24 +4962,6 @@ async function individualPdfReport() {
         report.feedback.savedPdfFeedback = window.teacherReportFiles.readSavedPdfFeedback(document.getElementById('aiContent'));
     }
     return report;
-}
-
-async function prepareIndividualPDF(mode, pdfOptions, layout) {
-    try {
-        const report = await individualPdfReport();
-        if (!report?.feedback?.engine && mode !== 'preview') return exportPDF({ pdfOptions });
-        const pdf = exportPDF({ report, pdfOptions, pdfLayout: layout });
-        if (!pdf) return;
-        if (mode !== 'preview') {
-            const template = document.createElement('template');
-            template.innerHTML = pdf.content;
-            await printPreparedPDF(pdf.styles, template.content.firstElementChild, pdf.fileName.replace(/\.pdf$/i, ''));
-            return;
-        }
-        await window.teacherBatchReports.previewIndividual(report, pdfOptions, layout);
-    } catch (error) {
-        showPDFPrintError(error);
-    }
 }
 
 function exportPDF(options){
@@ -5664,56 +5581,67 @@ function preparePDFDocument(layout){
     return {styles:layoutStyles,content:paginatePDFContent(layoutStyles,clonedContent)};
 }
 
-async function sendPDFToStudent(pdfOptions){
-    pdfOptions = normalizePDFOptions(pdfOptions);
-    const s = studentsData.find(st=>st.학번===currentStudentId);
-    if(!s){alert('학생 정보를 찾을 수 없습니다.');return;}
-    if ([caffeineData, sleepData, infoData].some(rows => rows.some(row => row.학번 === s.학번 && String(row.name || '').trim() !== s.이름.trim()))) {
-        showTeacherModal('⚠️','기록 소유자 확인 필요','이 학번에 현재 명단과 이름이 일치하지 않는 기록이 있습니다. 학생 일괄 분석에서 이 학생을 선택해 보내 주세요.','warning');
-        return;
+let individualReportOutputBusy = false;
+const individualDeliveryIds = new Map();
+
+async function runIndividualReportOutput(kind) {
+    if (individualReportOutputBusy) return;
+    const student = studentsData.find(row => row.학번 === currentStudentId);
+    const status = document.getElementById('individualReportOutputStatus');
+    const note = text => { status.textContent = text; status.hidden = !text; };
+    if (!student) return note('학생 정보를 찾을 수 없습니다.');
+    const send = kind === 'send';
+    if (send && [caffeineData, sleepData, infoData].some(rows => rows.some(row =>
+        row.학번 === student.학번 && String(row.name || '').trim() !== student.이름.trim()))) {
+        return note('이 학번에 이름이 일치하지 않는 기록이 있습니다. 학생 일괄 분석에서 확인해 주세요.');
     }
-    showTeacherModal('📎','PDF 준비 중...',`${s.이름} 학생에게 보낼 PDF를 만들고 있습니다.`,'info');
-    const options = {
-        mode:'send',
-        pdfOptions,
-        onReady:(html, meta)=>{
-            google.script.run
-                .withSuccessHandler(res=>{
-                    const prev=document.getElementById('teacherAlertModal');
-                    if(prev)prev.remove();
-                    if(res&&res.success){
-                        showTeacherModal('✅','전송 완료',`${s.이름} 학생의 메시지함으로 PDF 링크를 보냈습니다.`,'success');
-                        loadSentMessages();
-                    }else{
-                        showTeacherModal('❌','전송 실패',(res&&res.error)||'알 수 없는 오류가 발생했습니다.','error');
-                    }
-                })
-                .withFailureHandler(err=>{
-                    const prev=document.getElementById('teacherAlertModal');
-                    if(prev)prev.remove();
-                    showTeacherModal('❌','오류','PDF 전송 중 문제가 발생했습니다: '+String(err),'error');
-                })
-                .sendPrivateTeacherReport({
-                    studentId: meta.student.학번,
-                    studentName: meta.student.이름,
-                    start: meta.dates[0],
-                    end: meta.dates[meta.dates.length - 1],
-                    deliveryId: crypto.randomUUID(),
-                    fileName: meta.fileName,
-                    html
-                });
-        }
-    };
+    if (send && !window.confirm(student.이름 + ' 학생의 메시지함으로 이미지 PDF를 보낼까요?')) return;
+    const key = getAIContextKey();
+    const generation = aiViewGeneration;
+    const buttons = document.querySelectorAll('[data-report-output]');
+    const output = window.teacherReportExport;
     try {
+        individualReportOutputBusy = true;
+        buttons.forEach(button => { button.disabled = true; });
+        note('보고서 두 쪽을 이미지로 만드는 중입니다.');
         const report = await individualPdfReport();
-        if (!report?.feedback?.engine) return exportPDF(options);
-        const pdf = exportPDF({ ...options, report });
-        options.onReady(pdf.html, pdf);
+        if (!report?.feedback?.engine) throw new Error('먼저 피드백을 만들어 주세요.');
+        if (!isCurrentAIRequest(key, generation)) return;
+        if (kind === 'preview') {
+            await window.teacherBatchReports.previewIndividual(report, () => isCurrentAIRequest(key, generation));
+            if (isCurrentAIRequest(key, generation)) note('');
+            return;
+        }
+        const files = await output.prepare(report, kind === 'images' ? 'images' : 'pdf');
+        if (!isCurrentAIRequest(key, generation)) return;
+        if (send) {
+            const deliveryKey = JSON.stringify([report.student.학번, report.student.이름, report.start, report.end,
+                report.feedback.reportMode, report.feedback.mode, report.feedback.savedPdfFeedback?.summary || report.feedback.summary]);
+            if (!individualDeliveryIds.has(deliveryKey)) individualDeliveryIds.set(deliveryKey, crypto.randomUUID());
+            note('학생 메시지함에 PDF를 보내는 중입니다.');
+            await new Promise((resolve, reject) => {
+                google.script.run.withSuccessHandler(result => {
+                    if (result?.success) resolve(result);
+                    else reject(new Error(result?.error || 'PDF를 보내지 못했습니다.'));
+                }).withFailureHandler(reject).sendPrivateTeacherReport(output.deliveryRequest(report, files[0], individualDeliveryIds.get(deliveryKey)));
+            });
+            individualDeliveryIds.delete(deliveryKey);
+            if (isCurrentAIRequest(key, generation)) note('학생 메시지함으로 이미지 PDF를 보냈습니다.');
+            loadSentMessages();
+        } else if (kind === 'images') {
+            output.offerImageDownloads(files);
+            note('');
+        } else {
+            output.download(files[0]);
+            note('이미지 PDF 저장을 시작했습니다.');
+        }
     } catch (error) {
-        showPDFPrintError(error);
+        if (isCurrentAIRequest(key, generation)) note(error?.message || '보고서 출력을 완료하지 못했습니다.');
+    } finally {
+        individualReportOutputBusy = false;
+        buttons.forEach(button => { button.disabled = false; });
     }
 }
-
 
 function isMobile(){return window.innerWidth<=768;}
 function applyZoom(val){
@@ -7988,8 +7916,9 @@ function renderJourneyStatus(){
 }
 
 </script>
-<script src="/public/js/teacher-report-files.js?v=report-view-6"></script>
-<script src="/public/js/teacher-batch-reports.js?v=report-view-3"></script>
+<script src="/public/js/teacher-report-files.js?v=report-view-7"></script>
+<script src="/public/js/teacher-report-export.js?v=image-report-1"></script>
+<script src="/public/js/teacher-batch-reports.js?v=report-view-4"></script>
 <script type="module" src="/public/js/caffeine-companies.js"></script>
 </body>
 </html>

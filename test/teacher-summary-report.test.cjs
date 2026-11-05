@@ -211,5 +211,5 @@ test('recognizes a numeric Seoul sheet timestamp and uses observed kept-day fact
   assert.equal(result.summaryLateEntries.length, 1);
   assert.equal(result.summaryLateEntries[0].delayDays, 1);
   assert.equal(result.summaryReflection.facts.plan.kind, 'recordedCaffeine');
-  assert.match(result.summaryReflection.rule.plan, /11\.01 낮의 카페인 섭취량\(40mg\)/);
+  assert.match(result.summaryReflection.rule.plan, /11\.01 낮처럼 카페인 섭취량을 40mg 정도로 맞춰 보기/);
 });

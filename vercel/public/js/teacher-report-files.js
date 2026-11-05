@@ -498,11 +498,12 @@
     .summary-axis-label{font-size:12px;font-weight:700;color:#33416a;line-height:1.35}.summary-axis-label small{display:block;font-size:10px;font-weight:400;color:#4a5470}
     .summary-axis-label.caf{color:#a4521f}.summary-axis-label.hours{color:#2c5c9e}.summary-axis-label.condition{color:#1f6b4f}
     .summary-chart-bar{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;height:66px;color:#7a3a12;font-size:11px;font-weight:700;line-height:1.25}
-    .summary-chart-bar>span,.summary-chart-bar>i{z-index:1}.summary-chart-bar i{display:block;width:22px;border-radius:4px 4px 0 0;background:#d98a55}.compact .summary-chart-bar i{width:17px}
-    .summary-chart-bar.hours{color:#1f4a85}.summary-chart-bar.hours::before{position:absolute;content:"";bottom:35px;height:9px;inset-inline:0;background:#dfe8f7}
+    .summary-chart-bar>span,.summary-chart-bar>i{position:relative;z-index:1}.summary-chart-bar i{display:block;width:22px;border-radius:4px 4px 0 0;background:#d98a55}.compact .summary-chart-bar i{width:17px}
+    .summary-chart-bar.hours{color:#1f4a85}.summary-hours-band{position:absolute;z-index:0;bottom:35px;height:9px;inset-inline:0;background:#dfe8f7}
     .summary-chart-bar.hours i{background:#a9c0e6}.summary-chart-bar.hours i.in-range{background:#3f72bd}
     .summary-caf-zero{color:#185a41;background:#e3f3ec;border-radius:6px;padding:2px 4px}
     .summary-caf-missing{border:1px dashed #b8bccb;color:#555e7a;border-radius:6px;padding:2px 4px}
+    .compact .summary-caf-zero,.compact .summary-caf-missing{white-space:nowrap;font-size:9.5px;padding-inline:2px}
     .summary-clock{min-height:28px;display:grid;place-items:center;font-size:13px;font-weight:700;border-radius:8px}
     .summary-clock.late{background:#fde7da;color:#8a2f0c}.summary-muted{color:#555e7a;font-weight:500}
     .summary-cond{margin:4px auto;display:grid;place-items:center;width:min(46px,100%);min-height:28px;border-radius:14px;font-size:13px;font-weight:800;background:#ebe8f7;color:#33296f}
@@ -551,7 +552,7 @@
       .summary-page[data-size="week"] .summary-chart{padding:16px 12px}
       .summary-page[data-size="week"] .summary-axis-row+.summary-axis-row{margin-top:7px}
       .summary-page[data-size="week"] .summary-chart-bar{height:82px}
-      .summary-page[data-size="week"] .summary-chart-bar.hours::before{bottom:44px;height:11px}
+      .summary-page[data-size="week"] .summary-hours-band{bottom:44px;height:11px}
       .summary-page[data-size="week"] .summary-compare{padding:15px 12px;gap:7px}
       .summary-page[data-size="week"] .summary-mark{min-height:36px}
     }
@@ -603,7 +604,7 @@
     const inRange = h => h >= 8 && h <= 10;
     const hoursBar = day => {
       const value = !day.open && Number.isFinite(day.hours) ? day.hours : null;
-      return `<div ${markDate(day)} class="summary-chart-bar hours"><span>${day.open ? '아직' : value === null ? '–' : value.toFixed(1)}</span>${value === null ? ''
+      return `<div ${markDate(day)} class="summary-chart-bar hours"><div class="summary-hours-band" aria-hidden="true"></div><span>${day.open ? '아직' : value === null ? '–' : value.toFixed(1)}</span>${value === null ? ''
         : `<i aria-hidden="true" class="${inRange(value) ? 'in-range' : ''}" style="height:calc(${Math.round(Math.min(value, 11) / 11 * 48)}px * var(--bar-scale,1))"></i>`}</div>`;
     };
     const condition = day => {
