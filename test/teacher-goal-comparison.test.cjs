@@ -170,3 +170,22 @@ test('distinguishes a known target achievement from a withheld baseline comparis
   ] });
   assert.equal(tooLong.evaluation,'조금 아쉬웠어요');
 });
+
+test('connects the two period values and reports exact changes across midnight and for rates', () => {
+  const before = set(6,2).map(day=>({...day,sleep:{...day.sleep,bed:1430},
+    caffeine:{recorded:true,totalMg:0,times:[]}}));
+  const after = set(6,4).map(day=>({...day,sleep:{...day.sleep,bed:1450},
+    caffeine:{recorded:true,totalMg:50,times:[900]}}));
+  const html = goals.renderPage(goals.compare({ periods,model:phone,before,after }),'테스트 학생');
+  assert.match(html, /목표 실천율[\s\S]*?33\.3%[\s\S]*?66\.7%/);
+  const lines = html.match(/<tr><th scope="row"[^>]*>.*?<\/tr>/gs);
+  const bed = lines.find(line=>line.includes('평균 취침시각'));
+  assert.match(bed, /23:50[\s\S]*?goal-compare-slope[\s\S]*?y1="24"[\s\S]*?y2="4"[\s\S]*?00:10[\s\S]*?20분 늦어짐/);
+  const caffeine = lines.find(line=>line.includes('하루 평균 카페인'));
+  assert.match(caffeine, /0\.0mg[\s\S]*?goal-compare-slope[\s\S]*?50\.0mg[\s\S]*?50mg 증가/);
+  assert.match(lines.find(line=>line.includes('오후 3시 이후 마신 날')), /100%p 증가/);
+  assert.match(lines.find(line=>line.includes('평균 수면시간')), /y1="14"[\s\S]*?y2="14"[\s\S]*?변화 없음/);
+  const withheld = goals.renderPage(goals.compare({ periods,model:phone,before:before.slice(0,1),after }),'테스트 학생');
+  assert.match(withheld, /비교 보류/);
+  assert.doesNotMatch(withheld, /class="goal-compare-(?:track|slope)/);
+});

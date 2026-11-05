@@ -279,6 +279,11 @@
     '.goal-compare-side article{display:grid;gap:1px;padding:8px 12px;border:1.5px solid #e2def3;border-radius:12px;color:#4a5470;font-size:11px}',
     '.goal-compare-side article:last-child{background:#e3f3ec;border-color:#e3f3ec;color:#185a41}',
     '.goal-compare-side strong{font-size:21px;line-height:1.2}.goal-compare-side>b{text-align:center;color:#5b4fc4;font-size:20px}',
+    '.goal-compare-side strong small{font-size:12px;margin-left:6px}',
+    '.goal-compare-track{display:block;position:relative;height:6px;margin:4px 0 1px;border-radius:5px;background:#e5e9f4}',
+    '.goal-compare-track i{display:block;height:100%;border-radius:5px;background:#61779d}.goal-compare-track.after i{background:#5b4fc4}',
+    '.goal-compare-dot{display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:#61779d}.goal-compare-dot.after{background:#5b4fc4}',
+    '.goal-compare-slope{display:block;width:100%;height:27px;background:#f5f3fb;border-radius:5px}',
     '.goal-compare-section{display:grid;gap:6px}.goal-compare-section>p{font-size:11px;color:#4a5470}',
     '.goal-compare-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}.goal-compare-days.compact{grid-template-columns:repeat(14,minmax(0,1fr))}.goal-compare-days.dense{grid-template-columns:repeat(21,minmax(0,1fr))}',
     '.goal-compare-day{display:grid;gap:2px;text-align:center;font-size:10px;color:#4a5470}.goal-compare-day b{border:1.5px solid transparent;border-radius:6px;background:#eef0f4;line-height:1.2;padding:3px 0;font-size:12px}',
@@ -291,6 +296,26 @@
     '.goal-compare-page .summary-reflect-card{padding:8px 10px;font-size:12px}.goal-compare-page .summary-foot{margin-top:0!important}',
     '@media(max-width:520px){.goal-compare-lead{align-items:flex-start;flex-direction:column;gap:4px}.goal-compare-days.compact,.goal-compare-days.dense{grid-template-columns:repeat(7,minmax(0,1fr))}.goal-compare-metrics th,.goal-compare-metrics td{padding:5px 4px;font-size:11px}}',
   ].join('\n');
+
+
+  function track(fraction, period) {
+    return '<span class="goal-compare-track ' + period + '" aria-hidden="true"><i style="width:' +
+      precise(fraction * 100) + '%"></i></span>';
+  }
+
+  function metricChange(metric) {
+    const { key, delta, scale, unit, proportion } = metric;
+    const distance = Math.abs(delta);
+    const amount = key === 'bed' ? Math.round(distance) : precise(distance * (proportion ? 100 : 1));
+    const rise = amount ? precise(10 * delta / Math.max(distance, scale / 4)) : 0;
+    const start = precise(14 + rise);
+    const end = precise(14 - rise);
+    const graph = '<svg class="goal-compare-slope" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 28" aria-hidden="true">' +
+      '<line x1="8" y1="' + start + '" x2="100" y2="' + end + '" stroke="#7775a4" stroke-width="2.5"/>' +
+      '<circle cx="8" cy="' + start + '" r="4" fill="#61779d"/><circle cx="100" cy="' + end + '" r="4" fill="#5b4fc4"/></svg>';
+    const direction = key === 'bed' ? (delta < 0 ? '빨라짐' : '늦어짐') : (delta > 0 ? '증가' : '감소');
+    return { graph, text: amount ? amount + unit + ' ' + direction : '변화 없음' };
+  }
 
   function renderPage(data, name) {
     const {periods, model, overall, goals, comparable, achieved, recorded, condition} = data;
@@ -309,9 +334,16 @@
     const plan = model ? '<section class="goal-compare-plan"><h2>① 내 목표</h2><p>“' + escape(shorten(model.text || '',190)) +
       '”</p><div class="goal-compare-chips">' + goalChips + '</div></section>' : '';
     const goalValue = side => side.kept + ' / ' + side.measured + '일';
-    const value = (left, right) => '<div class="goal-compare-side"><article><span>' + beforeLabel + ' (' + escape(beforePeriod) +
-      ')</span><strong>' + left + '</strong></article><b aria-hidden="true">→</b><article><span>' + afterLabel +
-      ' (' + escape(afterPeriod) + ')</span><strong>' + right + '</strong></article></div>';
+    const value = (left, right, leftGraph = '', rightGraph = '') => '<div class="goal-compare-side"><article><span>' + beforeLabel + ' (' + escape(beforePeriod) +
+      ')</span><strong>' + left + '</strong>' + leftGraph + '</article><b aria-hidden="true">→</b><article><span>' + afterLabel +
+      ' (' + escape(afterPeriod) + ')</span><strong>' + right + '</strong>' + rightGraph + '</article></div>';
+    const goalGraph = () => {
+      const before = ratio(overall.before), after = ratio(overall.after);
+      const percent = amount => ' <small>' + precise(amount * 100) + '%</small>';
+      return '<p>목표 실천율 · 판정 가능한 날 중 지킨 날</p>' +
+        value(goalValue(overall.before) + percent(before), goalValue(overall.after) + percent(after),
+          track(before, 'before'), track(after, 'after'));
+    };
     const marks = overall ? '<div class="goal-compare-days' + (overall.days.length > 56 ? ' dense' : overall.days.length > 7 ? ' compact' : '') +
       '" aria-label="실천 기간 날짜별 판정">' + overall.days.map(day =>
         '<div class="goal-compare-day"><span>' + escape(dayLabel(day.date)) + '</span><b class="' +
@@ -321,18 +353,25 @@
     const breakdown = goals.length > 1 ? goals.map(goal=>'<p>' + escape(goal.label) + ' · ' + (goal.before.measured >= 2 && goal.after.measured >= 2 ?
       goalValue(goal.before) + ' → ' + goalValue(goal.after) : '비교 보류') + '</p>').join('') : '';
     const comparison = model
-      ? (comparable ? value(goalValue(overall.before),goalValue(overall.after)) : '<p>' + compareHold + '</p>') +
+      ? (comparable ? goalGraph() : '<p>' + compareHold + '</p>') +
         '<p>' + outcome + '</p>' + breakdown + marks + (overall ? '<p>✓ 지킴 · × 못 지킴 · – 판정 없음 · 아직 = 지나지 않은 밤</p>' : '')
       : (recorded.every(n=>n>=2) ? value('기록 ' + recorded[0] + '일','기록 ' + recorded[1] + '일') : '<p>' + compareHold + '</p>');
     const metricValue = (metric, side) => metric.proportion ? side.count + ' / ' + side.n + '일' :
       (metric.key === 'bed' ? clock(side.value) : side.value.toFixed(1) + metric.unit) + ' <small>(' + side.n + '일)</small>';
-    const table = '<div class="goal-compare-metrics"><table><colgroup><col style="width:32%"><col style="width:26%"><col style="width:26%"><col style="width:16%"></colgroup>' +
-      '<thead><tr><th scope="col">항목</th><th scope="col">' + beforeLabel + '</th><th scope="col">' + afterLabel + '</th><th scope="col">변화</th></tr></thead><tbody>' +
-      data.metrics.map(metric=>'<tr><th scope="row" class="' + (['caffeine','drinking','late'].includes(metric.key) ? 'caf' : 'sleep') +
-        '">' + metric.label + '</th>' + (metric.comparable ? '<td>' + metricValue(metric,metric.before) + '</td><td><b>' + metricValue(metric,metric.after) +
-        '</b></td><td class="trend">' + (metric.delta > 0 ? '↑' : metric.delta < 0 ? '↓' : '→') + '</td>' :
-        '<td colspan="3">비교 보류 <small>(기준 ' + metric.before.n + '일 · 비교 ' + metric.after.n + '일)</small></td>') + '</tr>').join('') +
-      '</tbody></table></div>';
+    const legend = data.metrics.some(metric => metric.comparable) ?
+      '<p>선은 왼쪽 ‘' + beforeLabel + '’에서 오른쪽 ‘' + afterLabel + '’로의 변화 방향을 보여 줘요.</p>' : '';
+    const table = legend + '<div class="goal-compare-metrics"><table><colgroup><col style="width:29%"><col style="width:18%"><col style="width:18%"><col style="width:18%"><col style="width:17%"></colgroup>' +
+      '<thead><tr><th scope="col">항목</th><th scope="col"><span class="goal-compare-dot" aria-hidden="true"></span>' + beforeLabel +
+      '</th><th scope="col">변화 그래프</th><th scope="col"><span class="goal-compare-dot after" aria-hidden="true"></span>' + afterLabel +
+      '</th><th scope="col">변화량</th></tr></thead><tbody>' +
+      data.metrics.map(metric => {
+        const heading = '<tr><th scope="row" class="' + (['caffeine','drinking','late'].includes(metric.key) ? 'caf' : 'sleep') +
+          '">' + metric.label + '</th>';
+        if (!metric.comparable) return heading + '<td colspan="4">비교 보류 <small>(기준 ' + metric.before.n + '일 · 비교 ' + metric.after.n + '일)</small></td></tr>';
+        const { graph, text } = metricChange(metric);
+        return heading + '<td>' + metricValue(metric,metric.before) + '</td><td>' + graph + '</td><td><b>' +
+          metricValue(metric,metric.after) + '</b></td><td class="trend">' + text + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
     const conditionText = condition ? '<p class="goal-compare-condition"><b>실천 기간 안에서</b> ' +
       (condition.kept.n >= 2 && condition.missed.n >= 2 ? '지킨 날(' + condition.kept.n + '일)의 다음 날 아침 컨디션은 평균 ' +
         condition.kept.value.toFixed(1) + '점, 못 지킨 날(' + condition.missed.n + '일)은 ' + condition.missed.value.toFixed(1) + '점이었어요.' :

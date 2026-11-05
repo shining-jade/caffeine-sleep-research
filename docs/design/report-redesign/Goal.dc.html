@@ -27,7 +27,7 @@ a{color:#4b3fb0}a:hover{color:#352b8a}
 
   <section style="display: flex; gap: 12px; align-items: center; padding: 12px 16px; border-radius: 14px; background: #2f2a6b; color: #ffffff;">
     <span style="flex-shrink: 0; padding: 4px 10px; border-radius: 999px; background: #ffffff; color: #2f2a6b; font-size: 12px; font-weight: 800;">한 줄 정리</span>
-    <p style="margin: 0; font-size: 14px; line-height: 1.55; font-weight: 500;">목표를 세운 뒤 ‘자기 전 휴대폰 30분 미만’을 지킨 날이 6일 중 2일에서 6일 중 4일로 늘었고, 같은 기간 잔 시간은 평균 1.2시간 길어졌어요.</p>
+    <p style="margin: 0; font-size: 14px; line-height: 1.55; font-weight: 500;"><b style="font-weight: 800; color: #b9f0d6;">잘 해냈어요!</b> 계획한 ‘7일 중 4일’을 지켰고, ‘자기 전 휴대폰 30분 미만’을 지킨 날도 6일 중 2일에서 4일로 늘었어요. 같은 기간 잔 시간은 평균 1.2시간 길어졌어요.</p>
   </section>
 
   <section style="display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; background: #f1effb;">
@@ -69,16 +69,34 @@ a{color:#4b3fb0}a:hover{color:#352b8a}
 
   <section style="display: flex; flex-direction: column; gap: 10px;">
     <h2 style="margin: 0; font-size: 17px; font-weight: 800;">③ 수면과 카페인도 함께 보기</h2>
-    <div style="display: grid; grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr) 70px; border: 1.5px solid #e2def3; border-radius: 12px; overflow: hidden;">
-      <span style="padding: 8px 12px; font-size: 12px; font-weight: 700; background: #f1effb;">항목</span>
-      <span style="padding: 8px 12px; font-size: 12px; font-weight: 700; background: #f1effb;">목표 세우기 전</span>
-      <span style="padding: 8px 12px; font-size: 12px; font-weight: 700; background: #f1effb;">실천 기간</span>
-      <span style="padding: 8px 12px; font-size: 12px; font-weight: 700; background: #f1effb;">변화</span>
+    <div style="display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 11px; color: #4a5470;">
+      <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #9aa0b4;"></span>목표 세우기 전</span>
+      <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #2f7d62;"></span>실천 기간 · 좋아짐</span>
+      <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #d0743f;"></span>아쉬움</span>
+      <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="width: 10px; height: 10px; border-radius: 50%; background: #6b7390;"></span>비슷해요(작은 변화)</span>
+      <span style="display: inline-flex; align-items: center; gap: 5px;"><span style="width: 14px; height: 8px; background: #dfe8f7;"></span>권장 범위 · 세로선은 기준</span>
+    </div>
+    <div style="display: flex; flex-direction: column; border: 1.5px solid #e2def3; border-radius: 12px; overflow: hidden;">
       <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
-        <span style="{{r.labelStyle}}">{{r.label}}</span>
-        <span style="padding: 9px 12px; font-size: 14px; border-top: 1px solid #ece9f6;">{{r.before}} <span style="font-size: 11px; color: #4a5470;">{{r.nb}}</span></span>
-        <span style="padding: 9px 12px; font-size: 14px; font-weight: 700; border-top: 1px solid #ece9f6;">{{r.after}} <span style="font-size: 11px; font-weight: 400; color: #4a5470;">{{r.na}}</span></span>
-        <span style="padding: 9px 12px; font-size: 15px; font-weight: 800; color: #3b3195; border-top: 1px solid #ece9f6;">{{r.arrow}}</span>
+        <div style="{{r.rowStyle}}">
+          <span style="{{r.labelStyle}}">{{r.label}}</span>
+          <span style="font-size: 13px; color: #4a5470; text-align: right;">{{r.before}}</span>
+          <div style="display: flex; flex-direction: column; gap: 2px;">
+            <div style="position: relative; height: 22px;">
+              <div style="position: absolute; left: 0; right: 0; top: 10px; height: 2px; background: #e6e8ef;"></div>
+              <div style="{{r.bandStyle}}"></div>
+              <div style="{{r.refStyle}}"></div>
+              <div style="{{r.lineStyle}}"></div>
+              <div style="{{r.dotBefore}}"></div>
+              <div style="{{r.dotAfter}}"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 9px; color: #6b7390;">
+              <span>{{r.min}}</span><span>{{r.refLabel}}</span><span>{{r.max}}</span>
+            </div>
+          </div>
+          <span style="font-size: 13px; font-weight: 700;">{{r.after}}</span>
+          <span style="{{r.verdictStyle}}">{{r.verdict}}</span>
+        </div>
       </sc-for>
     </div>
     <p style="margin: 0; font-size: 13px; line-height: 1.6; padding: 10px 14px; border-radius: 12px; background: #eef3fa;"><b>실천 기간 안에서</b> 목표를 지킨 밤(3일)의 다음 날 아침 컨디션은 평균 3.3점, 못 지킨 밤(2일)은 2.0점이었어요.</p>
@@ -119,14 +137,33 @@ class Component extends DCLogic {
     ];
     return {
       days: raw.map(function (x) { return { d: x[0], w: x[1], style: st[x[2]], mark: x[2] === 'ok' ? '✓' : x[2] === 'no' ? '×' : '아직', phone: x[3] }; }),
-      rows: [
-        { label: '평균 잔 시간', before: '7.1시간', nb: '6일', after: '8.3시간', na: '6일', arrow: '↑' },
-        { label: '평균 잠든 시각', before: '00:12', nb: '6일', after: '23:30', na: '6일', arrow: '빨라짐' },
-        { label: '평균 아침 컨디션', before: '2.2점', nb: '5일', after: '2.5점', na: '5일', arrow: '→' },
-        { label: '하루 평균 카페인', kind: 'caf', before: '72mg', nb: '5일', after: '50mg', na: '5일', arrow: '↓' },
-        { label: '카페인 마신 날', kind: 'caf', before: '4 / 5일', nb: '', after: '3 / 5일', na: '', arrow: '↓' },
-        { label: '오후 3시 이후 마신 날', kind: 'caf', before: '3 / 5일', nb: '', after: '2 / 5일', na: '', arrow: '↓' }
-      ].map(function (r) { return Object.assign({}, r, { labelStyle: 'padding: 9px 12px; font-size: 13px; font-weight: 700; border-top: 1px solid #ece9f6; color: ' + (r.kind === 'caf' ? '#8a3b10' : '#1f4a85') + ';' }); })
+      rows: (function () {
+        var colors = { good: '#2f7d62', bad: '#d0743f', same: '#6b7390' };
+        var spec = [
+          { label: '잔 시간', kind: 'sleep', min: 5, max: 11, minL: '5시간', maxL: '11시간', b: 7.1, a: 8.3, band: [8, 10], refL: '8~10시간', before: '7.1시간 (6일)', after: '8.3시간 (6일)', verdict: '좋아짐 · 1.2시간', v: 'good' },
+          { label: '잠든 시각', kind: 'sleep', min: 21, max: 26, minL: '21시', maxL: '02시', b: 24.2, a: 23.5, ref: 24, refL: '12시', before: '00:12 (6일)', after: '23:30 (6일)', verdict: '좋아짐 · 42분 일찍', v: 'good' },
+          { label: '아침 컨디션', kind: 'sleep', min: 1, max: 5, minL: '1점', maxL: '5점', b: 2.2, a: 2.5, ref: 3, refL: '보통 3점', before: '2.2점 (5일)', after: '2.5점 (5일)', verdict: '비슷해요', v: 'same' },
+          { label: '하루 평균 카페인', kind: 'caf', min: 0, max: 200, minL: '0mg', maxL: '200mg', b: 72, a: 50, ref: 170, refL: '일일 최대 170mg', before: '72mg (5일)', after: '50mg (5일)', verdict: '좋아짐 · 22mg 적게', v: 'good' },
+          { label: '카페인 마신 날', kind: 'caf', min: 0, max: 100, minL: '0일', maxL: '모든 날', b: 40, a: 80, refL: '', before: '2 / 5일', after: '4 / 5일', verdict: '아쉬움 · 2일 늘어남', v: 'bad' },
+          { label: '오후 3시 이후 마신 날', kind: 'caf', min: 0, max: 100, minL: '0일', maxL: '모든 날', b: 60, a: 40, refL: '', before: '3 / 5일', after: '2 / 5일', verdict: '비슷해요', v: 'same' }
+        ];
+        var pos = function (r, x) { return Math.max(0, Math.min(100, (x - r.min) / (r.max - r.min) * 100)); };
+        return spec.map(function (r, i) {
+          var pb = pos(r, r.b), pa = pos(r, r.a), lo = Math.min(pb, pa), hi = Math.max(pb, pa), c = colors[r.v];
+          var dot = 'position: absolute; top: 4px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; box-sizing: border-box;';
+          return {
+            label: r.label, before: r.before, after: r.after, verdict: r.verdict, min: r.minL, max: r.maxL, refLabel: r.refL,
+            rowStyle: 'display: grid; grid-template-columns: 128px 92px minmax(0, 1fr) 92px 112px; gap: 10px; align-items: center; padding: 8px 12px;' + (i ? ' border-top: 1px solid #ece9f6;' : ''),
+            labelStyle: 'font-size: 13px; font-weight: 700; color: ' + (r.kind === 'caf' ? '#8a3b10' : '#1f4a85') + ';',
+            bandStyle: r.band ? 'position: absolute; top: 4px; height: 14px; border-radius: 4px; background: #dfe8f7; left: ' + pos(r, r.band[0]) + '%; width: ' + (pos(r, r.band[1]) - pos(r, r.band[0])) + '%;' : 'display: none;',
+            refStyle: r.ref !== undefined ? 'position: absolute; top: 2px; height: 18px; width: 0; border-left: 1.5px dashed #8f96ad; left: ' + pos(r, r.ref) + '%;' : 'display: none;',
+            lineStyle: 'position: absolute; top: 9px; height: 4px; border-radius: 2px; background: ' + c + '; opacity: 0.55; left: ' + lo + '%; width: ' + (hi - lo) + '%;',
+            dotBefore: dot + ' background: #ffffff; border: 3px solid #9aa0b4; left: ' + pb + '%;',
+            dotAfter: dot + ' background: ' + c + '; left: ' + pa + '%;',
+            verdictStyle: 'font-size: 12px; font-weight: 800; color: ' + c + ';'
+          };
+        });
+      })()
     };
   }
 }

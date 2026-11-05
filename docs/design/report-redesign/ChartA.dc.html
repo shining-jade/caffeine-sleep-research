@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>비교 그래프 시안 A 아령</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 794px; height: 560px; box-sizing: border-box; padding: 28px 44px; display: flex; flex-direction: column; gap: 10px; background: #ffffff; color: #1f2a44; font-family: 'Noto Sans KR', system-ui, sans-serif;">
+  <h2 style="margin: 0; font-size: 17px; font-weight: 800;">A. 아령 — 같은 눈금 위의 점 두 개</h2>
+  <p style="margin: 0; font-size: 12px; color: #4a5470;">○ 목표 세우기 전 → ● 실천 기간. 파란 띠는 권장 범위, 점선은 기준. 점이 기준 쪽으로 움직였는지 봅니다.</p>
+  <div style="display: flex; flex-direction: column; border: 1.5px solid #e2def3; border-radius: 12px; overflow: hidden;">
+    <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+      <div style="{{r.rowStyle}}">
+        <span style="{{r.labelStyle}}">{{r.label}}</span>
+        <span style="font-size: 12px; color: #4a5470; text-align: right; white-space: nowrap;">{{r.before}}</span>
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="position: relative; height: 22px;">
+            <div style="position: absolute; left: 0; right: 0; top: 10px; height: 2px; background: #e6e8ef;"></div>
+            <div style="{{r.bandStyle}}"></div>
+            <div style="{{r.refStyle}}"></div>
+            <div style="{{r.lineStyle}}"></div>
+            <div style="{{r.dotBefore}}"></div>
+            <div style="{{r.dotAfter}}"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 9px; color: #6b7390; white-space: nowrap;">
+            <span>{{r.minL}}</span><span>{{r.refL}}</span><span>{{r.maxL}}</span>
+          </div>
+        </div>
+        <span style="font-size: 12px; font-weight: 700; white-space: nowrap;">{{r.after}}</span>
+        <span style="{{r.verdictStyle}}">{{r.verdict}}</span>
+      </div>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":794,"height":560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var colors = { good: '#2f7d62', bad: '#d0743f', same: '#6b7390' };
+    var spec = [
+      { label: '잔 시간', kind: 'sleep', min: 5, max: 11, minL: '5시간', maxL: '11시간', b: 7.1, a: 8.3, band: [8, 10], refL: '8~10시간', before: '7.1시간 (6일)', after: '8.3시간 (6일)', verdict: '좋아짐 · 1.2시간 길어짐', v: 'good' },
+      { label: '잠든 시각', kind: 'sleep', min: 21, max: 26, minL: '21시', maxL: '02시', b: 24.2, a: 23.5, ref: 24, refL: '12시', before: '00:12 (6일)', after: '23:30 (6일)', verdict: '좋아짐 · 42분 일찍', v: 'good' },
+      { label: '아침 컨디션', kind: 'sleep', min: 1, max: 5, minL: '1점', maxL: '5점', b: 2.2, a: 2.5, ref: 3, refL: '보통 3점', before: '2.2점 (5일)', after: '2.5점 (5일)', verdict: '비슷해요', v: 'same' },
+      { label: '하루 평균 카페인', kind: 'caf', min: 0, max: 200, minL: '0mg', maxL: '200mg', b: 72, a: 50, ref: 170, refL: '일일 최대 170mg', before: '72mg (5일)', after: '50mg (5일)', verdict: '좋아짐 · 22mg 적음', v: 'good' },
+      { label: '카페인 마신 날', kind: 'caf', min: 0, max: 100, minL: '0일', maxL: '모든 날', b: 40, a: 80, refL: '', before: '2 / 5일', after: '4 / 5일', verdict: '아쉬움 · 2일 많음', v: 'bad' },
+      { label: '오후 3시 이후 마신 날', kind: 'caf', min: 0, max: 100, minL: '0일', maxL: '모든 날', b: 60, a: 40, refL: '', before: '3 / 5일', after: '2 / 5일', verdict: '비슷해요', v: 'same' }
+    ];
+    var pos = function (r, x) { return Math.max(0, Math.min(100, (x - r.min) / (r.max - r.min) * 100)); };
+    var dot = 'position: absolute; top: 4px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; box-sizing: border-box;';
+    return { rows: spec.map(function (r, i) {
+      var pb = pos(r, r.b), pa = pos(r, r.a), lo = Math.min(pb, pa), hi = Math.max(pb, pa), c = colors[r.v];
+      return Object.assign({}, r, {
+        rowStyle: 'display: grid; grid-template-columns: 148px 84px minmax(0, 1fr) 84px 148px; gap: 8px; align-items: center; padding: 9px 12px;' + (i ? ' border-top: 1px solid #ece9f6;' : ''),
+        labelStyle: 'font-size: 13px; font-weight: 700; white-space: nowrap; color: ' + (r.kind === 'caf' ? '#8a3b10' : '#1f4a85') + ';',
+        bandStyle: r.band ? 'position: absolute; top: 4px; height: 14px; border-radius: 4px; background: #dfe8f7; left: ' + pos(r, r.band[0]) + '%; width: ' + (pos(r, r.band[1]) - pos(r, r.band[0])) + '%;' : 'display: none;',
+        refStyle: r.ref !== undefined ? 'position: absolute; top: 2px; height: 18px; width: 0; border-left: 1.5px dashed #8f96ad; left: ' + pos(r, r.ref) + '%;' : 'display: none;',
+        lineStyle: 'position: absolute; top: 9px; height: 4px; border-radius: 2px; opacity: 0.55; background: ' + c + '; left: ' + lo + '%; width: ' + (hi - lo) + '%;',
+        dotBefore: dot + ' background: #ffffff; border: 3px solid #9aa0b4; left: ' + pb + '%;',
+        dotAfter: dot + ' background: ' + c + '; left: ' + pa + '%;',
+        verdictStyle: 'font-size: 12px; font-weight: 800; white-space: nowrap; color: ' + c + ';'
+      });
+    }) };
+  }
+}
+</script>
+</body>
+</html>
