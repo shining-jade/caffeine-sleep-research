@@ -32,3 +32,48 @@ test('delivery uses raw PDF bytes as base64, preserves identity and period, and 
   big.set(bytes);
   assert.throws(() => build(report, { name: '가상.pdf', bytes: big }, 'fixture-delivery'), /3MB/);
 });
+
+test('exports two images when 29 caffeine intakes are represented as charts', async () => {
+  const report = makeSummaryFixture({ length:30, editDays(days) {
+    days.forEach(day => {
+      day.caffeine = { recorded:true, totalMg:40, intakes:[{ drink:'가상 음료', mg:40, time:'15:00' }] };
+    });
+  } });
+  const captured = [];
+  const frame = { style:{}, setAttribute(){}, remove(){}, contentDocument:{
+    fonts:{ ready:Promise.resolve() },
+    open(){}, close(){},
+    write(html){
+      this.pages = [...html.matchAll(/<article class="summary-page"[\s>]/g)].map(() => ({
+        dataset:{}, scrollHeight:1123, querySelector:() => null,
+      }));
+      assert.match(html, /섭취 29번/);
+      assert.equal((html.match(/data-caffeine-card=/g) || []).length, 4);
+      assert.doesNotMatch(html, /class="summary-scroll summary-intakes"/);
+    },
+    querySelectorAll(){ return this.pages; },
+  } };
+  const window = {};
+  const document = {
+    body:{ append(){} },
+    head:{ append(script) {
+      window.html2canvas = async (page, options) => {
+        captured.push(options.height);
+        return { width:1588, height:2246, toBlob:callback => callback(new Blob(['fake jpeg'], { type:'image/jpeg' })) };
+      };
+      window.jspdf = { jsPDF:{ version:'4.2.1' } };
+      script.load();
+    } },
+    createElement(tag) {
+      return tag === 'iframe' ? frame : { addEventListener(type, callback) { this[type] = callback; } };
+    },
+  };
+  const env = vm.createContext({ window, document, Uint8Array });
+  for (const file of ['teacher-report-files.js', 'teacher-report-export.js']) {
+    vm.runInContext(fs.readFileSync(path.join(root, 'vercel/public/js', file), 'utf8'), env);
+  }
+  const images = await window.teacherReportExport.prepare(report, 'images');
+  assert.equal(images.length, 2);
+  assert.deepEqual(captured, [1123, 1123]);
+  assert.match(images[1].name, /_2쪽\.jpg$/);
+});

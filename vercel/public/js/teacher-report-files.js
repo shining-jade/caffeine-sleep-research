@@ -577,15 +577,48 @@
     .summary-foot{margin-top:auto!important;font-size:10.5px;color:#4a5470;display:grid;gap:4px}
     .summary-foot-standards{display:grid;gap:2px}
     .summary-goal-row .summary-goal-total.no-weight,.summary-weekly-area .summary-ratio.no-weight{font-size:10px;line-height:1.25;white-space:normal;word-break:keep-all}
+    .summary-page[data-page="2"]{gap:11px}
+    .summary-page[data-page="2"] .summary-section{gap:7px}
     .summary-page[data-page="2"] .summary-header{align-items:baseline}
     .summary-intakes{border:1.5px solid #ecd9cb;border-radius:12px;max-height:195px}
     .summary-intakes table{width:100%;min-width:570px;border-collapse:collapse;table-layout:fixed}
     .summary-intakes th,.summary-intakes td{padding:7px 6px;text-align:left;overflow-wrap:anywhere}
     .summary-intakes th{background:#fbeee4;color:#6b3a1c;font-size:11px}.summary-intakes td{border-top:1px solid #f1e4da}
     .summary-intakes tr .late,.summary-intakes tr .discomfort{color:#8a2f0c;font-weight:800}
+    .summary-caf-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .summary-caf-card{min-width:0;border:1.5px solid #ecd9cb;border-radius:12px;padding:8px 12px;display:grid;gap:4px;align-content:start}
+    .summary-caf-card h3{color:#7a3a12;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:2px 6px}
+    .summary-caf-card h3 small,.summary-caf-count small{font-size:10.5px;font-weight:500;color:#4a5470}
+    .summary-caf-hb{display:grid;grid-template-columns:minmax(0,104px) minmax(0,1fr) 40px;gap:6px;align-items:center;font-size:12px;line-height:1.35}
+    .summary-caf-hb.wide{grid-template-columns:minmax(0,104px) minmax(0,1fr) 92px}
+    .summary-caf-label{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .summary-caf-track{height:12px;background:#f8efe8;border-radius:4px;overflow:hidden}
+    .summary-caf-track i{display:block;height:100%;background:#d98a55;border-radius:4px}
+    .summary-caf-track i.soft{background:#efc3a1}.summary-caf-track i.symptom{background:#d0743f}
+    .summary-caf-count{font-weight:800;color:#7a3a12;text-align:right;white-space:nowrap}
+    .summary-caf-cols,.summary-caf-axis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .summary-caf-cols{align-items:end;height:92px;padding-top:2px}
+    .summary-caf-col{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px;height:100%;font-size:12px;font-weight:800;color:#7a3a12}
+    .summary-caf-col i{display:block;width:min(34px,100%);border-radius:5px 5px 0 0;background:#efc3a1}
+    .summary-caf-col.late i{background:#d98a55}.summary-caf-axis b{color:#8a2f0c}
+    .summary-caf-axis{text-align:center;font-size:11px;color:#4a5470;border-top:1px solid #ecd9cb;padding-top:4px}
+    .summary-caf-split{display:flex;min-height:20px;border-radius:6px;overflow:hidden;font-size:11px;font-weight:700}
+    .summary-caf-split span{display:grid;place-items:center;min-width:max-content;padding-inline:4px}
+    .summary-caf-split .none{background:#eef0f4;color:#4a5470}.summary-caf-split .has{background:#d0743f;color:#fff}
+    .summary-caf-none{display:grid;grid-template-columns:150px minmax(0,1fr);gap:18px;align-items:center;border:1.5px solid #ecd9cb;background:#fffaf5;border-radius:14px;padding:16px 20px}
+    .summary-caf-none svg{max-width:100%;height:auto}
+    .summary-caf-big{font-size:40px;font-weight:800;color:#7a3a12;line-height:1}
+    .summary-caf-big small{font-size:16px;margin-left:2px}
+    .summary-caf-none .summary-caf-lead{font-size:15px;font-weight:800;margin-top:6px}
+    .summary-caf-stats{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+    .summary-caf-stats span{background:#fff;border:1.5px solid #ecd9cb;border-radius:10px;padding:6px 12px;font-size:11px;color:#4a5470}
+    .summary-caf-stats b{display:block;font-size:17px;color:#7a3a12}
+    .summary-caf-chips{display:flex;flex-wrap:wrap;gap:3px;margin-top:10px}
+    .summary-caf-chip{width:14px;height:14px;border-radius:4px;background:#d98a55}
+    @media(max-width:580px){.summary-caf-grid{grid-template-columns:minmax(0,1fr)}.summary-caf-none{grid-template-columns:1fr;gap:6px}.summary-caf-none svg{width:90px}}
     .summary-habit{display:grid;grid-template-columns:150px minmax(0,1fr);gap:10px;align-items:center;font-weight:700}
     .summary-habit-bar{display:flex;flex-wrap:wrap;gap:2px;overflow:hidden;border-radius:8px}
-    .summary-habit-bar span{display:grid;place-items:center;min-height:30px;min-width:0;padding:2px 3px;font-size:11px;line-height:1.25;text-align:center;overflow-wrap:anywhere;background:#e6ecf8;color:#24324f}
+    .summary-habit-bar>span{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:26px;min-width:44px;padding:1px 2px;font-size:10.5px;line-height:1.15;text-align:center;overflow-wrap:anywhere;background:#e6ecf8;color:#24324f}
     .summary-habit-bar .band-1{background:#bccde9}.summary-habit-bar .band-2{background:#5978b4;color:white}.summary-habit-bar .band-3{background:#3f68ad;color:white}
     .summary-record-card{border-radius:12px;padding:12px 14px;display:grid;align-content:start;gap:5px}
     .summary-record-card.good{background:#eef6f2;color:#185a41}.summary-record-card.review{border:1.5px dashed #d0a07f;color:#8a3b10}
@@ -658,6 +691,100 @@
   const reportTextHtml = value => typeof value?.html === 'string' && window.safeRender
     ? window.safeRender.sanitizeRichHtml(value.html, { report: true }) : pdfText(reportPlainText(value));
 
+  const caffeineChoiceLabels = new Map([
+    ['공부나 일에 집중이 필요해서', '공부·일에 집중'], ['스트레스나 불안을 해소하려고', '스트레스·불안 해소'],
+    ['커피나 음료 맛이 좋아서', '맛이 좋아서'], ['운동할 때 에너지를 얻으려고', '운동할 때 에너지'],
+    ['속이 울렁거리거나 배가 아팠다', '속 울렁임·복통'], ['불안하거나 예민했다', '불안·예민'],
+  ]);
+  const noDiscomfort = symptom => /^(없음|해당 없음|없었어요|없다)$/.test(symptom);
+
+  function buildSummaryCaffeineCharts(intakes) {
+    const noResponse = '<p class="summary-note">표시할 응답이 없어요.</p>';
+    const choices = value => (value || '').split(', ').map(item => item.trim()).filter(Boolean);
+    const shortChoice = value => caffeineChoiceLabels.get(value) ?? pdfShort(value, 12);
+    const rank = entries => {
+      const rows = new Map();
+      for (const [name, mg] of entries) {
+        if (!rows.has(name)) rows.set(name, { name, count: 0, mg: null });
+        const row = rows.get(name);
+        row.count++;
+        if (Number.isFinite(mg)) row.mg = (row.mg ?? 0) + mg;
+      }
+      return [...rows.values()].sort((a, b) => b.count - a.count);
+    };
+    const topFour = (rows, format = name => name) => {
+      const rest = rows.slice(4);
+      if (!rest.length) return rows;
+      const amounts = rest.map(row => row.mg).filter(Number.isFinite);
+      return [...rows.slice(0, 4), { name: `기타 (${format(rest[0].name)} 등)`,
+        count: rest.reduce((sum, row) => sum + row.count, 0),
+        mg: amounts.length ? amounts.reduce((sum, amount) => sum + amount, 0) : null }];
+    };
+    const horizontal = (rows, { tone = '', wide = false } = {}) => {
+      if (!rows.length) return noResponse;
+      const max = Math.max(...rows.map(row => row.count));
+      return rows.map(({ name, count, mg }) => `<div class="summary-caf-hb${wide ? ' wide' : ''}">
+        <span class="summary-caf-label" title="${pdfText(name)}">${pdfText(name)}</span><span class="summary-caf-track" aria-hidden="true"><i class="${tone}" style="width:${count / max * 100}%"></i></span>
+        <span class="summary-caf-count">${count}번${wide && mg !== null ? ` <small>${mg.toLocaleString('ko-KR')}mg</small>` : ''}</span></div>`).join('');
+    };
+    const card = (key, title, detail, content) => `<article class="summary-caf-card" data-caffeine-card="${key}"><h3>${title}${detail ? ` <small>${detail}</small>` : ''}</h3>${content}</article>`;
+    const drinks = rank(intakes.map(item => [item.drink?.replace(/\s+/g, ' ').trim() || '이름 없음', item.mg]));
+    const reasons = rank(intakes.flatMap(item => choices(item.reason).map(value => [value])));
+    const timeBands = [['morning', '오전', 0], ['midday', '12~15시', 720], ['afternoon', '15~18시', 900], ['evening', '18시 이후', 1080]];
+    const counts = timeBands.map(([, , start], index) => intakes.filter(({ time }) => Number.isFinite(time) &&
+      time >= start && time < (timeBands[index + 1]?.[2] ?? 1440)).length);
+    const maxTime = Math.max(...counts);
+    const times = maxTime ? `<div class="summary-caf-cols">${timeBands.map(([key], i) =>
+      `<div class="summary-caf-col${i >= 2 ? ' late' : ''}" data-caffeine-time="${key}"><span>${counts[i]}번</span><i aria-hidden="true" style="height:${counts[i] / maxTime * 62}px"></i></div>`).join('')}</div>
+      <div class="summary-caf-axis">${timeBands.map(([, text], i) => i >= 2 ? `<b>${text}</b>` : `<span>${text}</span>`).join('')}</div>` : noResponse;
+    const answered = intakes.map(item => ({ ...item, options: choices(item.symptom) })).filter(item => item.options.length);
+    const symptomatic = answered.map(item => ({ ...item, options: item.options.filter(value => !noDiscomfort(value)) }))
+      .filter(item => item.options.length);
+    const without = answered.length - symptomatic.length;
+    const symptoms = rank(symptomatic.flatMap(item => item.options.map(value => [value])))
+      .map(row => ({ ...row, name: shortChoice(row.name) }));
+    const split = answered.length ? `<div class="summary-caf-split">
+      ${without ? `<span class="none" style="flex:${without} 1 0">없음 ${without}번</span>` : ''}
+      ${symptomatic.length ? `<span class="has" style="flex:${symptomatic.length} 1 0">있음 ${symptomatic.length}번</span>` : ''}</div>
+      ${symptoms.length ? horizontal(symptoms, { tone: 'symptom' }) : ''}` : noResponse;
+    const [top, second] = drinks;
+    const late = counts[2] + counts[3];
+    const side = symptomatic[0];
+    const sideNote = symptomatic.length >= 2
+      ? `불편함을 적은 ${symptomatic.length}번 중 ${symptomatic.filter(item => item.time >= 900).length}번은 15시 이후였어요.`
+      : side && Number.isFinite(side.time) && Number.isFinite(side.bed)
+        ? `${pdfDay(side.date)}에는 ${pdfClock(side.time)}에 카페인을 마시고 ‘${side.options.join(', ')}’고 적었어요. 그날 밤 ${pdfClock(side.bed)}에 잠들었어요.` : '';
+    const note = [top.count >= 2 && top.count > (second?.count ?? 0) ? `가장 자주 마신 건 ‘${top.name}’(${top.count}번)예요.` : '',
+      late ? `15시 이후에 마신 건 ${late}번이에요.` : '', sideNote].filter(Boolean).join(' ');
+    const reasonRows = topFour(reasons.map(row => ({ ...row, name: shortChoice(row.name) })));
+    return { note, content: `<div class="summary-caf-grid">
+      ${card('drink', '① 자주 마신 음료', '횟수 · 합계', horizontal(topFour(drinks, name => pdfShort(name, 12)), { wide: true }))}
+      ${card('time', '② 마신 시각', '15시 이후 진하게', times)}
+      ${card('reason', '③ 마신 이유', '고른 횟수', horizontal(reasonRows, { tone: 'soft' }))}
+      ${card('symptom', '④ 마신 뒤 불편함', answered.length ? `적은 ${answered.length}번 중` : '', split)}
+    </div>` };
+  }
+
+  function buildSummaryNoCaffeine(zero, periodDays) {
+    if (!zero.length) return { content: '<p class="summary-note">표시할 섭취 내역이 없어요.</p>', note: '' };
+    let longest = 0, streak = 0, previous, last;
+    for (const { date } of zero) {
+      streak = previous === pdfShiftDate(date, -1) ? streak + 1 : 1;
+      if (streak > longest) { longest = streak; last = date; }
+      previous = date;
+    }
+    const lead = zero.length === periodDays ? '이 기간에는 카페인을 마시지 않았어요' : '기록한 날에는 카페인을 마시지 않았어요';
+    const note = `${zero.length}일 ‘안 마심’을 남겼고, 가장 길게는 ${pdfDay(pdfShiftDate(last, 1 - longest))}부터 ${pdfDay(last)}까지 ${longest}일 이어졌어요.`;
+    return { note: longest >= 2 ? note : `${zero.length}일 ‘안 마심’을 남겼어요.`, content: `<div class="summary-caf-none">
+      <svg viewBox="0 0 120 120" width="140" height="140" aria-hidden="true"><circle cx="60" cy="60" r="56" fill="#fbeee4"/>
+      <path d="M30 46h52l-6 44a8 8 0 0 1-8 7H44a8 8 0 0 1-8-7z" fill="#fff" stroke="#d98a55" stroke-width="4" stroke-linejoin="round"/>
+      <path d="M82 54h6a10 10 0 0 1 0 20h-8" fill="none" stroke="#d98a55" stroke-width="4"/>
+      <text x="56" y="80" text-anchor="middle" font-size="22" font-weight="800" fill="#7a3a12" font-family="Noto Sans CJK KR">0</text></svg>
+      <div><div class="summary-caf-big">0<small>mg</small></div><p class="summary-caf-lead">${lead}</p>
+      <div class="summary-caf-stats"><span><b>${zero.length}일</b>‘안 마심’ 기록</span>${longest >= 2 ? `<span><b>${longest}일</b>가장 길게 이어진 날</span>` : ''}</div>
+      <div class="summary-caf-chips" aria-hidden="true">${zero.map(() => '<i class="summary-caf-chip"></i>').join('')}</div></div></div>` };
+  }
+
   function buildSummaryReportDocument(report, { now = Date.now() } = {}) {
     const { feedback, student, start, end } = report;
     const finding = id => feedback.engine.findings.find(item => item.id === id)?.data;
@@ -677,7 +804,6 @@
     const validSleep = closed.filter(day => day.recorded && !day.held);
     const cafDays = days.filter(day => !day.open || day.caf?.recorded);
     const zero = cafDays.filter(day => day.caf?.status === 'zero');
-    const missing = closed.filter(day => !day.caf?.recorded);
     const counts = (label, recorded, total, tone = '') => `<div class="summary-counter ${tone}"><span>${label}</span><strong>${recorded} / ${total}일</strong></div>`;
     const wd = date => ['일', '월', '화', '수', '목', '금', '토'][new Date(date + 'T00:00:00Z').getUTCDay()];
     const dateText = date => `${pdfDay(date)}(${wd(date)})`;
@@ -863,19 +989,9 @@
     const intakes = days.flatMap(day => (day.caf?.intakes || []).filter(item => item.mg !== 0)
       .map(item => ({ ...item, date: day.date, bed: day.open ? null : day.bed })))
       .sort((a, b) => a.date.localeCompare(b.date) || (a.time ?? 1440) - (b.time ?? 1440));
-    const noDiscomfort = symptom => /^(없음|해당 없음|없었어요|없다)$/.test(symptom);
-    const intakeTable = intakes.length ? `<div class="summary-scroll summary-intakes" role="region" tabindex="0" aria-label="카페인 섭취 기록">
-      <table><colgroup><col style="width:10%"><col style="width:10%"><col style="width:22%"><col style="width:12%"><col style="width:25%"><col style="width:21%"></colgroup>
-      <thead><tr>${['날짜', '시각', '마신 것', '양', '마신 이유', '마신 뒤 불편함'].map(text => `<th scope="col">${text}</th>`).join('')}</tr></thead>
-      <tbody>${intakes.map(item => `<tr><td><b>${pdfDay(item.date)}</b></td><td${item.time >= 900 ? ' class="late"' : ''}>${asleep(item.time)}</td>
-        <td>${pdfText(item.drink || '–')}</td><td><b>${Number.isFinite(item.mg) ? `${item.mg}mg` : '–'}</b></td><td>${pdfText(item.reason || '–')}</td>
-        <td class="${item.symptom && !noDiscomfort(item.symptom) ? 'discomfort' : 'summary-muted'}">${pdfText(item.symptom || '–')}</td></tr>`).join('')}</tbody></table></div>`
-      : '<p class="summary-note">표시할 섭취 내역이 없어요.</p>';
-    const dates = list => list.length ? ` (${list.slice(0, 10).map(day => pdfDay(day.date)).join(', ')}${list.length > 10 ? ` 외 ${list.length - 10}일` : ''})` : '';
-    const side = intakes.find(item => item.mg > 0 && item.symptom && !noDiscomfort(item.symptom) && Number.isFinite(item.time) && Number.isFinite(item.bed));
-    const after3 = new Set(intakes.filter(item => item.mg > 0 && item.time >= 900).map(item => item.date));
-    const cNote = [side ? `${pdfDay(side.date)}에는 ${pdfClock(side.time)}에 카페인을 마시고 ‘${side.symptom}’고 적었어요. 그날 밤 ${pdfClock(side.bed)}에 잠들었어요.` : '',
-      after3.size ? `오후 3시 이후에 카페인을 마신 날은 ${after3.size}일이었어요.` : ''].filter(Boolean).join(' ');
+    const caffeineContent = intakes.length ? buildSummaryCaffeineCharts(intakes) : buildSummaryNoCaffeine(zero, days.length);
+    const caffeineNote = [`섭취 ${intakes.length}번`, intakes.length ? `마신 날 ${new Set(intakes.map(item => item.date)).size}일` : '',
+      zero.length ? `안 마신 날 ${zero.length}일` : ''].filter(Boolean).join(' · ');
     const habitOptions = {
       phone: ['안 함', '30분 미만', '30~60분', '60분 이상'],
       activity: ['안 함', '30분 미만', '30~60분', '60분 이상'],
@@ -891,7 +1007,7 @@
       if (!row) return '';
       const order = value => Math.max(0, habitOptions[key].indexOf(value) === -1 ? 2 : habitOptions[key].indexOf(value));
       return `<div class="summary-habit"><span>${title}</span><div class="summary-habit-bar">${[...row.responses]
-        .sort((a, b) => order(a.value) - order(b.value)).map(item => `<span class="band-${order(item.value)}" style="flex:${item.n} 1 0">${pdfText(item.value)} ${item.n}일</span>`).join('')}</div></div>`;
+        .sort((a, b) => order(a.value) - order(b.value)).map(item => `<span class="band-${order(item.value)}" style="flex:${item.n} 1 0"><span>${pdfText(item.value)}</span><span>${item.n}일</span></span>`).join('')}</div></div>`;
     }).join('');
     const phoneDates = finding('phoneBeforeBed')?.members || [[], []];
     const phoneGroups = phoneDates.map(list => { const keys = new Set(list); return validSleep.filter(day => keys.has(day.date)); });
@@ -902,22 +1018,31 @@
     const sleepMissing = closed.filter(day => !day.recorded);
     const held = closed.filter(day => day.held);
     const conditionMissing = validSleep.filter(day => !Number.isFinite(day.condition));
-    const quantityMissing = intakes.filter(item => !Number.isFinite(item.mg)).length;
-    const timeMissing = intakes.filter(item => !Number.isFinite(item.time)).length;
-    const review = [missing.length ? `카페인 기록이 비어 있는 날은 ${missing.length}일이에요${dates(missing)}. 안 마셨다면 ‘안 마심’을 눌러 주세요.` : '',
-      sleepMissing.length ? `수면 기록이 비어 있는 밤은 ${sleepMissing.length}일이에요${dates(sleepMissing)}.` : '',
-      held.length ? `겹치거나 충돌해 수면 분석을 보류한 밤은 ${held.length}일이에요${dates(held)}.` : '',
-      conditionMissing.length ? `아침 컨디션이 빠진 밤은 ${conditionMissing.length}일이에요${dates(conditionMissing)}.` : '',
-      quantityMissing || timeMissing ? `섭취 기록에서 ${[quantityMissing ? `함량 ${quantityMissing}건` : '', timeMissing ? `시각 ${timeMissing}건` : ''].filter(Boolean).join('과 ')}이 빠졌어요.` : ''].filter(Boolean);
+    const incompleteIntakes = intakes.filter(item => !Number.isFinite(item.mg) || !Number.isFinite(item.time));
+    const quantityMissing = incompleteIntakes.filter(item => !Number.isFinite(item.mg)).length;
+    const timeMissing = incompleteIntakes.filter(item => !Number.isFinite(item.time)).length;
+    const reviewDateLimit = 3;
+    const reviewDates = entries => {
+      const dates = [...new Set(entries.map(item => item.date))];
+      const additional = dates.length - reviewDateLimit;
+      return ` (${dates.slice(0, reviewDateLimit).map(pdfDay).join(', ')}${additional > 0 ? ` 외 ${additional}일` : ''})`;
+    };
+    const review = [sleepMissing.length ? `수면 기록이 비어 있는 밤은 ${sleepMissing.length}일이에요${reviewDates(sleepMissing)}.` : '',
+      held.length ? `겹치거나 충돌해 수면 분석을 보류한 밤은 ${held.length}일이에요${reviewDates(held)}.` : '',
+      conditionMissing.length ? `아침 컨디션이 빠진 밤은 ${conditionMissing.length}일이에요${reviewDates(conditionMissing)}.` : '',
+      incompleteIntakes.length ? `섭취 기록에서 ${[quantityMissing ? `함량 ${quantityMissing}건` : '', timeMissing ? `시각 ${timeMissing}건` : ''].filter(Boolean).join('과 ')}이 빠졌어요${reviewDates(incompleteIntakes)}.` : ''].filter(Boolean);
     const lateEntries = feedback.engine.summaryLateEntries || [];
-    const visibleLate = lateEntries.slice(0, 3);
-    const hiddenLate = lateEntries.slice(3).reduce((total, item) => total + item.count, 0);
-    const lateText = visibleLate.map(({ kind, date, delayDays, count }) => {
-      const when = delayDays === 1 ? '다음 날' : delayDays + '일 뒤';
-      const topic = kind === 'sleep' ? '밤 수면' : '카페인';
-      return pdfDay(date) + ' ' + topic + (count === 1 ? '은' : ' 기록 ' + count + '건은')
-        + (kind === 'sleep' ? ' 일어난 ' : ' ') + when + ' 입력했어요.';
-    }).join(' ') + (hiddenLate ? ' 외 ' + hiddenLate + '건' : '');
+    const visibleLate = lateEntries.slice(0, reviewDateLimit);
+    if (visibleLate.length) {
+      const examples = visibleLate.map(({ kind, date, delayDays, count }) => {
+        const when = delayDays === 1 ? '다음 날' : delayDays + '일 뒤';
+        const topic = kind === 'sleep' ? '밤 수면' : '카페인';
+        return pdfDay(date) + ' ' + topic + (count === 1 ? '은' : ' 기록 ' + count + '건은')
+          + (kind === 'sleep' ? ' 일어난 ' : ' ') + when + ' 입력했어요.';
+      });
+      const additional = lateEntries.slice(reviewDateLimit).reduce((total, item) => total + item.count, 0);
+      review.push(examples.join(' ') + (additional ? ' 외 ' + additional + '건' : ''));
+    }
     const ranked = goals.filter(goal => goal.measured > 0).sort((a, b) => b.kept / b.measured - a.kept / a.measured);
     const best = ranked[0];
     const hardest = ranked.filter(goal => goal.kept < goal.measured).at(-1);
@@ -939,11 +1064,11 @@
       reportPlainText(feedback.summary).trim() || defaultMemo);
     const page2 = `<article class="summary-page" data-page="2"${weeks.length ? ' data-period="weekly"' : ''}${visibleLate.length ? ' data-late="true"' : ''}><header class="summary-header">
       <p class="summary-kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="summary-sub">${name} · ${period}</p></header>
-      ${block('C. 카페인을 마신 날', intakeTable + `<p class="summary-sub">안 마신 날 ${zero.length}일${dates(zero)} · 기록 없는 날 ${missing.length}일${dates(missing)}</p>` + callout('caffeineDays', 'C. 카페인을 마신 날 설명', cNote))}
+      ${block('C. 카페인을 마신 날', caffeineContent.content + callout('caffeineDays', 'C. 카페인을 마신 날 설명', caffeineContent.note), caffeineNote)}
       ${block('D. 수면과 생활습관', (habitBars || '<p class="summary-note">표시할 생활습관 응답이 없어요.</p>') + callout('sleepHabits', 'D. 수면과 생활습관 설명', dNote, 'blue'), '밤 기록 중 고른 답 · 숫자는 일수')}
       <section class="summary-two">
         <div class="summary-record-card good"><h2>E. 기록 · 잘한 점</h2>${recordNote('recordGood', 'E. 기록 · 잘한 점', good.length ? good : ['아직 확인할 기록이 없어요.'])}</div>
-        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${recordNote('recordReview', 'E. 기록 · 아쉬운 점', lateText ? [...review, lateText] : review.length ? review : ['확인한 기록에서 빠진 항목이 없어요.'])}${visibleLate.length ? '<small class="summary-note">저장 시각 기준이라 나중에 수정한 기록도 포함될 수 있어요.</small>' : ''}</div>
+        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${recordNote('recordReview', 'E. 기록 · 아쉬운 점', review.length ? review : ['확인한 기록에서 빠진 항목이 없어요.'])}${visibleLate.length ? '<small class="summary-note">저장 시각 기준이라 나중에 수정한 기록도 포함될 수 있어요.</small>' : ''}</div>
       </section>
       <section class="summary-section summary-reflections"><h2>F. 돌아보기</h2><div class="summary-three">
         ${reflection.map(([key, title, value]) => `<div class="summary-reflect-card"><h3>${title}</h3><p data-summary-text="${key}"${reportPlainText(value) ? '' : ' class="summary-note"'}>${reportTextHtml(reportPlainText(value) ? value : '기록에서 확인할 내용이 없어요.')}</p></div>`).join('')}

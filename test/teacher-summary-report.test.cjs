@@ -92,6 +92,91 @@ test('fills the first teacher note consistently and keeps saved notes and delibe
   assert.equal(memo(), '');
 });
 
+function caffeineReport(entriesByDay) {
+  return makeSummaryFixture({ length: entriesByDay.length + 1, editDays(days) {
+    days.forEach((day, i) => {
+      const intakes = entriesByDay[i];
+      day.caffeine = intakes && { recorded: true, totalMg: intakes.reduce((sum, item) => sum + (item.mg || 0), 0), intakes };
+    });
+  } });
+}
+
+const caffeineSection = html => html.match(/<h2>C\. 카페인을 마신 날<\/h2>[\s\S]*?<\/section>/)[0];
+const caffeineCard = (html, key) => html.match(new RegExp('data-caffeine-card="' + key + '">([\\s\\S]*?)</article>'))[1];
+
+test('ranks drinks by servings, sums known amounts and groups all items after the fourth', () => {
+  const entries = [
+    ...Array.from({ length: 5 }, () => ({ drink:'아이스  커피', mg:200 })),
+    ...Array.from({ length: 4 }, () => ({ drink:'녹차', mg:50 })),
+    ...Array.from({ length: 3 }, () => ({ drink:'카페라떼', mg:100 })),
+    ...Array.from({ length: 2 }, () => ({ drink:'에너지음료', mg:80 })),
+    { drink:'콜라', mg:20 }, { drink:'홍차', mg:null },
+  ];
+  const html = caffeineSection(render(caffeineReport([entries])));
+  assert.doesNotMatch(html, /summary-intakes|<table/);
+  assert.equal((html.match(/data-caffeine-card=/g) || []).length, 4);
+  const card = caffeineCard(html, 'drink');
+  assert.match(card, /아이스 커피[\s\S]*?5번 <small>1,000mg<\/small>[\s\S]*?녹차[\s\S]*?4번[\s\S]*?카페라떼[\s\S]*?3번[\s\S]*?에너지음료[\s\S]*?2번[\s\S]*?기타 \(콜라 등\)[\s\S]*?2번 <small>20mg<\/small>/);
+  assert.doesNotMatch(card, /홍차/);
+  assert.match(html, /섭취 16번 · 마신 날 1일/);
+  assert.match(html, /가장 자주 마신 건 ‘아이스 커피’\(5번\)예요/);
+  const unknown = caffeineCard(caffeineSection(render(caffeineReport([[{ drink:'', mg:null }]]))), 'drink');
+  assert.match(unknown, /이름 없음[\s\S]*?1번/);
+  assert.doesNotMatch(unknown, /0mg/);
+});
+
+test('counts each selected reason and symptom and separates the 15:00 boundary from missing times', () => {
+  const report = caffeineReport([[
+    { drink:'가상 커피', time:'14:59', mg:40, reason:'졸음을 깨려고, 습관적으로', symptom:'손이 떨렸다, 가슴이 두근거렸다' },
+    { drink:'가상 커피', time:'15:00', mg:40, reason:'졸음을 깨려고', symptom:'없음, 해당 없음' },
+    { drink:'가상 차', time:null, mg:40, reason:'공부나 일에 집중이 필요해서, 습관적으로', symptom:'없음, 손이 떨렸다' },
+    { drink:'가상 차', time:'18:00', mg:40, symptom:'' },
+  ]]);
+  const html = render(report);
+  const c = caffeineSection(html);
+  assert.match(caffeineCard(c, 'time'), /data-caffeine-time="morning"[\s\S]*?0번[\s\S]*?data-caffeine-time="midday"[\s\S]*?1번[\s\S]*?data-caffeine-time="afternoon"[\s\S]*?1번[\s\S]*?data-caffeine-time="evening"[\s\S]*?1번/);
+  assert.match(caffeineCard(c, 'drink'), /가상 차[\s\S]*?2번/);
+  assert.match(caffeineCard(c, 'reason'), /졸음을 깨려고[\s\S]*?2번[\s\S]*?습관적으로[\s\S]*?2번[\s\S]*?공부·일에 집중[\s\S]*?1번/);
+  assert.match(caffeineCard(c, 'symptom'), /적은 3번 중[\s\S]*?없음 1번[\s\S]*?있음 2번[\s\S]*?손이 떨렸다[\s\S]*?2번[\s\S]*?가슴이 두근거렸다[\s\S]*?1번/);
+  assert.match(c, /15시 이후에 마신 건 2번이에요/);
+  assert.match(c, /불편함을 적은 2번 중 0번은 15시 이후였어요/);
+  assert.doesNotMatch(c, /가장 자주 마신 건/);
+  assert.match(html, /섭취 기록에서 시각 1건이 빠졌어요 \(11\.04\)\./);
+});
+
+test('keeps missing caffeine out of the prose and counts only explicit zero days in the infographic', () => {
+  const html = render(caffeineReport([[], null, [], [], null, []]));
+  const c = caffeineSection(html);
+  assert.doesNotMatch(html, /기록 없는 날|카페인 기록이 비어/);
+  assert.match(html, /class="summary-caf-missing">기록 없음/);
+  assert.match(c, /섭취 0번 · 안 마신 날 4일<\/span>/);
+  assert.match(c, /class="summary-caf-none"/);
+  assert.match(c, />0<small>mg<\/small>/);
+  assert.match(c, /<b>2일<\/b>가장 길게 이어진 날/);
+  assert.match(c, /11\.01부터 11\.02까지 2일 이어졌어요/);
+  assert.equal((c.match(/class="summary-caf-chip"/g) || []).length, 4);
+  const single = caffeineSection(render(caffeineReport([[], null])));
+  assert.doesNotMatch(single, /가장 길게/);
+  const empty = caffeineSection(render(caffeineReport([null, null])));
+  assert.match(empty, /표시할 섭취 내역이 없어요/);
+  assert.doesNotMatch(empty, /0mg|summary-caf-none/);
+});
+
+test('uses four charts for a few intakes and preserves the single-symptom observation and teacher edit', () => {
+  const report = caffeineReport([[
+    { drink:'가상 차', time:'09:00', mg:30, symptom:'없음' },
+    { drink:'가상 커피', time:'16:00', mg:60, symptom:'잠이 잘 안 왔다' },
+  ]]);
+  const c = caffeineSection(render(report));
+  assert.equal((c.match(/data-caffeine-card=/g) || []).length, 4);
+  assert.match(c, /표시할 응답이 없어요/);
+  assert.match(c, /16:00에 카페인을 마시고 ‘잠이 잘 안 왔다’고 적었어요\. 그날 밤 23:27에 잠들었어요/);
+  report.feedback.summaryEdit = { caffeineDays:'교사가 고친 가짜 관찰' };
+  const edited = caffeineSection(render(report));
+  assert.match(edited, /교사가 고친 가짜 관찰/);
+  assert.doesNotMatch(edited, /16:00에 카페인을 마시고/);
+});
+
 test('renders the full 14-day axis and escapes untrusted names and drink details', () => {
   const input = makeSummaryFixture({ length: 14 });
   input.student.이름 = '<script>not a name</script>';
@@ -101,7 +186,7 @@ test('renders the full 14-day axis and escapes untrusted names and drink details
   assert.equal((html.match(/data-row="dates">([\s\S]*?)<\/div>/)[1].match(/data-date=/g) || []).length, 14);
   assert.doesNotMatch(html, /<script>|<img onerror/);
   assert.match(html, /&lt;script&gt;/);
-  assert.match(html, /&lt;img onerror/);
+  assert.match(caffeineCard(caffeineSection(html), 'drink'), /&lt;img onerror/);
 });
 
 test('empty reports never infer zero caffeine or insert invented reflections', () => {
@@ -147,12 +232,27 @@ test('reports missing and held sleep even if all past caffeine days were recorde
   Object.assign(sleep[0], { recorded: false, hours: null, bed: null, wake: null, condition: null });
   Object.assign(sleep[1], { recorded: true, held: true, hours: null, bed: null, wake: null, condition: null });
   const html = render(input);
-  assert.match(html, /수면 기록이 비어 있는 밤은 1일/);
-  assert.match(html, /수면 분석을 보류한 밤은 1일/);
+  const review = html.match(/data-summary-text="recordReview"[^>]*>(.*?)<\/div>/s)[1];
+  assert.match(review, /수면 기록이 비어 있는 밤은 1일이에요 \(10\.30\)\./);
+  assert.match(review, /수면 분석을 보류한 밤은 1일이에요 \(10\.31\)\./);
+  assert.match(review, /아침 컨디션이 빠진 밤은 1일이에요 \(11\.04\)\./);
   const range = html.match(/data-daily-goal="range"[^>]*>([\s\S]*?)<\/span><\/div>/)[1];
   assert.match(range, /data-date="2026-10-30" class="summary-mark missing">기록 없음/);
   assert.match(range, /data-date="2026-10-31" class="summary-mark none">–/);
   assert.doesNotMatch(html, /확인한 기록에서 빠진 항목이 없어요/);
+});
+
+test('lists up to three dates per missing field and counts the remaining days', () => {
+  const input = makeSummaryFixture({ length:14, editDays(days) {
+    for (const day of days.slice(0, 5)) delete day.sleep;
+    for (const day of days.slice(5, 9)) day.sleep.held = true;
+    for (const day of days.slice(9)) day.sleep.condition = null;
+  } });
+  const review = render(input).match(/data-summary-text="recordReview"[^>]*>(.*?)<\/div>/s)[1];
+  assert.match(review, /수면 기록이 비어 있는 밤은 5일이에요 \(10\.23, 10\.24, 10\.25 외 2일\)\./);
+  assert.match(review, /수면 분석을 보류한 밤은 4일이에요 \(10\.28, 10\.29, 10\.30 외 1일\)\./);
+  assert.match(review, /아침 컨디션이 빠진 밤은 4일이에요 \(11\.01, 11\.02, 11\.03 외 1일\)\./);
+  assert.doesNotMatch(review, /10\.26|10\.27|10\.31|11\.04/);
 });
 
 test('reports delayed caffeine from intake date and sleep from actual wake date in KST', () => {
@@ -192,7 +292,7 @@ test('uses sheet timestamps in the report input and does not output raw timestam
   assert.doesNotMatch(JSON.stringify(report), /2026-11-01T15:00:00Z|2026-11-02 09:00:00/);
 });
 
-test('shows only three delayed groups and counts the hidden records', () => {
+test('shows up to three dated examples and counts the remaining delayed records', () => {
   const report = makeSummaryFixture({ editDays(days) {
     for (const day of days) {
       day.sleep.wakeDate = new Date(Date.parse(day.date) + 86400000).toISOString().slice(0, 10);
