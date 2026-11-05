@@ -141,13 +141,14 @@ test('counts each selected reason and symptom and separates the 15:00 boundary f
   assert.match(c, /15시 이후에 마신 건 2번이에요/);
   assert.match(c, /불편함을 적은 2번 중 0번은 15시 이후였어요/);
   assert.doesNotMatch(c, /가장 자주 마신 건/);
-  assert.match(html, /섭취 기록에서 시각 1건이 빠졌어요 \(11\.04\)\./);
+  assert.doesNotMatch(html, /섭취 기록에서 시각 1건이 빠졌어요/);
 });
 
-test('keeps missing caffeine out of the prose and counts only explicit zero days in the infographic', () => {
+test('keeps missing caffeine out of section C and counts only explicit zero days in the infographic', () => {
   const html = render(caffeineReport([[], null, [], [], null, []]));
   const c = caffeineSection(html);
-  assert.doesNotMatch(html, /기록 없는 날|카페인 기록이 비어/);
+  assert.doesNotMatch(c, /기록 없는 날|카페인 기록이 없는 날/);
+  assert.match(html, /카페인 기록이 없는 날은 2일이에요 \(10\.31, 11\.03\)\./);
   assert.match(html, /class="summary-caf-missing">기록 없음/);
   assert.match(c, /섭취 0번 · 안 마신 날 4일<\/span>/);
   assert.match(c, /class="summary-caf-none"/);
@@ -224,7 +225,7 @@ test('does not relabel an inclusive midnight goal as strictly before midnight', 
   assert.doesNotMatch(html, /12시 전에 자기/);
 });
 
-test('reports missing and held sleep even if all past caffeine days were recorded', () => {
+test('reports unrecorded sleep without treating held or incomplete records as unrecorded', () => {
   const input = makeSummaryFixture();
   const caffeine = input.feedback.engine.findings.find(x => x.id === 'caffeineSummary').data.days;
   caffeine.filter(x => x.date < input.end).forEach(x => { x.recorded = true; });
@@ -234,29 +235,29 @@ test('reports missing and held sleep even if all past caffeine days were recorde
   const html = render(input);
   const review = html.match(/data-summary-text="recordReview"[^>]*>(.*?)<\/div>/s)[1];
   assert.match(review, /수면 기록이 비어 있는 밤은 1일이에요 \(10\.30\)\./);
-  assert.match(review, /수면 분석을 보류한 밤은 1일이에요 \(10\.31\)\./);
-  assert.match(review, /아침 컨디션이 빠진 밤은 1일이에요 \(11\.04\)\./);
+  assert.doesNotMatch(review, /보류|컨디션|10\.31|11\.04|카페인 기록이 없는/);
   const range = html.match(/data-daily-goal="range"[^>]*>([\s\S]*?)<\/span><\/div>/)[1];
   assert.match(range, /data-date="2026-10-30" class="summary-mark missing">기록 없음/);
   assert.match(range, /data-date="2026-10-31" class="summary-mark none">–/);
-  assert.doesNotMatch(html, /확인한 기록에서 빠진 항목이 없어요/);
+  assert.doesNotMatch(review, /표시할 아쉬운 점이 없어요/);
 });
 
-test('lists up to three dates per missing field and counts the remaining days', () => {
+test('lists up to three dates for each unrecorded type and counts the remaining days', () => {
   const input = makeSummaryFixture({ length:14, editDays(days) {
-    for (const day of days.slice(0, 5)) delete day.sleep;
+    for (const day of days.slice(0, 5)) { delete day.sleep; delete day.caffeine; }
+    for (const day of days.slice(5)) day.caffeine = { recorded:true, totalMg:0, intakes:[] };
     for (const day of days.slice(5, 9)) day.sleep.held = true;
     for (const day of days.slice(9)) day.sleep.condition = null;
   } });
   const review = render(input).match(/data-summary-text="recordReview"[^>]*>(.*?)<\/div>/s)[1];
   assert.match(review, /수면 기록이 비어 있는 밤은 5일이에요 \(10\.23, 10\.24, 10\.25 외 2일\)\./);
-  assert.match(review, /수면 분석을 보류한 밤은 4일이에요 \(10\.28, 10\.29, 10\.30 외 1일\)\./);
-  assert.match(review, /아침 컨디션이 빠진 밤은 4일이에요 \(11\.01, 11\.02, 11\.03 외 1일\)\./);
+  assert.match(review, /카페인 기록이 없는 날은 5일이에요 \(10\.23, 10\.24, 10\.25 외 2일\)\./);
   assert.doesNotMatch(review, /10\.26|10\.27|10\.31|11\.04/);
 });
 
-test('reports delayed caffeine from intake date and sleep from actual wake date in KST', () => {
+test('calculates KST save delays without listing them in the report review', () => {
   const report = makeSummaryFixture({ editDays(days) {
+    days[1].caffeine.intakes[0].enteredAt = '2026-11-02 10:00:00';
     // 11.01 intake saved at midnight on 11.02 KST, despite the UTC date being 11.01.
     days[2].caffeine.intakes[0].enteredAt = '2026-11-01T15:00:00Z';
     // 11.01 night ends on 11.02; same-wake-day saves are not delayed.
@@ -268,13 +269,11 @@ test('reports delayed caffeine from intake date and sleep from actual wake date 
   } });
   const late = report.feedback.engine.summaryLateEntries;
   assert.deepEqual(JSON.parse(JSON.stringify(late)), [
+    { kind: 'caffeine', date: '2026-10-31', delayDays: 2, count: 1 },
     { kind: 'caffeine', date: '2026-11-01', delayDays: 1, count: 1 },
     { kind: 'sleep', date: '2026-11-02', delayDays: 1, count: 1 },
   ]);
-  const html = render(report);
-  assert.match(html, /11\.01 카페인은 다음 날 입력했어요/);
-  assert.match(html, /11\.02 밤 수면은 일어난 다음 날 입력했어요/);
-  assert.doesNotMatch(render(makeSummaryFixture()), /다음 날 입력했어요|저장 시각 기준/);
+  assert.doesNotMatch(render(report), /입력했어요|저장 시각 기준|data-late="true"/);
 });
 
 test('uses sheet timestamps in the report input and does not output raw timestamps', () => {
@@ -292,16 +291,18 @@ test('uses sheet timestamps in the report input and does not output raw timestam
   assert.doesNotMatch(JSON.stringify(report), /2026-11-01T15:00:00Z|2026-11-02 09:00:00/);
 });
 
-test('shows up to three dated examples and counts the remaining delayed records', () => {
-  const report = makeSummaryFixture({ editDays(days) {
-    for (const day of days) {
-      day.sleep.wakeDate = new Date(Date.parse(day.date) + 86400000).toISOString().slice(0, 10);
-      day.sleep.enteredAt = '2026-11-06 09:00:00';
-    }
-  } });
-  const html = render(report);
-  assert.equal((html.match(/밤 수면은 일어난/g) || []).length, 3);
-  assert.match(html, /외 3건/);
+test('reports only confirmed daily caffeine totals above the maximum, independent of personal goals', () => {
+  const editDays = days => {
+    [160,170,171,220,200,180,190,210].forEach((mg,i) => {
+      const intakes = [{ mg, time:'14:00', drink:'가상 차' }];
+      if (i === 5) intakes.push({ mg:null, time:'16:00', drink:'가상 커피' });
+      days[i].caffeine = { recorded:true, totalMg:mg, intakes };
+    });
+  };
+  const review = report => render(report).match(/data-summary-text="recordReview"[^>]*>(.*?)<\/div>/s)[1];
+  assert.equal(review(reportWithLimit('weight',170,{length:9,editDays})),
+    '<p>일일 최대 섭취량(170mg)을 넘긴 날은 5일이에요 (10.30, 10.31, 11.01 외 2일).</p>');
+  assert.doesNotMatch(review(reportWithLimit('noWeight',150,{length:9,editDays})), /섭취량.*넘긴/);
 });
 
 test('adds a recorded overlap only when it occurred on at least two missed nights', () => {

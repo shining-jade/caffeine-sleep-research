@@ -645,9 +645,6 @@
     .summary-teacher{border-radius:12px;background:#f1effb;padding:10px 14px;min-height:42px;display:flex;gap:10px}
     .summary-teacher b{white-space:nowrap}
     @media(min-width:681px){
-      .summary-page[data-late="true"]{gap:12px}
-      .summary-page[data-late="true"] .summary-section{gap:8px}
-      .summary-page[data-late="true"] .summary-record-card{padding:10px 12px;gap:4px}
       .summary-page[data-size="week"]{gap:16px;--bar-scale:1.25}
       .summary-page[data-size="week"] .summary-section{gap:12px}
       .summary-page[data-size="week"] .summary-chart{padding:16px 12px}
@@ -1013,34 +1010,21 @@
     const dNote = phone.means ? `자기 전 스마트폰을 30분 이상 쓴 밤(${phone.size[0]}일)은 수면시간이 평균 ${fixed(phone.means[0], '시간')}, 그보다 적게 사용했거나 사용하지 않은 밤(${phone.size[1]}일)은 ${fixed(phone.means[1], '시간')}이었어요.` : '';
     const good = [validSleep.length ? `수면은 ${closed.length}일 중 ${validSleep.length}일 기록했어요.` : '',
       zero.length ? `카페인을 안 마신 날도 ‘안 마심’으로 ${zero.length}일 남겼어요.` : ''].filter(Boolean);
-    const sleepMissing = closed.filter(day => !day.recorded);
-    const held = closed.filter(day => day.held);
-    const conditionMissing = validSleep.filter(day => !Number.isFinite(day.condition));
-    const incompleteIntakes = intakes.filter(item => !Number.isFinite(item.mg) || !Number.isFinite(item.time));
-    const quantityMissing = incompleteIntakes.filter(item => !Number.isFinite(item.mg)).length;
-    const timeMissing = incompleteIntakes.filter(item => !Number.isFinite(item.time)).length;
+    const maximum = Number(maximumText);
+    const overLimit = maximum > 0 ? cafDays.filter(day => day.caf?.status === 'known' && day.caf.totalMg > maximum) : [];
+    const caffeineMissing = closed.filter(day => !day.caf?.recorded);
+    const sleepMissing = closed.filter(day => !day.recorded && !day.held);
     const reviewDateLimit = 3;
     const reviewDates = entries => {
       const dates = [...new Set(entries.map(item => item.date))];
       const additional = dates.length - reviewDateLimit;
       return ` (${dates.slice(0, reviewDateLimit).map(pdfDay).join(', ')}${additional > 0 ? ` 외 ${additional}일` : ''})`;
     };
-    const review = [sleepMissing.length ? `수면 기록이 비어 있는 밤은 ${sleepMissing.length}일이에요${reviewDates(sleepMissing)}.` : '',
-      held.length ? `겹치거나 충돌해 수면 분석을 보류한 밤은 ${held.length}일이에요${reviewDates(held)}.` : '',
-      conditionMissing.length ? `아침 컨디션이 빠진 밤은 ${conditionMissing.length}일이에요${reviewDates(conditionMissing)}.` : '',
-      incompleteIntakes.length ? `섭취 기록에서 ${[quantityMissing ? `함량 ${quantityMissing}건` : '', timeMissing ? `시각 ${timeMissing}건` : ''].filter(Boolean).join('과 ')}이 빠졌어요${reviewDates(incompleteIntakes)}.` : ''].filter(Boolean);
-    const lateEntries = feedback.engine.summaryLateEntries || [];
-    const visibleLate = lateEntries.slice(0, reviewDateLimit);
-    if (visibleLate.length) {
-      const examples = visibleLate.map(({ kind, date, delayDays, count }) => {
-        const when = delayDays === 1 ? '다음 날' : delayDays + '일 뒤';
-        const topic = kind === 'sleep' ? '밤 수면' : '카페인';
-        return pdfDay(date) + ' ' + topic + (count === 1 ? '은' : ' 기록 ' + count + '건은')
-          + (kind === 'sleep' ? ' 일어난 ' : ' ') + when + ' 입력했어요.';
-      });
-      const additional = lateEntries.slice(reviewDateLimit).reduce((total, item) => total + item.count, 0);
-      review.push(examples.join(' ') + (additional ? ' 외 ' + additional + '건' : ''));
-    }
+    const review = [
+      overLimit.length ? `일일 최대 섭취량(${maximumText}mg)을 넘긴 날은 ${overLimit.length}일이에요${reviewDates(overLimit)}.` : '',
+      caffeineMissing.length ? `카페인 기록이 없는 날은 ${caffeineMissing.length}일이에요${reviewDates(caffeineMissing)}.` : '',
+      sleepMissing.length ? `수면 기록이 비어 있는 밤은 ${sleepMissing.length}일이에요${reviewDates(sleepMissing)}.` : '',
+    ].filter(Boolean);
     const ranked = goals.filter(goal => goal.measured > 0).sort((a, b) => b.kept / b.measured - a.kept / a.measured);
     const best = ranked[0];
     const hardest = ranked.filter(goal => goal.kept < goal.measured).at(-1);
@@ -1060,13 +1044,13 @@
       ? teacherNoteExamples[noteIndex % teacherNoteExamples.length] : teacherNoteExamples[1];
     const memo = edit?.memo ?? (reportPlainText(feedback.savedPdfFeedback?.summary).trim() ||
       reportPlainText(feedback.summary).trim() || defaultMemo);
-    const page2 = `<article class="summary-page" data-page="2"${visibleLate.length ? ' data-late="true"' : ''}><header class="summary-header">
+    const page2 = `<article class="summary-page" data-page="2"><header class="summary-header">
       <p class="summary-kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="summary-sub">${name} · ${period}</p></header>
       ${block('C. 카페인을 마신 날', caffeineContent.content + callout('caffeineDays', 'C. 카페인을 마신 날 설명', caffeineContent.note), caffeineNote)}
       ${block('D. 수면과 생활습관', (habitBars || '<p class="summary-note">표시할 생활습관 응답이 없어요.</p>') + callout('sleepHabits', 'D. 수면과 생활습관 설명', dNote, 'blue'), '밤 기록 중 고른 답 · 숫자는 일수')}
       <section class="summary-two">
         <div class="summary-record-card good"><h2>E. 기록 · 잘한 점</h2>${recordNote('recordGood', 'E. 기록 · 잘한 점', good.length ? good : ['아직 확인할 기록이 없어요.'])}</div>
-        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${recordNote('recordReview', 'E. 기록 · 아쉬운 점', review.length ? review : ['확인한 기록에서 빠진 항목이 없어요.'])}${visibleLate.length ? '<small class="summary-note">저장 시각 기준이라 나중에 수정한 기록도 포함될 수 있어요.</small>' : ''}</div>
+        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${recordNote('recordReview', 'E. 기록 · 아쉬운 점', review.length ? review : ['표시할 아쉬운 점이 없어요.'])}</div>
       </section>
       <section class="summary-section summary-reflections"><h2>F. 돌아보기</h2><div class="summary-three">
         ${reflection.map(([key, title, value]) => `<div class="summary-reflect-card"><h3>${title}</h3><p data-summary-text="${key}"${reportPlainText(value) ? '' : ' class="summary-note"'}>${reportTextHtml(reportPlainText(value) ? value : '기록에서 확인할 내용이 없어요.')}</p></div>`).join('')}
