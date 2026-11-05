@@ -514,22 +514,25 @@
     .summary-cond{margin:4px auto;display:grid;place-items:center;width:min(46px,100%);min-height:28px;border-radius:14px;font-size:13px;font-weight:800;background:#ebe8f7;color:#33296f}
     .summary-cond.low{background:#fbe0d0;color:#7a2e0b}.summary-cond.high{background:#d6efe4;color:#185a41}
     .summary-cond.summary-muted{background:#fff;border:1px dashed #b8bccb;color:#555e7a;font-size:11px}
+    .summary-clock.summary-missing,.summary-chart-bar .summary-missing,.summary-cond.summary-missing,.summary-mark.missing{font-size:10px;line-height:1.15;text-align:center;word-break:keep-all}
     .summary-three,.summary-two{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.summary-two{grid-template-columns:repeat(2,minmax(0,1fr))}
     .summary-compare,.summary-reflect-card{display:grid;align-content:start;gap:5px;border:1.5px solid #e2def3;border-radius:12px;padding:10px 12px}
     .summary-compare-row{display:flex;justify-content:space-between;align-items:baseline;gap:5px;font-size:12px;color:#4a5470;font-weight:700}
     .summary-compare-row.drink{color:#8a3b10}.summary-compare-row strong{font-size:17px;color:#1f2a44;white-space:nowrap}
     .summary-callout{padding:9px 14px;border-radius:12px;background:#fff4e9;font-size:13px}
     .summary-callout.mint{background:#eef6f2}.summary-callout.blue{background:#eef3fa}
-    .summary-goal-row{display:grid;grid-template-columns:180px repeat(var(--days),minmax(0,1fr)) 50px;gap:5px;align-items:center;min-width:calc(230px + var(--days) * 31px)}
-    .summary-goal-row.compact{grid-template-columns:140px repeat(var(--days),minmax(0,1fr)) 40px;min-width:calc(180px + var(--days) * 33px)}
+    .summary-goal-row{display:grid;grid-template-columns:180px repeat(var(--days),minmax(0,1fr)) 50px;gap:5px;align-items:center;min-width:calc(230px + var(--days) * 34px)}
+    .summary-goal-row.compact{grid-template-columns:140px repeat(var(--days),minmax(0,1fr)) 40px;min-width:calc(180px + var(--days) * 35px)}
     .summary-goal-row+.summary-goal-row{margin-top:6px}.summary-goal-row .summary-goal-label{font-size:14px;font-weight:700;line-height:1.35}
     .summary-goal-tag{display:block;font-size:10px;font-weight:700;color:#5b4fc4}
     .summary-goal-total{text-align:center;font-size:15px;font-weight:800}.summary-goal-row .summary-note{text-align:center}.summary-goal-row.compact .summary-note{font-size:9px}.summary-goal-row.compact .summary-goal-total{font-size:13px;white-space:nowrap}
     .summary-mark{display:grid;place-items:center;min-height:30px;border-radius:8px;background:#eef0f4;color:#4a5470;font-weight:800}
     .summary-mark.ok{background:#2f7d62;color:white}.summary-mark.no,.summary-mark.short{border:2px solid #d0743f;background:white;color:#8a3b10}
     .summary-mark.long{border:2px solid #8a7fd0;background:white;color:#3b3195}
-    .summary-mark.short,.summary-mark.long,.summary-mark.wait{font-size:11px}
-    .summary-mark.wait{border:1px dashed #b8bccb;background:white;color:#555e7a}
+    .summary-mark.near{background:#edf2fa;color:#33486b;font-size:11px}
+    .summary-mark.short,.summary-mark.long{font-size:11px;line-height:1.1}
+    .summary-mark.short,.summary-mark.long{min-height:32px;align-content:center;gap:1px}
+    .summary-mark-hours{font-size:10px}
     .summary-section{grid-template-columns:minmax(0,1fr)}
     .summary-title-line>.summary-note{min-width:0;max-width:100%;overflow-wrap:anywhere}
     .summary-title-line.stacked>.summary-note{flex:0 0 100%;text-align:right}
@@ -694,7 +697,13 @@
     const markDate = day => `data-date="${pdfText(day.date)}"`;
     const label = (main, sub = '', tone = '') => `<span class="summary-axis-label ${tone}">${main}${sub ? `<small>${sub}</small>` : ''}</span>`;
     const asleep = value => Number.isFinite(value) ? pdfClock(value) : '–';
-    const sleepClock = (day, key) => `<span ${markDate(day)} class="summary-clock${day.open || !Number.isFinite(day[key]) ? ' summary-muted' : key === 'bed' && day.bed >= 1440 ? ' late' : ''}">${day.open ? '아직' : asleep(day[key])}</span>`;
+    const sleepMissingText = day => day.held ? '–' : '기록 없음';
+    const sleepValue = (day, key) => day.open || day.held || !Number.isFinite(day[key]) ? null : day[key];
+    const sleepClock = (day, key) => {
+      const value = sleepValue(day, key);
+      const tone = value === null ? ' summary-muted summary-missing' : key === 'bed' && value >= 1440 ? ' late' : '';
+      return `<span ${markDate(day)} class="summary-clock${tone}">${value === null ? sleepMissingText(day) : asleep(value)}</span>`;
+    };
     const maxCaffeine = Math.max(150, ...shown.map(day => day.caf?.totalMg || 0));
     const caffeineBar = day => {
       const caf = day.caf;
@@ -708,22 +717,28 @@
       return `<div ${markDate(day)} class="summary-chart-bar">${text}${amount > 0 ? `<i aria-hidden="true" style="height:calc(${Math.max(4, Math.round(44 * amount / maxCaffeine))}px * var(--bar-scale,1))"></i>` : ''}</div>`;
     };
     const inRange = h => h >= 8 && h <= 10;
+    const roundedHours = day => {
+      const value = sleepValue(day, 'hours');
+      return value === null ? null : Math.round(value);
+    };
     const hoursBar = day => {
-      const value = !day.open && Number.isFinite(day.hours) ? day.hours : null;
-      return `<div ${markDate(day)} class="summary-chart-bar hours"><div class="summary-hours-band" aria-hidden="true"></div><span>${day.open ? '아직' : value === null ? '–' : value.toFixed(1)}</span>${value === null ? ''
+      const value = roundedHours(day);
+      return `<div ${markDate(day)} class="summary-chart-bar hours"><div class="summary-hours-band" aria-hidden="true"></div><span${value === null ? ' class="summary-missing"' : ''}>${value === null ? sleepMissingText(day) : value}</span>${value === null ? ''
         : `<i aria-hidden="true" class="${inRange(value) ? 'in-range' : ''}" style="height:calc(${Math.round(Math.min(value, 11) / 11 * 48)}px * var(--bar-scale,1))"></i>`}</div>`;
     };
     const condition = day => {
-      const value = day.condition;
-      const score = !day.open && Number.isInteger(value) && value >= 1 && value <= 5;
-      return `<div ${markDate(day)}><span class="summary-cond ${score ? (value < 3 ? 'low' : value > 3 ? 'high' : '') : 'summary-muted'}">${score ? `${value}점` : day.open ? '아직' : day.recorded && !day.held ? '빠짐' : '–'}</span></div>`;
+      const value = sleepValue(day, 'condition');
+      const score = Number.isInteger(value) && value >= 1 && value <= 5;
+      const text = score ? `${value}점` : sleepMissingText(day);
+      const tone = score ? (value < 3 ? 'low' : value > 3 ? 'high' : '') : 'summary-muted summary-missing';
+      return `<div ${markDate(day)}><span class="summary-cond ${tone}">${text}</span></div>`;
     };
     const dailyChart = () => `<div class="summary-scroll summary-chart" role="region" tabindex="0" aria-label="날짜별 카페인과 수면">
       ${axis('dates', '<span></span>', day => `<span ${markDate(day)}>${pdfDay(day.date)} <span class="summary-dow">(${wd(day.date)})</span></span>`)}
-      ${axis('caffeine', label('낮 · 카페인', 'mg', 'caf'), caffeineBar)}
-      ${axis('bedtime', label('밤 · 잠든 시각'), day => sleepClock(day, 'bed'))}
-      ${axis('wake', label('아침 · 일어난 시각'), day => sleepClock(day, 'wake'))}
-      ${axis('hours', label('잔 시간', '파란 띠 = 8~10시간', 'hours'), hoursBar)}
+      ${axis('caffeine', label('카페인', 'mg', 'caf'), caffeineBar)}
+      ${axis('bedtime', label('취침시각'), day => sleepClock(day, 'bed'))}
+      ${axis('wake', label('기상시각'), day => sleepClock(day, 'wake'))}
+      ${axis('hours', label('수면시간', '반올림 · 파란 띠 = 8~10시간', 'hours'), hoursBar)}
       ${axis('condition', label('다음 날 아침 컨디션', '5점 만점', 'condition'), condition)}
     </div>`;
     // Display summaries of facts already present in the report. No sheet reads or new engine output.
@@ -736,8 +751,8 @@
     const fixed = (value, unit) => value.toFixed(1) + unit;
     const groups = ['known', 'zero'].map(status => validSleep.filter(day => day.caf?.status === status));
     const metrics = [
-      ['bed', '잠든 시각 평균', value => pdfClock(Math.round(value))],
-      ['hours', '잔 시간 평균', value => fixed(value, '시간')],
+      ['bed', '취침시각 평균', value => pdfClock(Math.round(value))],
+      ['hours', '수면시간 평균', value => fixed(value, '시간')],
       ['condition', '아침 컨디션 평균', value => fixed(value, '점')],
     ].map(([key, title, format]) => ({ key, title, format, ...compare(groups, key) }));
     const comparisons = `<div class="summary-three">${metrics.map(item => `<article class="summary-compare" data-compare="${item.key === 'bed' ? 'bedtime' : item.key}"><h3>${item.title}</h3>
@@ -751,8 +766,8 @@
     const chart = weeks.length ? renderSummaryWeeks(weeks, [
       weeklyMetric('caffeine', '평균 카페인', day => ['known', 'zero'].includes(day.caf?.status) ? day.caf.totalMg : null,
         value => Math.round(value * 10) / 10 + 'mg'),
-      weeklyMetric('bedtime', '평균 잠든 시각', sleepField('bed'), value => pdfClock(Math.round(value))),
-      weeklyMetric('hours', '평균 잔 시간', sleepField('hours'), value => fixed(value, '시간')),
+      weeklyMetric('bedtime', '평균 취침시각', sleepField('bed'), value => pdfClock(Math.round(value))),
+      weeklyMetric('hours', '평균 수면시간', sleepField('hours'), value => fixed(value, '시간')),
       weeklyMetric('condition', '평균 아침 컨디션', sleepField('condition'), value => fixed(value, '점')),
     ]) : dailyChart();
     const availableMetric = metrics.find(item => item.means);
@@ -772,10 +787,12 @@
     const registered = (finding('goalProgress')?.goals || []).filter(goal => goal.criterion || goal.label);
     const selected = registered.filter(goal => goal.source === 'class' ||
       !registered.some(other => other.source === 'class' && other.criterion && other.criterion === goal.criterion));
-    const range = { id: 'range', label: '8~10시간 취침', days: closed.map(day => ({
-      date: day.date, kept: Number.isFinite(day.hours) ? inRange(day.hours) : null,
-      outcome: Number.isFinite(day.hours) && !inRange(day.hours) ? (day.hours < 8 ? 'short' : 'long') : null,
-    })) };
+    const range = { id: 'range', label: '8~10시간 취침', days: days.map(day => {
+      const hours = roundedHours(day);
+      const kept = hours === null ? null : inRange(hours);
+      const outcome = kept === false ? (hours < 7 ? 'short' : hours > 11 ? 'long' : 'near') : null;
+      return { date: day.date, kept, outcome };
+    }) };
     const defaults = standards.filter(row => row.id !== 'sleepMin' && !(noWeight && row.id === 'caffeineMax')).map(row => ({ ...row,
       label: row.id === 'caffeineMax' && maximumText ? `일일 최대 섭취량(${maximumText}mg) 넘지 않기` : '12시 전에 자기' }));
     const goalEligible = (goal, day) => !day.open || (goal.criterion || goal.id) === 'caffeineMax';
@@ -790,13 +807,21 @@
       });
     const goalsShown = [...goals.filter(goal => goal.id !== 'range' && !goal.unavailable).slice(0, 4),
       ...goals.filter(goal => goal.id === 'range' || goal.unavailable)];
-    const markLabels = { ok: '✓', no: '×', short: '짧음', long: '김', none: '–', wait: '아직' };
+    const markLabels = { ok: '✓', no: '×', short: '짧음', long: '긺', none: '–', missing: '기록 없음' };
     const goalLabel = goal => `<span class="summary-goal-tag">${goal.source === 'class' || goal.source === 'student' ? '내 목표' : '기본 기준'}</span>${pdfText(goal.label)}`;
     const goalMark = (goal, day) => {
       const state = goal.states.get(day.date);
-      const canCheckToday = (goal.criterion || goal.id) === 'caffeineMax' && state;
-      const mark = goal.unavailable ? 'none' : day.open && !canCheckToday ? 'wait' : !state ? 'none' : state.outcome || (state.kept ? 'ok' : 'no');
-      return `<span ${markDate(day)} class="summary-mark ${mark}">${markLabels[mark]}</span>`;
+      const sleepGoal = ['range', 'bedtime', 'wakeTime', 'sleepMin'].includes(goal.criterion || goal.id);
+      const missingSleep = sleepGoal && !day.held && (day.open || !day.recorded) &&
+        goal.days.some(item => item.date === day.date);
+      const mark = goal.unavailable ? 'none' : missingSleep ? 'missing'
+        : !state || !goalEligible(goal, day) ? 'none' : state.outcome || (state.kept ? 'ok' : 'no');
+      let text = markLabels[mark];
+      if (mark === 'near') text = `${roundedHours(day)}h`;
+      if (mark === 'short' || mark === 'long') {
+        text = `<span>${text}</span><small class="summary-mark-hours">${roundedHours(day)}h</small>`;
+      }
+      return `<span ${markDate(day)} class="summary-mark ${mark}">${text}</span>`;
     };
     const dailyCalendar = () => `<div class="summary-scroll" role="region" tabindex="0" aria-label="날짜별 목표 실천 달력">
       <div class="summary-goal-row${compact}" style="--days:${n}"><span></span>${shown.map(day => `<span class="summary-note">${pdfDay(day.date)}</span>`).join('')}<span class="summary-note">지킨 날</span></div>
@@ -821,16 +846,16 @@
     const conditionCompare = compare([validSleep.filter(day => Number.isFinite(day.hours) && inRange(day.hours)),
       validSleep.filter(day => Number.isFinite(day.hours) && !inRange(day.hours))], 'condition');
     const bNote = conditionCompare.means
-      ? `8~10시간 잔 밤(${conditionCompare.size[0]}일)의 다음 날 아침 컨디션은 평균 ${fixed(conditionCompare.means[0], '점')}, 그렇지 않은 밤(${conditionCompare.size[1]}일)은 ${fixed(conditionCompare.means[1], '점')}이었어요.`
-      : '8~10시간 잔 밤과 그렇지 않은 밤의 컨디션 비교는 양쪽 기록이 각각 2일 이상일 때 보여 줘요.';
+      ? `다음 날 아침 컨디션은 8~10시간인 밤(${conditionCompare.size[0]}일) 평균 ${fixed(conditionCompare.means[0], '점')}, 그 밖의 밤(${conditionCompare.size[1]}일) 평균 ${fixed(conditionCompare.means[1], '점')}이었어요(반올림 전 기준).`
+      : '컨디션 비교에는 반올림 전 8~10시간인 밤과 그 밖의 밤의 기록이 각각 2일 이상 필요해요.';
     const page1 = `<article class="summary-page"${weeks.length > 14 ? ' data-size="many-weeks"' : !weeks.length && n <= 7 ? ' data-size="week"' : ''}><header class="summary-header"><div>
       <p class="summary-kicker">카페인·수면 기록 요약 · 1쪽 한눈에 보기</p><h1>${name}의 기록</h1>
       <p class="summary-sub">${pdfText(plainPeriod)} · 날짜는 그날 밤 기준</p></div>
       <div class="summary-header-counts">${counts('수면 기록', validSleep.length, closed.length)}${counts('카페인 기록', cafDays.filter(day => day.caf?.recorded).length, cafDays.length, 'caf')}</div></header>
       ${block('A. 카페인과 수면', chart + comparisons + callout('caffeineSleep', 'A. 카페인과 수면 설명', aNote), weeks.length ? '주차별 평균 · 각 숫자 아래는 계산에 사용한 일수' : '')}
-      ${block('B. 수면을 위한 행동과 결과', calendar + callout('behavior', 'B. 수면을 위한 행동과 결과 설명', bNote, 'mint'), weeks.length ? '지킨 날 / 판정 가능한 날 · 비율이 높을수록 진하게 표시' : `✓ 지킴 · × 못 지킴 · – ${noWeight ? '판정 없음' : '기록 없음'} · 아직 = 지나지 않은 밤`, !weeks.length && n > 7)}
+      ${block('B. 수면을 위한 행동과 결과', calendar + callout('behavior', 'B. 수면을 위한 행동과 결과 설명', bNote, 'mint'), weeks.length ? '지킨 날 / 판정 가능한 날 · 비율이 높을수록 진하게 표시 · 수면시간은 반올림해 판정' : '✓ 지킴 · × 못 지킴 · – 판정 없음 · 수면시간은 반올림해 판정', !weeks.length && n > 7)}
       <footer class="summary-foot">
-        <p>날짜는 그날 밤 기준이에요. 12시를 넘겨 잠든 날도 전날 밤에 넣어요. 잔 시간은 잠든 시각부터 일어난 시각까지예요. 비교는 양쪽 모두 유효 기록이 2일 이상일 때만 보여 줘요.</p>
+        <p>날짜는 그날 밤 기준이에요. 12시를 넘겨 잠든 날도 전날 밤에 넣어요. 수면시간은 취침시각부터 기상시각까지예요. 비교는 양쪽 모두 유효 기록이 2일 이상일 때만 보여 줘요.</p>
         <div class="summary-foot-standards"><p>청소년 일일 최대 섭취량 = 내 체중 × 2.5mg(식품의약품안전처)</p><p>청소년 권장 수면 8~10시간(미국수면의학회, 2016)</p></div>
       </footer>
     </article>`;
@@ -871,7 +896,7 @@
     const phoneDates = finding('phoneBeforeBed')?.members || [[], []];
     const phoneGroups = phoneDates.map(list => { const keys = new Set(list); return validSleep.filter(day => keys.has(day.date)); });
     const phone = compare(phoneGroups, 'hours');
-    const dNote = phone.means ? `자기 전 스마트폰을 30분 이상 쓴 밤(${phone.size[0]}일)은 잔 시간이 평균 ${fixed(phone.means[0], '시간')}, 그보다 적게 사용했거나 사용하지 않은 밤(${phone.size[1]}일)은 ${fixed(phone.means[1], '시간')}이었어요.` : '';
+    const dNote = phone.means ? `자기 전 스마트폰을 30분 이상 쓴 밤(${phone.size[0]}일)은 수면시간이 평균 ${fixed(phone.means[0], '시간')}, 그보다 적게 사용했거나 사용하지 않은 밤(${phone.size[1]}일)은 ${fixed(phone.means[1], '시간')}이었어요.` : '';
     const good = [validSleep.length ? `수면은 ${closed.length}일 중 ${validSleep.length}일 기록했어요.` : '',
       zero.length ? `카페인을 안 마신 날도 ‘안 마심’으로 ${zero.length}일 남겼어요.` : ''].filter(Boolean);
     const sleepMissing = closed.filter(day => !day.recorded);
@@ -906,7 +931,12 @@
       ['difficulty', '어려웠던 점', edit?.difficulty ?? reflectionText?.difficulty ?? (hardest ? ratio(hardest) : '')],
       ['plan', '다음 계획', edit?.plan ?? reflectionText?.plan ?? plan],
     ];
-    const memo = edit?.memo ?? feedback.savedPdfFeedback?.summary ?? feedback.summary ?? '';
+    const noteKey = `${student?.학번 || student?.이름 || ''}|${start}|${end}`;
+    const noteIndex = Array.from(noteKey).reduce((hash, char) => (Math.imul(hash, 31) + char.codePointAt(0)) >>> 0, 0);
+    const defaultMemo = cafDays.some(day => day.caf?.recorded) || validSleep.length
+      ? teacherNoteExamples[noteIndex % teacherNoteExamples.length] : teacherNoteExamples[1];
+    const memo = edit?.memo ?? (reportPlainText(feedback.savedPdfFeedback?.summary).trim() ||
+      reportPlainText(feedback.summary).trim() || defaultMemo);
     const page2 = `<article class="summary-page" data-page="2"${weeks.length ? ' data-period="weekly"' : ''}${visibleLate.length ? ' data-late="true"' : ''}><header class="summary-header">
       <p class="summary-kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="summary-sub">${name} · ${period}</p></header>
       ${block('C. 카페인을 마신 날', intakeTable + `<p class="summary-sub">안 마신 날 ${zero.length}일${dates(zero)} · 기록 없는 날 ${missing.length}일${dates(missing)}</p>` + callout('caffeineDays', 'C. 카페인을 마신 날 설명', cNote))}

@@ -2173,9 +2173,10 @@ function feedbackSummaryReflection_(days, goals, standards) {
     if (kind === 'bedtime' && (goal.source === 'default' || goal.label === '23:59까지 잠자리에 들기')) return '12시 전에 자기';
     return goal.label.replace('잠자리에 들기', '자기');
   };
-  const range = { id: 'range', label: '8~10시간 취침', days: days.map(day => ({
-    date: day.date, kept: day.sleep.hours === null ? null : day.sleep.hours >= 8 && day.sleep.hours <= 10,
-  })) };
+  const range = { id: 'range', label: '8~10시간 취침', days: days.map(day => {
+    const hours = day.sleep.hours === null ? null : Math.round(day.sleep.hours);
+    return { date: day.date, kept: hours === null ? null : hours >= 8 && hours <= 10 };
+  }) };
   const ranked = [...(registered.length ? registered : standards.filter(goal => goal.id !== 'sleepMin')), range].map(goal => {
     const kind = kindFor(goal);
     const judged = goal.days.filter(item => typeof item.kept === 'boolean' &&

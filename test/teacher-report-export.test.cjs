@@ -8,8 +8,8 @@ const { root, makeSummaryFixture } = require('./fixtures/summary-report.cjs');
 test('reflection uses natural recorded-day wording and a concrete action', () => {
   const result = makeSummaryFixture().feedback.engine.summaryReflection;
   assert.match(result.rule.praise, /기록한 5일 모두 지켰어요/);
-  assert.match(result.rule.difficulty, /기록한 6일 중 2일 지켰어요/);
-  assert.match(result.rule.plan, /10\.31 밤처럼 23시 21분쯤 누워 보기/);
+  assert.match(result.rule.difficulty, /기록한 6일 중 5일 지켰어요/);
+  assert.match(result.rule.plan, /10\.30 밤처럼 23시쯤 누워 보기/);
   assert.doesNotMatch(result.rule.plan, /다음 계획에 참고/);
 });
 

@@ -16,12 +16,19 @@ test('renders two approved pages and keeps the sleep, wake, and condition in the
     'D. 수면과 생활습관', 'E. 기록 · 잘한 점', 'E. 기록 · 아쉬운 점', 'F. 돌아보기']) assert.ok(html.includes(label));
   assert.match(html, /data-row="bedtime"[^>]*>[\s\S]*?data-date="2026-11-01"[^>]*>01:21/);
   assert.match(html, /data-row="condition"[^>]*>[\s\S]*?data-date="2026-11-01"[^>]*>[\s\S]*?2점/);
-  assert.match(html, /data-row="condition"[^>]*>[\s\S]*?빠짐[\s\S]*?아직/);
+  const condition = html.match(/data-row="condition"[^>]*>([\s\S]*?)<\/div>\s*<\/div>/)[1];
+  assert.equal((condition.match(/>기록 없음<\/span>/g) || []).length, 2);
+  assert.doesNotMatch(condition, /빠짐/);
+  assert.match(html, />수면시간<small>/);
+  assert.match(html, /data-row="hours"[\s\S]*?data-date="2026-11-03"[^>]*>[\s\S]*?<span>8<\/span>/);
   assert.match(html, /안 마심/);
   assert.match(html, /기록 없음/);
   assert.match(html, /오늘/);
   assert.match(html, /수면 기록<\/span><strong>6 \/ 6일/);
   assert.match(html, /카페인 기록<\/span><strong>5 \/ 6일/);
+  assert.match(html, />카페인<small>mg/);
+  assert.match(html, />취침시각<\/span>/);
+  assert.match(html, />기상시각<\/span>/);
   assert.match(html, /다음 날 아침 컨디션/);
 });
 
@@ -40,8 +47,49 @@ test('distinguishes the registered target, default maximum, and 8–10 hour boun
   assert.match(personal, /하루 150mg 넘지 않기/);
   assert.match(defaults, /일일 최대 섭취량\(170mg\) 넘지 않기/);
   assert.match(personal, /8~10시간 취침/);
-  assert.match(personal, />짧음</);
-  assert.match(personal, />김</);
+  assert.match(personal, /8~10시간인 밤\(2일\) 평균[\s\S]*?\(반올림 전 기준\)/);
+  assert.match(personal, /class="summary-mark short"><span>짧음<\/span><small class="summary-mark-hours">6h<\/small>/);
+  const longNight = makeSummaryFixture({ editDays(days) { days[0].sleep.hours = 11.7; } });
+  assert.match(render(longNight), /class="summary-mark long"><span>긺<\/span><small class="summary-mark-hours">12h<\/small>/);
+});
+
+test('rounds sleep to whole hours before checking the daily and weekly goal and reflection', () => {
+  const fixture = length => makeSummaryFixture({ length, editDays(days) {
+    const hours = [7.49, 7.5, 7.8, 10.49, 10.5];
+    days.forEach((day, index) => {
+      if (index < hours.length) day.sleep.hours = hours[index];
+      else delete day.sleep;
+    });
+  } });
+  const report = fixture(7);
+  const html = render(report);
+  const row = html.match(/data-daily-goal="range"[^>]*>([\s\S]*?)<\/span><\/div>/)[1];
+  const marks = [...row.matchAll(/class="summary-mark (\w+)"/g)].map(match => match[1]);
+  assert.deepEqual(marks, ['near', 'ok', 'ok', 'ok', 'near', 'missing', 'missing']);
+  assert.match(row, /class="summary-mark near">7h<\/span>/);
+  assert.match(row, /class="summary-mark near">11h<\/span>/);
+  assert.match(row, /class="summary-goal-total">3\/5$/);
+  assert.match(html, /수면시간은 반올림해 판정/);
+  assert.equal(report.feedback.engine.summaryReflection.facts.difficulty.kind, 'range');
+  assert.equal(report.feedback.engine.summaryReflection.facts.difficulty.kept, 3);
+  assert.match(report.feedback.engine.summaryReflection.rule.difficulty, /5일 중 3일/);
+  const weekly = render(fixture(15)).match(/data-weekly-goal="range"[^>]*>([\s\S]*?)<\/tr>/)[1];
+  assert.equal((weekly.match(/>3\/5<\/span>/g) || []).length, 2);
+  assert.match(weekly, />0\/0<\/span>/);
+});
+
+test('fills the first teacher note consistently and keeps saved notes and deliberate blanks', () => {
+  const report = makeSummaryFixture();
+  const memo = () => render(report).match(/data-summary-text="memo">([^<]*)<\/p>/)[1];
+  const initial = memo();
+  assert.ok(initial.trim());
+  assert.equal(memo(), initial);
+  report.feedback.savedPdfFeedback = { summary: '저장한 가짜 메모' };
+  assert.equal(memo(), '저장한 가짜 메모');
+  report.feedback.summaryEdit = { memo: '직접 고친 가짜 메모' };
+  assert.equal(memo(), '직접 고친 가짜 메모');
+  report.feedback.summaryEdit.memo = '';
+  assert.equal(memo(), '');
 });
 
 test('renders the full 14-day axis and escapes untrusted names and drink details', () => {
@@ -76,7 +124,9 @@ test('a one-day report distinguishes daytime today from the still-open night', (
     now: Date.parse('2026-11-04T20:00:00Z'),
   }).content;
   assert.match(html, /data-row="caffeine"[\s\S]*?>오늘<\/span>/);
-  assert.match(html, /data-row="bedtime"[\s\S]*?data-date="2026-11-05"[^>]*>아직<\/span>/);
+  assert.match(html, /data-row="bedtime"[\s\S]*?data-date="2026-11-05"[^>]*>기록 없음<\/span>/);
+  assert.match(html, /data-daily-goal="range"[^>]*>[\s\S]*?data-date="2026-11-05" class="summary-mark missing">기록 없음<\/span>/);
+  assert.doesNotMatch(html, /summary-mark-hours">/);
   assert.match(html, /수면 기록<\/span><strong>0 \/ 0일/);
 });
 
@@ -99,6 +149,9 @@ test('reports missing and held sleep even if all past caffeine days were recorde
   const html = render(input);
   assert.match(html, /수면 기록이 비어 있는 밤은 1일/);
   assert.match(html, /수면 분석을 보류한 밤은 1일/);
+  const range = html.match(/data-daily-goal="range"[^>]*>([\s\S]*?)<\/span><\/div>/)[1];
+  assert.match(range, /data-date="2026-10-30" class="summary-mark missing">기록 없음/);
+  assert.match(range, /data-date="2026-10-31" class="summary-mark none">–/);
   assert.doesNotMatch(html, /확인한 기록에서 빠진 항목이 없어요/);
 });
 
@@ -152,9 +205,15 @@ test('shows only three delayed groups and counts the hidden records', () => {
 });
 
 test('adds a recorded overlap only when it occurred on at least two missed nights', () => {
-  const normal = makeSummaryFixture();
+  const makeMissedNights = days => {
+    days[0].sleep.hours = 11.1;
+    days[4].sleep.hours = 7.2;
+    days[5].sleep.hours = 7.4;
+  };
+  const normal = makeSummaryFixture({ editDays: makeMissedNights });
   assert.match(normal.feedback.engine.summaryReflection.rule.difficulty, /4일 중 3일은 자기 전 스마트폰을 30분 이상/);
   const sparse = makeSummaryFixture({ editDays(days) {
+    makeMissedNights(days);
     days.forEach((day, i) => {
       day.habits.phone = i === 2 ? '60분 이상' : null;
       day.caffeine?.intakes.forEach(item => { item.time = i === 2 ? '17:30' : '12:00'; });
