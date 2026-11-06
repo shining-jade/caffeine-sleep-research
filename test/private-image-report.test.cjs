@@ -232,7 +232,7 @@ test('teacher gateway accepts only supported report models and keeps the choice 
     assert.doesNotMatch(input, /테스트 학생|fixture-owner/);
     const analyses = JSON.parse(input).map(evidence => ({
       ...Object.fromEntries(Object.entries(evidence).map(([field, fact]) => [
-        field, fact ? '기록에 나타난 습관을 다음에도 살펴볼 수 있습니다.' : null,
+        field, fact ? field === 'memo' ? '나에게 맞았던 좋은 습관을 앞으로도 이어 가요.' : '기록에 나타난 습관을 다음에도 살펴볼 수 있습니다.' : null,
       ])),
       highlights: ['caffeineSleep'],
     }));

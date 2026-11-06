@@ -96,8 +96,14 @@ test('fills the first teacher note consistently and keeps saved notes and delibe
   const report = makeSummaryFixture();
   const memo = () => render(report).match(/data-summary-text="memo">([^<]*)<\/p>/)[1];
   const initial = memo();
-  assert.ok(initial.trim());
+  assert.match(initial, /(?:요|니다)[.!?]$/);
+  assert.doesNotMatch(initial, /감사|고맙|고마/);
   assert.equal(memo(), initial);
+  report.feedback.reportMode = 'final';
+  assert.notEqual(memo(), initial);
+  assert.match(memo(), /앞으로도/);
+  assert.match(memo(), /(?:요|니다)[.!?]$/);
+  assert.doesNotMatch(memo(), /감사|고맙|고마/);
   report.feedback.savedPdfFeedback = { summary: '저장한 가짜 메모' };
   assert.equal(memo(), '저장한 가짜 메모');
   report.feedback.summaryEdit = { memo: '직접 고친 가짜 메모' };
@@ -346,7 +352,8 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
   const original = report.feedback.engine.summaryReflection.rule;
   const comment = '기록에서 보인 차이는 다음 기간에도 함께 살펴볼 수 있습니다.';
   const plan = '잠자리에 들기 편한 시각을 미리 정하고 다음 기록에 남기는 것을 권합니다.';
-  const memo = '기록에서 확인된 좋은 습관을 다음에도 이어 가는 것을 권합니다.';
+  const ongoingMemo = '이번에 찾은 좋은 습관을 다음 주에도 이어 가 봐요.';
+  const finalMemo = '나에게 맞았던 습관을 앞으로도 이어 가 봐요. 그동안 기록하느라 수고했습니다.';
   const respond = value => Response.json({ status:'completed', output:[
     { type:'message', content:[{ type:'output_text', text:JSON.stringify(value) }] },
   ] });
@@ -357,14 +364,19 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
     assert.doesNotMatch(request.input,/synthetic-only|테스트 학생|가상|2026-|11\.01|하루 150mg|enteredAt|studentId/);
     const reports = JSON.parse(request.input);
     assert.match(reports[0].caffeineSleep,/카페인.*평균/);
-    const analyses = reports.map((facts,i) => modify({
-      ...Object.fromEntries(Object.keys(facts).map(field=>[field,facts[field] ? ({ plan,memo })[field] || comment : null])),
-      highlights:['caffeineSleep','caffeineDays'],
-    },i));
+    const analyses = reports.map((facts,i) => {
+      const memo = facts.memo?.startsWith('연구 종료 후 마무리 분석입니다.') ? finalMemo : ongoingMemo;
+      return modify({
+        ...Object.fromEntries(Object.keys(facts).map(field=>[field,facts[field] ? ({ plan,memo })[field] || comment : null])),
+        highlights:['caffeineSleep','caffeineDays'],
+      },i);
+    });
     return respond({analyses});
   };
   for (const n of [1,2]) {
-    const result = await createTeacherOpenAI({ readKey:()=> 'fixture-only', fetchImpl:async (_url,options)=>rewrite(options) })(makeData(n));
+    const data = makeData(n);
+    for (const item of data.reports) item.feedback.reportMode = n === 2 ? 'final' : 'ongoing';
+    const result = await createTeacherOpenAI({ readKey:()=> 'fixture-only', fetchImpl:async (_url,options)=>rewrite(options) })(data);
     for (const item of result.reports) {
       assert.equal(item.feedback.mode,'ai');
       assert.equal(item.feedback.aiFallback,false);
@@ -381,7 +393,7 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
       assert.match(html,/data-summary-text="caffeineSleep"[^>]*>[^<]*기록에서 보인 차이/);
       assert.match(html,/data-summary-text="praise"[^>]*>[^<]*기록에서 보인 차이/);
       assert.match(html,/data-summary-text="plan"[^>]*>[^<]*잠자리에 들기 편한 시각/);
-      assert.match(html,/data-summary-text="memo">기록에서 확인된 좋은 습관을 다음에도 이어 가는 것을 권합니다\.<\/p>/);
+      assert.ok(html.includes('data-summary-text="memo">' + (n === 2 ? finalMemo : ongoingMemo) + '</p>'));
       assert.deepEqual(item.feedback.engine.findings,makeData().reports[0].feedback.engine.findings);
       item.feedback.savedPdfFeedback = {summary:'이전에 저장한 한마디'};
       assert.match(render(item),/data-summary-text="memo">이전에 저장한 한마디<\/p>/);
@@ -400,7 +412,7 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
       const request = JSON.parse(options.body);
       assert.match(request.model,/^gpt-/);
       calls.push(JSON.parse(request.input).length);
-      return rewrite(options,(value,i)=>calls.length === 1 && i === 1 ? {...value, difficulty:'기준에 맞지 않은 날도 있었어요.'}
+      return rewrite(options,(value,i)=>calls.length === 1 && i === 1 ? {...value, difficulty:'기준에 맞지 않은 날도 있었어요.', memo:'기록을 남겨 줘서 고마워요.'}
         : calls.length === 2 ? {...value, praise:'숫자 99를 썼어요.', difficulty:repairedDifficulty} : value);
     },
   })(makeData(2));
@@ -409,6 +421,7 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
   assert.deepEqual(mixed.reports.map(item=>item.feedback.aiApiStatus),['applied','applied']);
   assert.equal(mixed.reports[1].feedback.aiResponseIssue,undefined);
   assert.ok(mixed.reports[1].feedback.summaryReflection.difficulty.includes(repairedDifficulty));
+  assert.equal(mixed.reports[1].feedback.aiNarrative.memo, ongoingMemo);
   assert.match(mixed.reports[1].feedback.summaryReflection.praise,/기록에서 보인 차이/);
   assert.match(files.aiCallStatusText(mixed.reports[1].feedback),/GPT.*AI 응답 반영/);
   assert.doesNotMatch(render(mixed.reports[1]),/진단|99시간|API 키 사용 확인/);

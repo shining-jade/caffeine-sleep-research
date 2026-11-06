@@ -37,7 +37,7 @@ function goalEvidence(goal) {
   return `확인 가능한 ${goal.measured}일 중 ${goal.kept}일은 ${label}에 맞았습니다.${overlap}`;
 }
 
-function buildEvidence(engine) {
+function buildEvidence({ engine, reportMode }) {
   const finding = id => engine.findings?.find(item => item.id === id)?.data;
   const habit = finding('recordHabit');
   const record = Number.isInteger(habit?.count) && habit.count > 0
@@ -66,7 +66,9 @@ function buildEvidence(engine) {
   const { praise, difficulty, plan } = engine.summaryReflection.facts || {};
   const evidence = { record, caffeineSleep, behavior, caffeineDays, sleepHabits, praise: goalEvidence(praise), difficulty: goalEvidence(difficulty) };
   const planTopic = Object.hasOwn(PLAN_TOPICS, plan?.kind) ? PLAN_TOPICS[plan.kind] : '다음 기간에도 같은 항목을 기록하기';
-  const memo = evidence.praise || Object.values(evidence).find(Boolean) || null;
+  const memoEvidence = evidence.praise || Object.values(evidence).find(Boolean) || null;
+  const isFinal = (reportMode ?? engine.mode) === 'final';
+  const memo = memoEvidence && (isFinal ? '연구 종료 후 마무리 분석입니다. ' + memoEvidence : memoEvidence);
   return { ...evidence, plan: memo ? planTopic : null, memo };
 }
 
@@ -74,11 +76,13 @@ function acceptedAnalysis(value, evidence) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const sentences = {};
   for (const field of FIELDS.filter(field => evidence[field])) {
-    const sentence = value[field];
-    if (typeof sentence !== 'string' || sentence.trim().length < 8 || sentence.trim().length > 72 ||
-        !/(?:니다|십시오)[.!?]$/.test(sentence.trim()) || /요[.!?](?:\s|$)/.test(sentence) || UNSAFE_TEXT.test(sentence) ||
-        (field === 'memo' && /(?:격려|칭찬)합니다/.test(sentence))) continue;
-    sentences[field] = sentence.trim();
+    if (typeof value[field] !== 'string') continue;
+    const sentence = value[field].trim();
+    if (sentence.length < 8 || sentence.length > 72 || UNSAFE_TEXT.test(sentence)) continue;
+    if (field === 'memo') {
+      if (!/(?:요|니다)[.!?]$/.test(sentence) || /감사|고맙|고마|(?:격려|칭찬)(?:합니다|해요)/.test(sentence)) continue;
+    } else if (!/(?:니다|십시오)[.!?]$/.test(sentence) || /요[.!?](?:\s|$)/.test(sentence)) continue;
+    sentences[field] = sentence;
   }
   const highlights = Array.isArray(value.highlights)
     ? [...new Set(value.highlights.filter(field => HIGHLIGHTS.includes(field) && evidence[field]))].slice(0, 2) : [];
@@ -124,7 +128,7 @@ function useAnalysis(report, evidence, { sentences, highlights }) {
   delete feedback.aiResponseIssue;
 }
 
-const INSTRUCTIONS = 'Write Korean feedback for a school caffeine and sleep log using only the supplied aggregate evidence. Return one analysis per input, in order. For each non-null field write one natural Korean sentence in formal 합니다체 for a teacher report, using 8 to 72 characters. End with a form such as 나타났습니다, 확인됩니다, or 권합니다. Use clear, natural Korean without exclamations, stiff filler such as 모습이 확인됩니다, or a paraphrase of the figures already shown. Prefer concrete verbs. Write 기준을 벗어난 날 instead of 일부 날 when describing missed days. In comparisons name both groups when useful and describe only the direction supported by the evidence. For difficulty, distinguish meeting a range from being below it: if the evidence only says a target was missed, do not infer why or which side of the range. For null fields return null. Interpret observations without changing their direction or scope, and never suggest that one observation caused another. The app displays the original figures separately: omit all numerals, dates, times, thresholds, scores and amounts from your sentences, even if they appear in the input. Do not add facts, names, diagnoses, medical advice, links or emojis. Use the plan topic for one practical recommendation, phrased naturally with 하는 것을 권합니다 when appropriate. For memo, address the student directly in formal but warm Korean using the given evidence, for example 꾸준히 기록해 주셔서 감사합니다. Do not describe the act of praise or encouragement with 격려합니다 or 칭찬합니다. For highlights choose one or two distinct available fields from caffeineSleep, behavior, caffeineDays, sleepHabits, praise and difficulty, or return an empty list if none of them are available.';
+const INSTRUCTIONS = 'Write Korean feedback for a school caffeine and sleep log using only the supplied aggregate evidence. Return one analysis per input, in order. For each non-null field except memo, write one natural Korean sentence in formal 합니다체 for a teacher report, using 8 to 72 characters. End with a form such as 나타났습니다, 확인됩니다, or 권합니다. Use clear, natural Korean without exclamations, stiff filler such as 모습이 확인됩니다, or a paraphrase of the figures already shown. Prefer concrete verbs. Write 기준을 벗어난 날 instead of 일부 날 when describing missed days. In comparisons name both groups when useful and describe only the direction supported by the evidence. For difficulty, distinguish meeting a range from being below it: if the evidence only says a target was missed, do not infer why or which side of the range. Return null only when the corresponding input field is null. For record, always acknowledge the act of keeping records when evidence is supplied, even if it only supports one brief observation. Mention consistency only when the record supports it. Interpret observations without changing their direction or scope, and never suggest that one observation caused another. The app displays the original figures separately: omit all numerals, dates, times, thresholds, scores and amounts from your sentences, even if they appear in the input. Do not add facts, names, diagnoses, medical advice, links or emojis. Use the plan topic for one practical recommendation, phrased naturally with 하는 것을 권합니다 when appropriate. For memo only, write a brief, friendly note addressed directly to the student in one or two short Korean sentences, 8 to 72 characters in total. Choose polite 해요체 or 합니다체 according to the message. You may combine them naturally, for example a factual observation in 했습니다 followed by encouragement in 해 봐요. Do not force a mix or switch register within a sentence. Use only memo evidence to acknowledge a specific effort and encourage the student to continue that habit. Do not describe any habit as effective or beneficial unless the memo evidence establishes it. For final reviews marked 연구 종료 후 마무리 분석, recognize the effort across the study and encourage continuation after the study, without assuming further study records. Do not thank the student or use phrases such as 감사합니다, 고마워요, 격려합니다, or 칭찬합니다. When supported by the record, a natural note is 카페인 섭취 목표를 꾸준히 지켰습니다. 자신에게 맞았던 방법을 이어 가 봐요. For highlights choose one or two distinct available fields from caffeineSleep, behavior, caffeineDays, sleepHabits, praise and difficulty, or return an empty list if none of them are available.';
 
 async function requestDrafts(group, { fetchImpl, key, model }, retry) {
   try {
@@ -134,7 +138,7 @@ async function requestDrafts(group, { fetchImpl, key, model }, retry) {
       body:JSON.stringify({
         model, store:false, max_output_tokens:2400,
         ...(model.startsWith('gpt-6') ? { reasoning:{ effort:'none' } } : {}),
-        instructions:INSTRUCTIONS + (retry ? ' This is a second attempt. Check that every non-null field has one short 합니다체 sentence, no digits, and only a supported observation. Return the complete requested analysis.' : ''),
+        instructions:INSTRUCTIONS + (retry ? ' This is a second attempt. Check that every non-null field uses the requested tone (합니다체 for analysis, and natural 해요체, 합니다체, or both for memo), contains no digits, and uses only supported evidence. Return the complete requested analysis.' : ''),
         input:JSON.stringify(group.map(item => item.evidence)),
         text:{ format:{ type:'json_schema', name:'teacher_report_writing', strict:true, schema:{
           type:'object', additionalProperties:false, required:['analyses'], properties:{ analyses:{ type:'array', items:{
@@ -209,7 +213,7 @@ async function writeGroup(group, options) {
 export async function writeTeacherReports(data, { fetchImpl, readKey, model }) {
   const reports = data.reports.filter(report => report.feedback);
   const pending = reports.filter(report => report.feedback.engine?.summaryReflection)
-    .map(report => ({ report, evidence:buildEvidence(report.feedback.engine) })).filter(item => item.evidence.plan);
+    .map(report => ({ report, evidence:buildEvidence(report.feedback) })).filter(item => item.evidence.plan);
   const key = readKey()?.trim();
   for (const report of reports) report.feedback.aiApiStatus = key ? 'no_facts' : 'missing_key';
   let state = key ? 'report_no_facts' : 'missing_key';

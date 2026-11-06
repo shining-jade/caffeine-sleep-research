@@ -1071,8 +1071,9 @@
     ];
     const noteKey = `${student?.학번 || student?.이름 || ''}|${start}|${end}`;
     const noteIndex = Array.from(noteKey).reduce((hash, char) => (Math.imul(hash, 31) + char.codePointAt(0)) >>> 0, 0);
+    const notes = teacherNotesFor(feedback);
     const defaultMemo = cafDays.some(day => day.caf?.recorded) || validSleep.length
-      ? teacherNoteExamples[noteIndex % teacherNoteExamples.length] : teacherNoteExamples[1];
+      ? notes.examples[noteIndex % notes.examples.length] : notes.withoutRecords;
     const memo = edit?.memo ?? (reportPlainText(feedback.savedPdfFeedback?.summary).trim() ||
       feedback.aiNarrative?.memo || reportPlainText(feedback.summary).trim() || defaultMemo);
     const page2 = `<article class="summary-page" data-page="2"><header class="summary-header">
@@ -1093,12 +1094,29 @@
     return { styles, content: `<main class="summary-report" aria-label="카페인과 수면 기록 요약">${firstPage}${page2}</main>` };
   }
 
-  const teacherNoteExamples = [
-    '기록을 남겨 주셔서 감사합니다. 다음에는 실천하기 쉬운 행동 한 가지부터 시작하는 것을 권합니다.',
-    '처음부터 모든 목표를 지킬 필요는 없습니다. 자신에게 맞는 방법을 하나씩 찾아보시기 바랍니다.',
-    '기록에서 발견한 점을 다음 실천 계획에 하나 반영하는 것을 권합니다.',
-    '이번에 실천하기 편했던 방법이 있다면 다음에도 이어 가는 것을 권합니다.',
-  ];
+  const teacherNotes = {
+    ongoing: {
+      examples: [
+        '기록을 남긴 것만으로도 좋은 시작입니다. 이번 주에도 할 수 있는 것부터 하나씩 해 봐요.',
+        '매일 완벽할 필요는 없어요. 나에게 맞는 방법을 하나씩 찾아가요.',
+        '기록을 돌아보고 나에게 맞는 습관을 찾아가는 과정도 의미 있습니다.',
+        '이번에 해 보니 편했던 방법이 있다면 다음에도 이어 가 봐요.',
+      ],
+      withoutRecords: '처음부터 완벽할 필요는 없어요. 기록하기 쉬운 것 한 가지부터 시작해 봐요.',
+    },
+    final: {
+      examples: [
+        '연구 기간 동안 기록을 남기느라 수고했습니다. 나에게 맞았던 습관을 앞으로도 이어 가 봐요.',
+        '그동안 남긴 기록은 나에게 맞는 습관을 찾는 데 좋은 출발점입니다. 앞으로도 응원할게요.',
+        '이번에 해 보니 편했던 방법 한 가지를 앞으로도 이어 가 봐요. 작은 실천도 충분히 의미 있어요.',
+      ],
+      withoutRecords: '연구는 마무리되지만 습관은 언제든 시작할 수 있어요. 나에게 편한 것 한 가지부터 해 봐요.',
+    },
+  };
+
+  function teacherNotesFor(feedback) {
+    return (feedback.reportMode ?? feedback.engine?.mode) === 'final' ? teacherNotes.final : teacherNotes.ongoing;
+  }
 
   function createFeedbackTextEditor(content, { save, available = () => true } = {}) {
     const tools = document.getElementById('feedbackTextEditorTools').content.firstElementChild.cloneNode(true);
@@ -1210,7 +1228,7 @@
     return reset();
   }
 
-  function addSummaryEditor(shadow, saveSummary) {
+  function addSummaryEditor(shadow, saveSummary, noteExamples) {
     const report = shadow.querySelector('.summary-report');
     const section = shadow.querySelector('.summary-reflections');
     const texts = [...report.querySelectorAll('[data-summary-text]')];
@@ -1325,9 +1343,9 @@
     const edit = button('보고서 문장 수정', begin), topEdit = button('보고서 문장 수정', begin);
     const examples = button('다른 예시 문구', () => {
       const memo = fields.get('memo');
-      if (memo.innerText === teacherNoteExamples[exampleIndex]) exampleIndex = (exampleIndex + 1) % teacherNoteExamples.length;
-      memo.textContent = teacherNoteExamples[exampleIndex];
-      exampleIndex = (exampleIndex + 1) % teacherNoteExamples.length;
+      if (memo.innerText === noteExamples[exampleIndex]) exampleIndex = (exampleIndex + 1) % noteExamples.length;
+      memo.textContent = noteExamples[exampleIndex];
+      exampleIndex = (exampleIndex + 1) % noteExamples.length;
       memo.focus();
     });
     examples.dataset.summaryExample = '';
@@ -1413,7 +1431,7 @@
     const template = document.createElement('template');
     template.innerHTML = content;
     shadow.append(style, template.content);
-    const editor = saveSummary ? addSummaryEditor(shadow, saveSummary) : null;
+    const editor = saveSummary ? addSummaryEditor(shadow, saveSummary, teacherNotesFor(report.feedback).examples) : null;
     const controls = document.createElement('div');
     controls.className = 'report-view-controls';
     controls.setAttribute('role', 'group');
