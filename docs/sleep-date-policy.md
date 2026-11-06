@@ -3,7 +3,7 @@
 > 기록앱(학생 화면·교사 대시보드·피드백·PDF 보고서), 전처리 헬퍼, 논문 연구방법이 함께 따르는 기준 문서입니다.
 > 코드에서 날짜 규칙을 바꾸기 전에 이 문서를 먼저 고치고, 변경 이력에 날짜와 이유를 남깁니다.
 
-- 운영 배포본 규칙 버전: `2026-10-21-episode-preservation-v2` (2026-11-06 운영 배포 Apps Script v47·Vercel 소스 4ad9d12)
+- 운영 배포본 규칙 버전: `2026-10-21-episode-preservation-v2` (2026-11-06 운영 배포 Apps Script v48·Vercel 소스 3000579)
 - 로컬 작업 폴더 규칙 버전: `2026-10-20-wake-minus-one-v1` (운영본보다 이전 버전)
 - 두 버전 모두 수면 대상일 규칙(`targetDate = previous(wakeDay)`)은 같음
 - 문서 작성: 2026-11-05
@@ -114,6 +114,7 @@
 
 | 날짜 | 내용 | 이유 |
 |---|---|---|
+| 2026-11-06 | 소스 커밋 3000579 운영 배포. Apps Script v48, Vercel dpl_hX1yBsnweLaqPwxprfWtrTrQmJBL | 교사 피드백과 기록 요약 보고서의 합니다체 정리. 가짜 기록으로 학생 목록과 일괄 분석의 실제 Luna 응답 확인 |
 | 2026-11-06 | 소스 커밋 4ad9d12 Vercel 운영 배포. Vercel dpl_9hXUR1X9WRxfdBjqAhtUvxhRDKJC, Apps Script v47 | 가짜 기록으로 Luna·Terra의 개별·일괄 피드백과 보고서 작성 확인, 교사 모델 선택 및 Luna 기본값 적용 |
 | 2026-11-06 | 소스 커밋 234afdb Vercel 운영 배포. Vercel dpl_Aw5cBSSdDHTvUp4c1NzsrTQsApBm, Apps Script v47 | 학생 목록·일괄 분석의 실제 GPT 피드백·보고서를 가짜 자료로 검증하고, 문장 검증 실패 시 학생별 재요청 적용 |
 | 2026-11-06 | 소스 커밋 fb8f44a Vercel 운영 배포. Vercel dpl_8ibTYveW5oX29SdEECWmHBejhYhm, Apps Script v47 | 교사 화면의 개별·일괄 분석과 PDF 미리보기 창에 OpenAI API 호출 상태 표시 |
