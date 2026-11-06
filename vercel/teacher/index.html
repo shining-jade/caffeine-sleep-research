@@ -3284,9 +3284,11 @@ function updateSleepTab(){
     if (sleepQualLabelEl) sleepQualLabelEl.textContent = daysText;
     try { renderSleepQualCharts(filteredSleep); } catch(e) { console.error('수면 질 차트 오류:', e); }
 
-    const studentNames = new Map(students.map(student => [student.학번, student.이름]));
+    const studentLabels = new Map(students.map(student => [
+        student.학번, [student.학번, student.이름].filter(Boolean).join(' '),
+    ]));
     const memos = filteredSleep.filter(entry => entry.메모?.trim()).map(entry => ({
-        text: entry.메모, student: studentNames.get(entry.학번), date: getSleepLifeDate(entry),
+        text: entry.메모, student: studentLabels.get(entry.학번), date: getSleepLifeDate(entry),
     }));
     import('/public/js/teacher-sleep-memo.js?v=4')
         .then(({ renderSleepMemoAnalysis }) => renderSleepMemoAnalysis(memos))
