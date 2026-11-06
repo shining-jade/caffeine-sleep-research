@@ -358,6 +358,10 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
       assert.match(files.aiCallStatusText(item.feedback),/API 키 사용 확인.*AI 응답 반영/);
       assert.match(item.analysis,/AI가 살펴본 기록[\s\S]*?기록에서 보인 차이/);
       assert.ok(item.feedback.sections.some(section=>section.items.some(text=>text.includes(comment))));
+      assert.match(item.feedback.sections.find(section=>section.id==='record').items[0],/기록에서 보인 차이/);
+      assert.deepEqual(item.feedback.sections.find(section=>section.id==='action').items,[plan]);
+      assert.equal(item.feedback.summaryReflection.plan,plan);
+      assert.equal(item.feedback.sections.some(section=>section.id==='why'),false);
       const html = render(item);
       assert.doesNotMatch(html,/API 키 사용 확인/);
       assert.match(html,/data-summary-text="caffeineSleep"[^>]*>[^<]*기록에서 보인 차이/);
@@ -374,13 +378,45 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
       assert.match(render(item), /data-summary-text="caffeineSleep"[^>]*>교사가 저장한 설명/);
     }
   }
+  const calls = [];
+  const repairedDifficulty = '목표에 맞지 않은 날의 기록도 다음 계획에 참고해 봐요.';
   const mixed = await createTeacherOpenAI({ readKey:()=> 'fixture-only',
-    fetchImpl:async (_url,options)=>rewrite(options,(value,i)=>i ? {...value, difficulty:'진단: 99시간'} : value),
+    fetchImpl:async (url,options)=>{
+      assert.equal(url,'https://api.openai.com/v1/responses');
+      const request = JSON.parse(options.body);
+      assert.match(request.model,/^gpt-/);
+      calls.push(JSON.parse(request.input).length);
+      return rewrite(options,(value,i)=>calls.length === 1 && i === 1 ? {...value, difficulty:'진단: 99시간'}
+        : calls.length === 2 ? {...value, praise:'숫자 99를 썼어요.', difficulty:repairedDifficulty} : value);
+    },
   })(makeData(2));
-  assert.deepEqual(mixed.reports.map(item=>item.feedback.mode),['ai','rule']);
-  assert.deepEqual(mixed.reports.map(item=>item.feedback.aiApiStatus),['applied','response_rejected']);
-  assert.deepEqual(mixed.reports[1].feedback.summaryReflection,structuredClone(original));
-  assert.equal(mixed.reports[1].analysis,'규칙 기반 피드백');
+  assert.deepEqual(calls,[2,1]);
+  assert.deepEqual(mixed.reports.map(item=>item.feedback.mode),['ai','ai']);
+  assert.deepEqual(mixed.reports.map(item=>item.feedback.aiApiStatus),['applied','applied']);
+  assert.equal(mixed.reports[1].feedback.aiResponseIssue,undefined);
+  assert.ok(mixed.reports[1].feedback.summaryReflection.difficulty.includes(repairedDifficulty));
+  assert.match(mixed.reports[1].feedback.summaryReflection.praise,/기록에서 보인 차이/);
+  assert.match(files.aiCallStatusText(mixed.reports[1].feedback),/GPT.*AI 응답 반영/);
+  assert.doesNotMatch(render(mixed.reports[1]),/진단|99시간|API 키 사용 확인/);
+  const rejected = await createTeacherOpenAI({ readKey:()=> 'fixture-only',
+    fetchImpl:async (_url,options)=>rewrite(options,value=>({...value, difficulty:'새 숫자 99를 넣었어요.'})),
+  })(makeData());
+  assert.equal(rejected.reports[0].feedback.aiApiStatus,'response_rejected');
+  assert.equal(rejected.reports[0].feedback.aiResponseIssue,'wording');
+  assert.equal(rejected.reports[0].analysis,'규칙 기반 피드백');
+  assert.equal(rejected.reports[0].feedback.aiNarrative,undefined);
+  assert.deepEqual(rejected.reports[0].feedback.summaryReflection,structuredClone(original));
+  const badResponses = [
+    [{status:'incomplete', output:[]}, 'incomplete'],
+    [{status:'completed', output:[{type:'message',content:[{type:'refusal'}]}]}, 'refusal'],
+    [{status:'completed', output:[]}, 'format'],
+  ];
+  for (const [body,reason] of badResponses) {
+    const result = await createTeacherOpenAI({ readKey:()=> 'fixture-only', fetchImpl:async()=>Response.json(body) })(makeData());
+    assert.equal(result.reports[0].feedback.aiApiStatus,'response_rejected');
+    assert.equal(result.reports[0].feedback.aiResponseIssue,reason);
+    assert.equal(result.reports[0].feedback.mode,'rule');
+  }
   const offline = await createTeacherOpenAI({ readKey:()=> 'fixture-only', fetchImpl:async()=>{throw Error('offline');} })(makeData());
   assert.equal(offline.reports[0].feedback.aiFallback,true);
   assert.equal(offline.reports[0].feedback.aiApiStatus,'request_failed');

@@ -105,7 +105,7 @@
   }
 
   const aiCallLabels = {
-    applied: 'OpenAI API 키 사용 확인 · AI 응답 반영',
+    applied: 'OpenAI GPT API 키 사용 확인 · AI 응답 반영 완료',
     response_rejected: 'OpenAI API 키 사용 확인 · 응답 검증 실패로 규칙 기반 적용',
     authentication_failed: 'OpenAI API 호출 시도 · 키 인증 또는 접근 권한 확인 필요',
     request_failed: 'OpenAI API 호출 시도 · 요청 실패로 규칙 기반 적용',
@@ -113,9 +113,19 @@
     no_facts: 'OpenAI API 호출 안 함 · AI가 해석할 기록 부족',
     preview: '미리보기 AI 예시 · 실제 API 호출 없음',
   };
+  const aiResponseIssueLabels = {
+    incomplete: '응답 생성이 끝나지 않음',
+    refusal: '모델이 응답을 거절함',
+    format: '응답 형식이 보고서와 맞지 않음',
+    wording: '문장이 길이·숫자·내용 기준을 통과하지 못함',
+  };
 
   function aiCallStatusText(feedback) {
     const status = feedback?.aiApiStatus;
+    const issue = feedback?.aiResponseIssue;
+    if (status === 'response_rejected' && Object.hasOwn(aiResponseIssueLabels, issue)) {
+      return 'OpenAI API 키 사용 확인 · ' + aiResponseIssueLabels[issue] + ' · 규칙 기반 적용';
+    }
     if (Object.hasOwn(aiCallLabels, status)) return aiCallLabels[status];
     if (status === 'unknown' || feedback?.aiFallback || feedback?.mode === 'ai') return 'OpenAI API 호출 여부를 확인할 수 없음';
     return 'OpenAI API 호출 안 함 · 규칙 기반';
@@ -204,7 +214,7 @@
       ['수면에 영향을 줄 수 있는 생활습관', 'habit'],
       ['실천 제안', 'next'], ['💡 실천 제안', 'next'],
       ['기록 습관', 'habit'], ['내 목표', 'goal'], ['기간의 처음과 끝', 'sleep'],
-      ['첫째 주와 둘째 주', 'sleep'], ['이번 기록에서 찾은 것', 'sleep'], ['비교해 본 기록', 'sleep'],
+      ['첫째 주와 둘째 주', 'sleep'], ['이번 기록에서 찾은 것', 'sleep'], ['AI가 살펴본 기록', 'sleep'], ['비교해 본 기록', 'sleep'],
       ['왜 그럴까', 'caffeine'], ['알아 두면 좋아요', 'caffeine'],
       ['이번 주 해 볼 것', 'next'], ['앞으로 이어 갈 한 가지', 'next'],
     ]);
@@ -229,8 +239,9 @@
         (section?.items || intro).push(line);
       }
     }
-    const isCurrent = sections.some(item => item.title.endsWith('기록 습관'))
-      && sections.some(item => item.title.endsWith('이번 기록에서 찾은 것') || item.title === '비교해 본 기록');
+    const isCurrent = sections.some(item => item.title.endsWith('AI가 살펴본 기록')) || (
+      sections.some(item => item.title.endsWith('기록 습관'))
+      && sections.some(item => item.tone === 'next' || item.title.endsWith('이번 기록에서 찾은 것') || item.title === '비교해 본 기록'));
     if (!isCurrent && (!sections.some(item => item.tone === 'caffeine') || !sections.some(item => item.tone === 'sleep'))) return false;
     renderFeedback(target, { summary: intro.join(' '), sections, sources }, '', false);
     return true;

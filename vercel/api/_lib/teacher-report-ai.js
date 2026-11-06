@@ -1,6 +1,6 @@
 const REPORT_FIELDS = ['caffeineSleep', 'behavior', 'caffeineDays', 'sleepHabits'];
 const REFLECTION_FIELDS = ['praise', 'difficulty', 'plan'];
-const FIELDS = [...REPORT_FIELDS, ...REFLECTION_FIELDS, 'memo'];
+const FIELDS = ['record', ...REPORT_FIELDS, ...REFLECTION_FIELDS, 'memo'];
 const HIGHLIGHTS = [...REPORT_FIELDS, 'praise', 'difficulty'];
 const GOAL_LABELS = {
   caffeineMax: '카페인 섭취량 목표', bedtime: '취침시각 목표', sleepMin: '수면시간 목표',
@@ -39,6 +39,9 @@ function goalEvidence(goal) {
 
 function buildEvidence(engine) {
   const finding = id => engine.findings?.find(item => item.id === id)?.data;
+  const habit = finding('recordHabit');
+  const record = Number.isInteger(habit?.count) && habit.count > 0
+    ? `수면이나 카페인 기록을 ${habit.count}일 남겼어요.${habit.streak > 1 ? ` 가장 길게는 ${habit.streak}일 이어졌어요.` : ''}` : null;
   const sleep = (finding('bedtimeSeries')?.days || []).filter(day => !day.open && day.recorded && !day.held);
   const caffeine = finding('caffeineSummary')?.days || [];
   const caffeineByDate = new Map(caffeine.map(day => [day.date, day.status]));
@@ -61,22 +64,24 @@ function buildEvidence(engine) {
   const sleepHabits = phoneGroups?.length === 2 ? compare(phoneGroups.map(dates => sleep.filter(day => dates.has(day.date))),
     'hours', ['자기 전 스마트폰을 30분 이상 쓴 밤의 수면시간', '그보다 적게 사용했거나 사용하지 않은 밤의 수면시간'], '시간') : null;
   const { praise, difficulty, plan } = engine.summaryReflection.facts || {};
-  const evidence = { caffeineSleep, behavior, caffeineDays, sleepHabits, praise: goalEvidence(praise), difficulty: goalEvidence(difficulty) };
+  const evidence = { record, caffeineSleep, behavior, caffeineDays, sleepHabits, praise: goalEvidence(praise), difficulty: goalEvidence(difficulty) };
   const planTopic = Object.hasOwn(PLAN_TOPICS, plan?.kind) ? PLAN_TOPICS[plan.kind] : '다음 기간에도 같은 항목을 기록하기';
   const memo = evidence.praise || Object.values(evidence).find(Boolean) || null;
   return { ...evidence, plan: memo ? planTopic : null, memo };
 }
 
-function validAnalysis(value, evidence) {
-  if (!value || Object.keys(value).length !== FIELDS.length + 1) return false;
-  const { highlights } = value;
-  if (!Array.isArray(highlights) || highlights.length < 1 || highlights.length > 2 || new Set(highlights).size !== highlights.length ||
-      !highlights.every(field => HIGHLIGHTS.includes(field) && evidence[field])) return false;
-  return FIELDS.every(field => {
+function acceptedAnalysis(value, evidence) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const sentences = {};
+  for (const field of FIELDS.filter(field => evidence[field])) {
     const sentence = value[field];
-    return evidence[field] ? typeof sentence === 'string' && sentence.trim().length >= 8 && sentence.length <= 72 &&
-      /[가-힣]/.test(sentence) && !UNSAFE_TEXT.test(sentence) : sentence === null;
-  });
+    if (typeof sentence !== 'string' || sentence.trim().length < 8 || sentence.trim().length > 72 ||
+        !/[가-힣]/.test(sentence) || UNSAFE_TEXT.test(sentence)) continue;
+    sentences[field] = sentence.trim();
+  }
+  const highlights = Array.isArray(value.highlights)
+    ? [...new Set(value.highlights.filter(field => HIGHLIGHTS.includes(field) && evidence[field]))].slice(0, 2) : [];
+  return { sentences, highlights };
 }
 
 function useRule(report) {
@@ -86,24 +91,110 @@ function useRule(report) {
   if (feedback.engine?.summaryReflection) feedback.summaryReflection = { ...feedback.engine.summaryReflection.rule };
 }
 
-function useAnalysis(report, evidence, analysis) {
+function useAnalysis(report, evidence, { sentences, highlights }) {
   const { feedback } = report;
-  const write = (fact, sentence) => [fact, sentence?.trim()].filter(Boolean).join(' ');
-  feedback.aiNarrative = Object.fromEntries(REPORT_FIELDS.filter(field => evidence[field])
-    .map(field => [field, write(evidence[field], analysis[field])]));
-  feedback.aiNarrative.memo = analysis.memo.trim();
+  const write = (fact, sentence) => [fact, sentence].filter(Boolean).join(' ');
+  feedback.aiNarrative = Object.fromEntries(REPORT_FIELDS.filter(field => sentences[field])
+    .map(field => [field, write(evidence[field], sentences[field])]));
+  if (sentences.memo) feedback.aiNarrative.memo = sentences.memo;
   const rule = feedback.engine.summaryReflection.rule;
   feedback.summaryReflection = {
-    praise: write(rule.praise || evidence.praise, analysis.praise),
-    difficulty: write(rule.difficulty || evidence.difficulty, analysis.difficulty),
-    plan: write(analysis.plan.trim(), rule.plan),
+    praise: sentences.praise ? write(rule.praise || evidence.praise, sentences.praise) : rule.praise,
+    difficulty: sentences.difficulty ? write(rule.difficulty || evidence.difficulty, sentences.difficulty) : rule.difficulty,
+    plan: sentences.plan,
   };
-  const items = analysis.highlights.map(field => write(evidence[field], analysis[field]));
-  feedback.sections = [{ id:'aiAnalysis', tone:'sleep', title:'AI가 살펴본 기록', items }, ...feedback.sections.map(section =>
-    section.id === 'action' ? { ...section, items:[analysis.plan.trim()] } : section)];
+  const actionTitle = feedback.sections.find(section => section.id === 'action')?.title || '이번 주 해 볼 것';
+  const goalItems = ['praise', 'difficulty'].filter(field => {
+    const kind = feedback.engine.summaryReflection.facts?.[field]?.kind;
+    return sentences[field] && !highlights.includes(field) && kind && kind !== 'sleepRecords' && kind !== 'caffeineRecords';
+  }).map(field => feedback.summaryReflection[field]);
+  feedback.sections = [
+    ...(sentences.record ? [{ id:'record', title:'📝 기록 습관', items:[write(evidence.record, sentences.record)] }] : []),
+    ...(goalItems.length ? [{ id:'goals', tone:'goal', title:'🎯 내 목표', items:goalItems }] : []),
+    ...(highlights.length ? [{ id:'findings', tone:'sleep', title:'AI가 살펴본 기록',
+      items:highlights.map(field => write(evidence[field], sentences[field])) }] : []),
+    { id:'action', tone:'next', title:actionTitle, items:[sentences.plan] },
+  ];
+  feedback.sources = [];
   report.analysis = feedback.sections.map(section => [(section.icon ? section.icon + ' ' : '') + section.title, ...section.items].join('\n')).join('\n\n');
   feedback.mode = 'ai';
   feedback.aiFallback = false;
+  feedback.aiApiStatus = 'applied';
+  delete feedback.aiResponseIssue;
+}
+
+const INSTRUCTIONS = 'Write Korean feedback for a school caffeine and sleep log using only the supplied aggregate evidence. Return one analysis per input, in order. For each non-null field write one natural 해요체 sentence, using 8 to 72 characters. For null fields return null. Interpret observations without changing their direction or scope, and never suggest that one observation caused another. The app displays the original figures separately: omit all numerals, dates, times, thresholds, scores and amounts from your sentences, even if they appear in the input. Do not add facts, names, diagnoses, medical advice, links or emojis. Use the plan topic to write one practical action. Use the memo evidence to write one supportive teacher comment. For highlights choose one or two distinct available fields from caffeineSleep, behavior, caffeineDays, sleepHabits, praise and difficulty, or return an empty list if none of them are available.';
+
+async function requestDrafts(group, { fetchImpl, key, model }, retry) {
+  try {
+    const response = await fetchImpl('https://api.openai.com/v1/responses', {
+      method:'POST', redirect:'error', signal:AbortSignal.timeout(retry ? 6500 : 8000),
+      headers:{ Authorization:'Bearer '+key, 'Content-Type':'application/json' },
+      body:JSON.stringify({
+        model, store:false, max_output_tokens:2400,
+        instructions:INSTRUCTIONS + (retry ? ' This is a second attempt. Check every non-null field has a short sentence, no digits, and only a supported observation. Return the complete requested analysis.' : ''),
+        input:JSON.stringify(group.map(item => item.evidence)),
+        text:{ format:{ type:'json_schema', name:'teacher_report_writing', strict:true, schema:{
+          type:'object', additionalProperties:false, required:['analyses'], properties:{ analyses:{ type:'array', items:{
+            type:'object', additionalProperties:false, required:[...FIELDS,'highlights'], properties:{
+              ...Object.fromEntries(FIELDS.map(field => [field,{ type:['string','null'] }])),
+              highlights:{ type:'array', items:{ type:'string', enum:HIGHLIGHTS } },
+            },
+          } } },
+        } } },
+      }),
+    });
+    if (!response.ok) return { status:[401,403].includes(response.status) ? 'authentication_failed' : 'request_failed' };
+    const body = await response.json().catch(() => null);
+    const messages = Array.isArray(body?.output) ? body.output.flatMap(item =>
+      item?.type === 'message' && Array.isArray(item.content) ? item.content : []) : [];
+    if (messages.some(item => item?.type === 'refusal')) return { status:'response_rejected', issue:'refusal' };
+    if (body?.status === 'incomplete') return { status:'response_rejected', issue:'incomplete' };
+    const output = messages.find(item => item?.type === 'output_text')?.text;
+    if (body?.status === 'completed' && typeof output === 'string') {
+      let analyses;
+      try { analyses = JSON.parse(output)?.analyses; }
+      catch { return { status:'response_rejected', issue:'format' }; }
+      if (Array.isArray(analyses) && analyses.length === group.length) return { status:'response_rejected', analyses };
+    }
+    return { status:'response_rejected', issue:'format' };
+  } catch {
+    return { status:'request_failed' };
+  }
+}
+
+async function writeGroup(group, options) {
+  const applyDrafts = (items, { status, issue, analyses }) => {
+    const incomplete = [];
+    items.forEach((item, i) => {
+      const { report, evidence, draft } = item;
+      const { feedback } = report;
+      // Preserve proof that GPT responded if a retry fails before a response arrives.
+      if (status !== 'response_rejected' && feedback.aiApiStatus === 'response_rejected') return;
+      feedback.aiApiStatus = status;
+      if (status !== 'response_rejected') return;
+      const result = acceptedAnalysis(analyses?.[i], evidence);
+      if (result) {
+        item.draft = {
+          sentences: { ...result.sentences, ...draft?.sentences },
+          highlights: draft?.highlights.length ? draft.highlights : result.highlights,
+        };
+        if (FIELDS.every(field => !evidence[field] || item.draft.sentences[field]) &&
+            (item.draft.highlights.length || !HIGHLIGHTS.some(field => evidence[field]))) {
+          useAnalysis(report, evidence, item.draft);
+          return;
+        }
+      }
+      feedback.aiResponseIssue = issue || (result ? 'wording' : 'format');
+      if (issue !== 'refusal') incomplete.push(item);
+    });
+    return incomplete;
+  };
+
+  const first = await requestDrafts(group, options, false);
+  const incomplete = applyDrafts(group, first);
+  if (incomplete.length) applyDrafts(incomplete, await requestDrafts(incomplete, options, true));
+  return first.status === 'authentication_failed' ? first.status : 'report_failed';
 }
 
 export async function writeTeacherReports(data, { fetchImpl, readKey, model }) {
@@ -116,55 +207,9 @@ export async function writeTeacherReports(data, { fetchImpl, readKey, model }) {
   if (key && pending.length) {
     const groups = [];
     for (let i = 0; i < pending.length; i += 4) groups.push(pending.slice(i,i+4));
-    const states = await Promise.all(groups.map(async group => {
-      const setApiStatus = status => {
-        for (const { report } of group) report.feedback.aiApiStatus = status;
-      };
-      setApiStatus('request_failed');
-      try {
-        const response = await fetchImpl('https://api.openai.com/v1/responses', {
-          method:'POST', redirect:'error', signal:AbortSignal.timeout(8000),
-          headers:{ Authorization:'Bearer '+key, 'Content-Type':'application/json' },
-          body:JSON.stringify({
-            model, store:false, max_output_tokens:2400,
-            instructions:'Write brief Korean feedback for a school caffeine and sleep log. Each input object has confirmed aggregate evidence for one report. Return one analysis per input, in order. For each non-null evidence field except plan and memo, write one natural 해요체 sentence interpreting the stated pattern. Preserve the direction and scope of comparisons. Describe differences as observations, never as causes. The app displays the exact evidence alongside your sentence. Do not repeat numbers, invent observations, infer identity, diagnose, or give medical advice. For plan write one practical action using only the given plan topic. For memo write one supportive sentence for the teacher to review, grounded in the memo evidence. Recognize the effort the records show. Return null for null inputs. For highlights choose one or two different non-null evidence fields, excluding plan and memo, whose patterns are most useful to point out. Return plain Korean text only, with each sentence no longer than 72 characters.',
-            input:JSON.stringify(group.map(item => item.evidence)),
-            text:{ format:{ type:'json_schema', name:'teacher_report_writing', strict:true, schema:{
-              type:'object', additionalProperties:false, required:['analyses'], properties:{ analyses:{ type:'array', items:{
-                type:'object', additionalProperties:false, required:[...FIELDS,'highlights'], properties:{
-                  ...Object.fromEntries(FIELDS.map(field => [field,{ type:['string','null'] }])),
-                  highlights:{ type:'array', items:{ type:'string', enum:HIGHLIGHTS } },
-                },
-              } } },
-            } } },
-          }),
-        });
-        if (!response.ok) {
-          if ([401,403].includes(response.status)) {
-            setApiStatus('authentication_failed');
-            return 'authentication_failed';
-          }
-          return 'report_failed';
-        }
-        setApiStatus('response_rejected');
-        const body = await response.json();
-        const output = body.output?.flatMap(item => item.type === 'message' ? item.content : [])
-          .find(item => item.type === 'output_text')?.text;
-        const { analyses } = JSON.parse(output);
-        if (body.status !== 'completed' || !Array.isArray(analyses) || analyses.length !== group.length) return 'report_failed';
-        group.forEach(({ report, evidence }, i) => {
-          if (validAnalysis(analyses[i],evidence)) {
-            useAnalysis(report,evidence,analyses[i]);
-            report.feedback.aiApiStatus = 'applied';
-          }
-        });
-        return 'report_failed';
-      } catch {
-        return 'report_failed';
-      }
-    }));
-    state = reports.some(report => report.feedback.aiNarrative) ? 'report_written' : states[0];
+    const states = await Promise.all(groups.map(group => writeGroup(group, { fetchImpl, key, model })));
+    state = reports.some(report => report.feedback.aiApiStatus === 'applied') ? 'report_written' : states[0];
   }
-  for (const report of reports) if (!report.feedback.aiNarrative) useRule(report);
+  for (const report of reports) if (report.feedback.aiApiStatus !== 'applied') useRule(report);
   return { ...data, aiVerification:{ state } };
 }
