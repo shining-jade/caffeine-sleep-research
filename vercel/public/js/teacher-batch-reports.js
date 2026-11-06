@@ -438,8 +438,8 @@
           organization_unavailable: 'OpenAI 조직 확인 필요',
           synthetic_failed: '가상 기록 검증 실패',
           connection_failed: 'OpenAI 연결 확인 필요',
-          reflection_failed: 'AI 돌아보기 응답을 확인할 수 없음',
-          reflection_no_facts: 'AI로 다듬을 돌아보기 기록이 없음',
+          report_failed: 'AI 피드백·보고서 응답을 확인할 수 없음',
+          report_no_facts: 'AI로 해석할 기록이 없음',
         };
         const org = verification?.organization ? ' · 조직 ' + verification.organization : '';
         const reasons = {
@@ -449,8 +449,8 @@
           rate_limit_exceeded: '요청 한도 초과',
         };
         const reason = reasons[verification?.reason] || (verification?.status ? 'HTTP ' + verification.status : '');
-        status.textContent += verification?.state === 'reflection_refined'
-          ? '\n돌아보기 문장 AI 적용 ' + aiCount + '/' + ready + '명' + (aiCount < ready ? ' · 나머지는 규칙 기반' : '')
+        status.textContent += aiCount > 0 && verification?.state !== 'verified'
+          ? '\n피드백과 보고서 AI 적용 ' + aiCount + '/' + ready + '명' + (aiCount < ready ? ' · 나머지는 규칙 기반' : '')
           : verification?.state === 'verified'
           ? '\nOpenAI 인증·가상 기록 검증 완료' + org + ' · AI 적용 ' + aiCount + '/' + ready + '명'
           : '\n' + (checks[verification?.state] || 'AI 연결 확인 필요') + org + (reason ? ' · ' + reason : '') + ' · 규칙 기반으로 분석했습니다.';

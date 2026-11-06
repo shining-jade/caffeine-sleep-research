@@ -126,7 +126,8 @@
     const result = node('div', 'report-feedback');
     if (feedback.mode) {
       const mode = feedback.aiFallback ? 'AI 분석을 사용할 수 없어 규칙 기반으로 분석했어요.'
-        : feedback.mode === 'ai' ? (feedback.summaryReflection ? 'AI 분석 · 돌아보기 문장 다듬기'
+        : feedback.mode === 'ai' ? (feedback.aiNarrative ? 'AI 분석 · 피드백과 보고서 작성'
+          : feedback.summaryReflection ? 'AI 분석 · 돌아보기 문장 다듬기'
           : feedback.engine ? 'AI 분석 · 설명 문장 다듬기' : 'AI 분석 · 실천 제안 우선순위 반영') : '규칙 기반 분석';
       const periodMode = feedback.reportMode === 'final' ? '마무리 분석 · ' : feedback.reportMode === 'ongoing' ? '진행 분석 · ' : '';
       result.append(node('p', 'report-feedback-mode', periodMode + mode));
@@ -808,7 +809,7 @@
     const edit = feedback.summaryEdit;
     const summaryText = (key, label, message) => `<span data-summary-text="${key}" data-summary-label="${label}">${reportTextHtml(message)}</span>`;
     const callout = (key, label, fallback, tone = '') => {
-      const message = edit?.[key] ?? fallback;
+      const message = edit?.[key] ?? feedback.aiNarrative?.[key] ?? fallback;
       return `<p class="summary-callout ${tone}" data-summary-callout${reportPlainText(message) ? '' : ' hidden'}><b data-summary-prefix${edit?.[key] === undefined ? '' : ' hidden'}>기록을 보면</b> ${summaryText(key, label, message)}</p>`;
     };
     const recordNote = (key, label, paragraphs) => `<div data-summary-text="${key}" data-summary-label="${label}">${edit?.[key] !== undefined
@@ -1043,7 +1044,7 @@
     const defaultMemo = cafDays.some(day => day.caf?.recorded) || validSleep.length
       ? teacherNoteExamples[noteIndex % teacherNoteExamples.length] : teacherNoteExamples[1];
     const memo = edit?.memo ?? (reportPlainText(feedback.savedPdfFeedback?.summary).trim() ||
-      reportPlainText(feedback.summary).trim() || defaultMemo);
+      feedback.aiNarrative?.memo || reportPlainText(feedback.summary).trim() || defaultMemo);
     const page2 = `<article class="summary-page" data-page="2"><header class="summary-header">
       <p class="summary-kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="summary-sub">${name} · ${period}</p></header>
       ${block('C. 카페인을 마신 날', caffeineContent.content + callout('caffeineDays', 'C. 카페인을 마신 날 설명', caffeineContent.note), caffeineNote)}

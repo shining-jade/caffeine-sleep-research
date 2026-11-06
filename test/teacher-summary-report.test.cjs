@@ -324,39 +324,62 @@ test('adds a recorded overlap only when it occurred on at least two missed night
   assert.doesNotMatch(sparse.feedback.engine.summaryReflection.rule.difficulty, /스마트폰|오후 3시/);
 });
 
-test('AI receives only allowed aggregate facts; rejects novel wording and retains the three rules on failure', async () => {
+test('AI writes feedback and report narration from anonymous aggregates for single and batch results', async () => {
   const { createTeacherOpenAI } = await import('../vercel/api/_lib/teacher-openai.js');
   const report = makeSummaryFixture();
-  const makeData = () => structuredClone({ success: true, reports: [{ ...report, studentId: 'synthetic-only' }] });
-  const rule = report.feedback.engine.summaryReflection.rule;
-  const safeChoices = { praise: 'warm', difficulty: 'warm', plan: 'warm' };
-  const completed = value => new Response(JSON.stringify({ status: 'completed', output: [
-    { type: 'message', content: [{ type: 'output_text', text: JSON.stringify(value) }] },
-  ] }));
-  let calls = 0;
-  const success = createTeacherOpenAI({ readKey: () => 'fixture-only', fetchImpl: async (_url, options) => {
-    calls++;
-    const request = JSON.parse(options.body);
-    assert.equal(request.store, false);
-    assert.doesNotMatch(request.input, /synthetic-only|테스트 학생|가상|2026-|하루 150mg/);
-    assert.deepEqual(Object.keys(JSON.parse(request.input)[0]), ['praise', 'difficulty', 'plan']);
-    return completed({ choices: [safeChoices] });
-  } });
-  const polished = await success(makeData());
-  assert.equal(calls, 1);
-  assert.equal(polished.reports[0].feedback.mode, 'ai');
-  assert.equal(polished.reports[0].feedback.aiFallback, false);
-  assert.notEqual(polished.reports[0].feedback.summaryReflection.praise, rule.praise);
-  assert.deepEqual(polished.reports[0].feedback.sections, makeData().reports[0].feedback.sections);
-  for (const fetchImpl of [async () => { throw Error('offline'); },
-    async () => completed({ choices: [{ ...safeChoices, difficulty: '진단: 99시간' }] })]) {
-    const fallback = await createTeacherOpenAI({ readKey: () => 'fixture-only', fetchImpl })(makeData());
-    const { feedback } = fallback.reports[0];
-    assert.equal(feedback.aiFallback, true);
-    assert.equal(feedback.mode, 'rule');
-    assert.deepEqual(feedback.summaryReflection, structuredClone(rule));
-    assert.match(render(fallback.reports[0]), /스마트폰을 30분 이상/);
+  const makeData = (n = 1) => structuredClone({ success:true, reports:Array.from({length:n}, (_,i) =>
+    ({ ...structuredClone(report), studentId:'synthetic-only-'+i, analysis:'규칙 기반 피드백' })) });
+  const original = report.feedback.engine.summaryReflection.rule;
+  const comment = '기록에서 보인 차이는 다음 기간에도 함께 살펴볼 만해요.';
+  const plan = '잠자리에 들기 편한 시각을 미리 정하고 다음 기록에 남겨 봐요.';
+  const memo = '기록에서 찾은 잘된 습관을 다음에도 이어 가 봐요.';
+  const respond = value => Response.json({ status:'completed', output:[
+    { type:'message', content:[{ type:'output_text', text:JSON.stringify(value) }] },
+  ] });
+  const rewrite = ({body}, modify = analysis => analysis) => {
+    const request = JSON.parse(body);
+    assert.equal(request.store,false);
+    assert.equal(request.text.format.name,'teacher_report_writing');
+    assert.doesNotMatch(request.input,/synthetic-only|테스트 학생|가상|2026-|11\.01|하루 150mg|enteredAt|studentId/);
+    const reports = JSON.parse(request.input);
+    assert.match(reports[0].caffeineSleep,/카페인.*평균/);
+    const analyses = reports.map((facts,i) => modify({
+      ...Object.fromEntries(Object.keys(facts).map(field=>[field,facts[field] ? ({ plan,memo })[field] || comment : null])),
+      highlights:['caffeineSleep','caffeineDays'],
+    },i));
+    return respond({analyses});
+  };
+  for (const n of [1,2]) {
+    const result = await createTeacherOpenAI({ readKey:()=> 'fixture-only', fetchImpl:async (_url,options)=>rewrite(options) })(makeData(n));
+    for (const item of result.reports) {
+      assert.equal(item.feedback.mode,'ai');
+      assert.equal(item.feedback.aiFallback,false);
+      assert.match(item.analysis,/AI가 살펴본 기록[\s\S]*?기록에서 보인 차이/);
+      assert.ok(item.feedback.sections.some(section=>section.items.some(text=>text.includes(comment))));
+      const html = render(item);
+      assert.match(html,/data-summary-text="caffeineSleep"[^>]*>[^<]*기록에서 보인 차이/);
+      assert.match(html,/data-summary-text="praise"[^>]*>[^<]*기록에서 보인 차이/);
+      assert.match(html,/data-summary-text="plan"[^>]*>[^<]*잠자리에 들기 편한 시각/);
+      assert.match(html,/data-summary-text="memo">기록에서 찾은 잘된 습관을 다음에도 이어 가 봐요\.<\/p>/);
+      assert.deepEqual(item.feedback.engine.findings,makeData().reports[0].feedback.engine.findings);
+      item.feedback.savedPdfFeedback = {summary:'이전에 저장한 한마디'};
+      assert.match(render(item),/data-summary-text="memo">이전에 저장한 한마디<\/p>/);
+      item.feedback.summaryEdit = {caffeineSleep:'교사가 저장한 설명',memo:'직접 고친 한마디'};
+      assert.match(render(item),/data-summary-text="memo">직접 고친 한마디<\/p>/);
+      item.feedback.summaryEdit.memo = '';
+      assert.match(render(item),/data-summary-text="memo"><\/p>/);
+      assert.match(render(item), /data-summary-text="caffeineSleep"[^>]*>교사가 저장한 설명/);
+    }
   }
+  const mixed = await createTeacherOpenAI({ readKey:()=> 'fixture-only',
+    fetchImpl:async (_url,options)=>rewrite(options,(value,i)=>i ? {...value, difficulty:'진단: 99시간'} : value),
+  })(makeData(2));
+  assert.deepEqual(mixed.reports.map(item=>item.feedback.mode),['ai','rule']);
+  assert.deepEqual(mixed.reports[1].feedback.summaryReflection,structuredClone(original));
+  assert.equal(mixed.reports[1].analysis,'규칙 기반 피드백');
+  const offline = await createTeacherOpenAI({ readKey:()=> 'fixture-only', fetchImpl:async()=>{throw Error('offline');} })(makeData());
+  assert.equal(offline.reports[0].feedback.aiFallback,true);
+  assert.deepEqual(offline.reports[0].feedback.summaryReflection,structuredClone(original));
 });
 
 test('recognizes a numeric Seoul sheet timestamp and uses observed kept-day facts for a caffeine plan', () => {
