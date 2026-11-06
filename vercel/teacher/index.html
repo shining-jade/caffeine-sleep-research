@@ -658,6 +658,26 @@
         .report-result-header{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-bottom:8px;}
         .report-result-header h4{margin:0;color:#20324c;font-size:15px;}
         .report-result-badge{border-radius:20px;background:#edf2f9;color:#334c69;padding:4px 9px;font-size:12px;font-weight:700;}
+        .sleep-memo-note{font-size:12px;color:#526176;font-weight:400}
+        .sleep-memo-empty{text-align:center;padding:36px}
+        .sleep-memo-analysis{padding-top:6px}
+        .sleep-memo-analysis p{margin:8px 0}
+        .sleep-memo-insight{padding:16px;border-radius:10px;background:#f0f4ff;border-left:4px solid #5b63bf;color:#253452}
+        .sleep-memo-insight p{margin:4px 0 14px;line-height:1.55}
+        .sleep-memo-insight p:last-child{margin-bottom:0}
+        .sleep-memo-analysis details{margin:12px 0}
+        .sleep-memo-analysis summary{cursor:pointer;font-size:13px;font-weight:600;color:#374467}
+        .sleep-memo-sources{margin-top:16px}
+        .sleep-memo-sources summary{cursor:pointer;font-size:14px;font-weight:600;color:#374467}
+        .sleep-memo-sources ol{list-style:none;display:grid;gap:8px;margin:10px 0 0;padding:0}
+        .sleep-memo-sources li{padding:10px 12px;border:1px solid #dce2eb;border-radius:8px;color:#253452}
+        .sleep-memo-sources strong{font-size:13px}
+        .sleep-memo-sources p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+        .sleep-memo-actions{margin-top:12px}
+        .sleep-memo-categories{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;text-align:left;margin-top:12px}
+        .sleep-memo-category{padding:10px 12px;border:1px solid #dce2eb;border-left:4px solid var(--topic-color);border-radius:8px;background:#f8faff}
+        .sleep-memo-category strong{color:var(--topic-color)}
+        .sleep-memo-category ul{list-style:none;padding:0;margin:4px 0 0;font-size:13px}
         .report-ai-api-status{font-size:13px;font-weight:650;color:#405676;margin:6px 0;}
         .report-preview-button{margin-left:auto;background:#edf0fe;color:#36459a;border:1px solid #d8def8;min-height:42px;}
         .report-result summary{cursor:pointer;font-weight:650;color:#425574;padding:6px 0;}
@@ -1090,20 +1110,19 @@
             <div class="chart-card"><h3 class="chart-title">💤 중도 각성 횟수</h3><div class="chart-container"><canvas id="awakeningsChart"></canvas></div></div>
             <div class="chart-card" style="grid-column:1/-1;"><h3 class="chart-title">😪 어제 낮 졸음·집중력 저하</h3><div class="chart-container" style="height:200px;"><canvas id="daytimeChart"></canvas></div></div>
             <div class="chart-card" style="grid-column:1/-1;">
-                <h3 class="chart-title">📝 수면 메모 워드클라우드 <span style="font-size:13px;font-weight:400;color:#9ca3af;">(<span id="sleepChartLabel2">7일</span> 기준 · 자주 나온 단어일수록 크게 표시)</span></h3>
-                <div id="sleepMemoNoData" style="text-align:center;padding:40px;color:#9ca3af;font-size:14px;">수면 메모 데이터가 없습니다.</div>
-                <div id="sleepMemoWrap" style="display:none;width:100%;min-height:200px;padding:16px 24px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;justify-content:center;"></div>
-                <!-- AI 분류 버튼 & 결과 영역 -->
-                <div id="sleepMemoAiArea" style="display:none;margin-top:16px;border-top:1px solid #f3f4f6;padding-top:14px;">
-                    <div style="text-align:center;margin-bottom:12px;">
-                        <button id="sleepMemoAiBtn" onclick="aiGroupSleepWords()"
-                            style="background:linear-gradient(135deg,#6366f1,#8b5cf6);color:white;border:none;border-radius:20px;padding:9px 20px;font-size:13px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 8px rgba(99,102,241,0.35);">
-                            단어 분류하기
-                        </button>
-                        <p style="font-size:11px;color:#9ca3af;margin-top:6px;">비슷한 단어끼리 카테고리로 묶어줍니다</p>
+                <h3 class="chart-title">📝 수면 메모 분석 <span class="sleep-memo-note">(<span id="sleepChartLabel2">7일</span> 기준)</span></h3>
+                <div id="sleepMemoNoData" class="sleep-memo-note sleep-memo-empty">선택한 기간에 남긴 수면 메모가 없습니다.</div>
+                <div id="sleepMemoAiArea" class="sleep-memo-analysis" hidden>
+                    <div id="sleepMemoAiResult" aria-live="polite"></div>
+                    <div class="sleep-memo-actions">
+                        <button id="sleepMemoAiBtn" class="btn btn-primary" type="button">Luna로 핵심 찾기</button>
+                        <p class="sleep-memo-note">메모에서 찾은 주제와 건수로 핵심을 고릅니다.</p>
                     </div>
-                    <div id="sleepMemoAiResult" style="display:none;"></div>
                 </div>
+                <details id="sleepMemoSources" class="sleep-memo-sources" hidden>
+                    <summary id="sleepMemoSourceLabel">학생 메모 원문 보기</summary>
+                    <ol id="sleepMemoSourceList"></ol>
+                </details>
             </div>
         </div>
     </div>
@@ -3263,46 +3282,13 @@ function updateSleepTab(){
     if (sleepQualLabelEl) sleepQualLabelEl.textContent = daysText;
     try { renderSleepQualCharts(filteredSleep); } catch(e) { console.error('수면 질 차트 오류:', e); }
 
-    // ── 수면 메모 워드클라우드 ─────────────────────────────
-    const stopWords = new Set(['이','가','은','는','을','를','의','에','에서','도','와','과','로','으로','한','하고','있다','없다','너무','그냥','좀','잘','더','안','못','것','거','수','때','적','많','있','없','하다','되다','같다','싶다','아','어','고','서','나','그','다','들','를','에서','부터','까지','만','보다','하지만','그리고','그래서','하지만','또','다시','계속','오늘','어제']);
-    const wordMap = {};
-    filteredSleep.forEach(s => {
-        if (!s.메모 || !s.메모.trim()) return;
-        s.메모.trim().split(/[\s,\.!?~\-]+/).forEach(w => {
-            const t = w.replace(/[^가-힣a-zA-Z0-9]/g, '');
-            if (t.length < 2 || stopWords.has(t)) return;
-            wordMap[t] = (wordMap[t] || 0) + 1;
-        });
-    });
-    const wordList = Object.entries(wordMap).sort((a,b)=>b[1]-a[1]).slice(0,60);
-    // AI 분류용으로 단어 목록 전역 저장
-    window._sleepWordList = wordList;
-    const noDataEl2 = document.getElementById('sleepMemoNoData');
-    const wrapEl2   = document.getElementById('sleepMemoWrap');
-    const aiArea    = document.getElementById('sleepMemoAiArea');
-    const aiResult  = document.getElementById('sleepMemoAiResult');
-    if (wordList.length === 0) {
-        if (noDataEl2) noDataEl2.style.display = 'block';
-        if (wrapEl2)   wrapEl2.style.display   = 'none';
-        if (aiArea)    aiArea.style.display     = 'none';
-    } else {
-        if (noDataEl2) noDataEl2.style.display = 'none';
-        if (wrapEl2)   wrapEl2.style.display   = 'flex';
-        if (aiArea)    aiArea.style.display     = 'block';
-        if (aiResult)  { aiResult.style.display = 'none'; aiResult.innerHTML = ''; }
-        const maxCnt = wordList[0][1];
-        const minPx = 13, maxPx = 50;
-        const colors = ['#6366f1','#8b5cf6','#ec4899','#ef4444','#f59e0b','#10b981','#3b82f6','#06b6d4','#f97316','#84cc16'];
-        // 시드 기반 색상으로 같은 단어는 항상 같은 색
-        const getColor = word => colors[word.split('').reduce((a,c)=>a+c.charCodeAt(0),0) % colors.length];
-        wrapEl2.innerHTML = wordList.map(([word, cnt]) => {
-            const size   = Math.round(minPx + ((cnt / maxCnt) * (maxPx - minPx)));
-            const weight = cnt > 1 ? 700 : 500;
-            const opacity = 0.75 + (cnt / maxCnt) * 0.25;
-            return `<span title="${escapeHtml(word)}: ${cnt}회" style="font-size:${size}px;font-weight:${weight};color:${getColor(word)};opacity:${opacity.toFixed(2)};line-height:1.4;cursor:default;transition:transform .15s;display:inline-block;padding:1px 3px;"
-                onmouseover="this.style.transform='scale(1.15)'" onmouseout="this.style.transform=''">${escapeHtml(word)}</span>`;
-        }).join('');
-    }
+    const studentNames = new Map(students.map(student => [student.학번, student.이름]));
+    const memos = filteredSleep.filter(entry => entry.메모?.trim()).map(entry => ({
+        text: entry.메모, student: studentNames.get(entry.학번), date: getSleepLifeDate(entry),
+    }));
+    import('/public/js/teacher-sleep-memo.js?v=3')
+        .then(({ renderSleepMemoAnalysis }) => renderSleepMemoAnalysis(memos))
+        .catch(() => { document.getElementById('sleepMemoNoData').textContent = '수면 메모 주제를 불러오지 못했습니다.'; });
 }
 
 // ── 수면 질 세부 지표 차트 렌더링 ────────────────────────────────
@@ -3387,104 +3373,6 @@ function renderSleepQualCharts(filteredSleep) {
                 scales: { x:{ticks:{callback:chartTickWrap(7)}}, y: { beginAtZero: true, ticks: { stepSize: 1 } } }
             }
         });
-    }
-}
-
-// ── 수면 메모 단어 분류 (키워드 규칙 기반, API 불필요) ───────────
-function localClassifyWords(words) {
-    const rules = [
-        {
-            name: '카페인·음료',
-            keys: ['커피', '에너지음료', '캔커피', '마신', '마셨', '카페인', '탓인지', '아메리카노', '라떼', '에스프레소', '홍차', '녹차', '콜라', '음료']
-        },
-        {
-            name: '수면 방해·불안',
-            keys: ['두근', '심장', '불안', '걱정', '뒤척', '핸드폰', '폰', '유튜브', '게임', '보다가', '늦게', '새벽', '생각이', '많았', '잠드는', '걸렸', '못잠', '불면', '꿈', '깼', '잠이']
-        },
-        {
-            name: '피로·졸림',
-            keys: ['졸', '피곤', '피로', '나른', '힘들', '무기력', '지쳐', '꾸벅', '눈무거']
-        },
-        {
-            name: '개운함·긍정',
-            keys: ['개운', '상쾌', '푹', '기분좋', '끝났', '그나마', '좋았', '좋음', '잘잠']
-        },
-        {
-            name: '일상·활동',
-            keys: ['시험', '주말', '산책', '운동', '공부', '오후', '낮에', '저녁에', '밤에', '전날', '몰아서', '충전', '완료', '실수', '일찍', '이른', '자다가', '잠들', '잤다', '자서']
-        }
-    ];
-
-    const result = {};
-    rules.forEach(r => { result[r.name] = []; });
-    result['기타'] = [];
-
-    words.forEach(word => {
-        let matched = false;
-        for (const rule of rules) {
-            if (rule.keys.some(k => word.includes(k) || k.includes(word))) {
-                result[rule.name].push(word);
-                matched = true;
-                break;
-            }
-        }
-        if (!matched) result['기타'].push(word);
-    });
-
-    // 빈 카테고리 제거
-    Object.keys(result).forEach(k => { if (result[k].length === 0) delete result[k]; });
-    return result;
-}
-
-function aiGroupSleepWords() {
-    const btn = document.getElementById('sleepMemoAiBtn');
-    const resultEl = document.getElementById('sleepMemoAiResult');
-    const wordList = window._sleepWordList || [];
-    if (wordList.length === 0) return;
-
-    btn.disabled = true;
-    btn.innerHTML = '⏳ 분류 중...';
-    btn.style.opacity = '0.7';
-    resultEl.style.display = 'none';
-
-    try {
-        const words = wordList.map(([w]) => w);
-        const categories = localClassifyWords(words);
-
-        const catColors = [
-            { bg:'#ede9fe', border:'#c4b5fd', text:'#5b21b6', badge:'#7c3aed' },
-            { bg:'#fce7f3', border:'#fbcfe8', text:'#9d174d', badge:'#db2777' },
-            { bg:'#fef3c7', border:'#fde68a', text:'#92400e', badge:'#d97706' },
-            { bg:'#d1fae5', border:'#a7f3d0', text:'#065f46', badge:'#059669' },
-            { bg:'#dbeafe', border:'#bfdbfe', text:'#1e3a8a', badge:'#2563eb' },
-            { bg:'#fef9c3', border:'#fde047', text:'#713f12', badge:'#ca8a04' },
-        ];
-
-        let html = '<div style="display:flex;flex-wrap:wrap;gap:12px;">';
-        Object.entries(categories).forEach(([catName, catWords], i) => {
-            const c = catColors[i % catColors.length];
-            const chips = catWords.map(w =>
-                `<span style="background:white;border-radius:20px;padding:3px 10px;font-size:12px;color:${c.text};box-shadow:0 1px 3px rgba(0,0,0,0.1);white-space:nowrap;">${w}</span>`
-            ).join('');
-            html += `
-            <div style="flex:1;min-width:160px;background:${c.bg};border:1.5px solid ${c.border};border-radius:14px;padding:12px 14px;">
-                <div style="font-size:12px;font-weight:800;color:${c.badge};margin-bottom:8px;">📌 ${catName} <span style="font-size:10px;font-weight:500;opacity:0.75;">(${catWords.length}개)</span></div>
-                <div style="display:flex;flex-wrap:wrap;gap:5px;">${chips}</div>
-            </div>`;
-        });
-        html += '</div>';
-        html += '<p style="text-align:center;font-size:11px;color:#9ca3af;margin-top:10px;">✦ 키워드 기반 자동 분류 결과입니다</p>';
-
-        resultEl.innerHTML = html;
-        resultEl.style.display = 'block';
-
-    } catch (err) {
-        resultEl.innerHTML = `<p style="text-align:center;color:#ef4444;font-size:13px;">⚠️ 오류: ${err.message || err}</p>`;
-        resultEl.style.display = 'block';
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '단어 분류하기';
-        btn.style.opacity = '1';
     }
 }
 

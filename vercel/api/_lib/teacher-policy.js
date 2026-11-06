@@ -3,6 +3,7 @@ import { validateMessageInput } from './message-validation.js';
 const ACTION_NAMES = [
   'saveTeacherClassGoals',
   'analyzeTeacherBatch',
+  'analyzeSleepMemoTopics',
   'interpretTeacherGoal',
   'renderTeacherReportPdf',
   'sendPrivateTeacherReport',

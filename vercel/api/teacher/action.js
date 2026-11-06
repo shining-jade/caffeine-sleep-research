@@ -3,6 +3,7 @@ import { callGas as defaultCallGas } from '../_lib/gas.js';
 import { DEFAULT_MAX_BYTES, readJson, sendJson } from '../_lib/http.js';
 import { readSessionCookie, verifySession } from '../_lib/session.js';
 import { normalizeTeacherRequest } from '../_lib/teacher-policy.js';
+import { analyzeSleepMemoTopics as defaultAnalyzeSleepMemoTopics, validateSleepMemoSummary } from '../_lib/teacher-sleep-memo.js';
 
 const LEGACY_PDF_MAX_BYTES = 4 * 1024 * 1024;
 const LEGACY_PDF_ACTIONS = new Set(['saveTeacherPdfAndSendMessage', 'renderTeacherReportPdf']);
@@ -15,6 +16,7 @@ export function createActionHandler({
   callGas = defaultCallGas,
   applyTeacherAI = defaultApplyTeacherAI,
   interpretTeacherGoal = defaultInterpretTeacherGoal,
+  analyzeSleepMemoTopics = defaultAnalyzeSleepMemoTopics,
   now = () => Math.floor(Date.now() / 1000),
 } = {}) {
   return async function actionHandler(req, res) {
@@ -67,6 +69,16 @@ export function createActionHandler({
     }
 
     try {
+      if (normalized.action === 'analyzeSleepMemoTopics') {
+        const [summary] = normalized.params;
+        if (normalized.params.length !== 1 || !validateSleepMemoSummary(summary)) {
+          sendJson(res, 400, { success: false, error: 'INVALID_INPUT' });
+          return;
+        }
+        const analysis = await analyzeSleepMemoTopics(summary);
+        sendJson(res, 200, { success: true, data: analysis });
+        return;
+      }
       if (normalized.action === 'interpretTeacherGoal') {
         const [sentence] = normalized.params;
         const interpretation = normalized.params.length === 1 ? await interpretTeacherGoal(sentence) : null;

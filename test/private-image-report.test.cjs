@@ -276,3 +276,73 @@ test('teacher gateway accepts only supported report models and keeps the choice 
   assert.equal(gasRequests.length, 5);
   assert.equal(apiRequests.length, 4);
 });
+
+test('teacher-only sleep memo analysis sends sentence-level aggregates and rejects invented pairs', async () => {
+  const { createActionHandler } = await import('../vercel/api/teacher/action.js');
+  const { analyzeSleepMemoTopics } = await import('../vercel/api/_lib/teacher-sleep-memo.js');
+  const { summarizeSleepMemos } = await import('../vercel/public/js/sleep-memo-topics.js');
+  const summary = summarizeSleepMemos([
+    '수업용 합성 예시 · 가상 학생 이름 김가짜. 핸드폰을 보고 휴대폰을 내려놓았는데 잠이 오지 않았다.',
+    '스마트폰을 봤다. 머리가 아프다.',
+    '실제 학생 기록 아님.',
+  ]);
+  assert.deepEqual(summary, {
+    topics: [['screens', 2], ['sleepOnset', 1], ['headache', 1]],
+    pairs: [['screens', 'sleepOnset', 1]],
+  });
+  const negated = summarizeSleepMemos([
+    '폰은 안 봤고 잠이 잘 안 왔다.',
+    '커피는 안 마셨는데 잠이 오지 않았다.',
+    '피곤하지 않았고 개운했다.',
+  ]);
+  assert.deepEqual(negated.topics, [['sleepOnset', 2], ['noCaffeine', 1], ['refreshed', 1]]);
+  assert.deepEqual(negated.pairs, [['noCaffeine', 'sleepOnset', 1]]);
+  const classified = {
+    assignments: [
+      { topic: 'screens', category: 'habits' },
+      { topic: 'sleepOnset', category: 'interruption' },
+      { topic: 'headache', category: 'condition' },
+    ],
+    highlights: ['screens', 'sleepOnset'],
+    pairHighlight: 'screens|sleepOnset',
+  };
+  let requests = 0;
+  let providerOutput = classified;
+  const handle = createActionHandler({
+    now,
+    callGas() { assert.fail('Memo analysis must not call Apps Script'); },
+    analyzeSleepMemoTopics(entries) {
+      return analyzeSleepMemoTopics(entries, { apiKey: 'local-fixture-only', async fetchImpl(url, options) {
+        requests++;
+        assert.equal(url, 'https://api.openai.com/v1/responses');
+        const payload = JSON.parse(options.body);
+        assert.equal(payload.model, 'gpt-6-luna');
+        assert.equal(payload.store, false);
+        assert.doesNotMatch(payload.input, /김가짜|가상 학생|핸드폰을 보고/);
+        assert.deepEqual(JSON.parse(payload.input).topics.map(({ id, count }) => [id, count]), summary.topics);
+        assert.deepEqual(JSON.parse(payload.input).sentencePairs, [{ id: 'screens|sleepOnset', count: 1 }]);
+        return Response.json({ status: 'completed', output: [
+          { type: 'message', content: [{ type: 'output_text', text: JSON.stringify(providerOutput) }] },
+        ] });
+      } });
+    },
+  });
+  const cookie = await makeSession('teacher');
+  const post = async (entries, authenticated = true) => {
+    const req = Readable.from([Buffer.from(JSON.stringify({ action: 'analyzeSleepMemoTopics', params: [entries] }))]);
+    req.method = 'POST';
+    req.headers = authenticated ? { cookie } : {};
+    const res = fakeResponse();
+    await handle(req, res);
+    return [res.statusCode, JSON.parse(res.body)];
+  };
+  assert.equal((await post(summary, false))[0], 401);
+  assert.equal((await post({ ...summary, memo: '원문을 보내면 안 됩니다.' }))[0], 400);
+  assert.equal((await post({ ...summary, topics: [['김가짜', 1]] }))[0], 400);
+  assert.equal((await post({ ...summary, pairs: [['screens', 'sleepOnset', 2]] }))[0], 400);
+  assert.equal(requests, 0);
+  assert.deepEqual(await post(summary), [200, { success: true, data: { status: 'ai', ...classified } }]);
+  providerOutput = { ...classified, pairHighlight: 'headache|screens' };
+  assert.deepEqual(await post(summary), [200, { success: true, data: { status: 'unavailable' } }]);
+  assert.equal(requests, 2);
+});
