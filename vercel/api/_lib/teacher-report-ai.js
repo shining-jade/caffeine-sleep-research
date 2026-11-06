@@ -21,27 +21,27 @@ function compare(groups, field, labels, unit) {
   const values = groups.map(group => group.map(day => day[field]).filter(Number.isFinite));
   if (values.some(group => group.length < 2)) return null;
   const [first, second] = values.map(group => (group.reduce((sum, value) => sum + value, 0) / group.length).toFixed(1));
-  return `${labels[0]}(${values[0].length}일)는 평균 ${first}${unit}, ${labels[1]}(${values[1].length}일)는 평균 ${second}${unit}이었어요.`;
+  return `${labels[0]}은 평균 ${first}${unit}(${values[0].length}일), ${labels[1]}은 평균 ${second}${unit}(${values[1].length}일)입니다.`;
 }
 
 function goalEvidence(goal) {
   if (!goal || !Object.hasOwn(GOAL_LABELS, goal.kind) || !Number.isInteger(goal.measured) ||
       !Number.isInteger(goal.kept) || goal.measured < 1 || goal.measured > 366 || goal.kept < 0 || goal.kept > goal.measured) return null;
   const label = GOAL_LABELS[goal.kind];
-  if (goal.kind === 'sleepRecords' || goal.kind === 'caffeineRecords') return `${label}을 ${goal.measured}일 중 ${goal.kept}일 남겼어요.`;
+  if (goal.kind === 'sleepRecords' || goal.kind === 'caffeineRecords') return `${label}을 ${goal.measured}일 중 ${goal.kept}일 남겼습니다.`;
   const observation = goal.observation;
-  const observed = observation?.kind === 'phone30' ? '자기 전 스마트폰을 30분 이상 썼다고 적었어요.' :
-    observation?.kind === 'afternoonCaffeine' ? '오후 3시 이후 카페인을 마셨다고 적었어요.' : '';
+  const observed = observation?.kind === 'phone30' ? '자기 전 스마트폰을 30분 이상 사용했다고 기록했습니다.' :
+    observation?.kind === 'afternoonCaffeine' ? '오후 3시 이후 카페인을 섭취했다고 기록했습니다.' : '';
   const overlap = observed && Number.isInteger(observation.count) && observation.count >= 2 && observation.count <= goal.measured - goal.kept
     ? ` 지키지 못한 날 중 ${observation.count}일은 ${observed}` : '';
-  return `확인 가능한 ${goal.measured}일 중 ${goal.kept}일에 ${label}에 맞는 기록을 남겼어요.${overlap}`;
+  return `확인 가능한 ${goal.measured}일 중 ${goal.kept}일은 ${label}에 맞았습니다.${overlap}`;
 }
 
 function buildEvidence(engine) {
   const finding = id => engine.findings?.find(item => item.id === id)?.data;
   const habit = finding('recordHabit');
   const record = Number.isInteger(habit?.count) && habit.count > 0
-    ? `수면이나 카페인 기록을 ${habit.count}일 남겼어요.${habit.streak > 1 ? ` 가장 길게는 ${habit.streak}일 이어졌어요.` : ''}` : null;
+    ? `수면이나 카페인 기록을 ${habit.count}일 남겼습니다.${habit.streak > 1 ? ` 가장 긴 연속 기록은 ${habit.streak}일입니다.` : ''}` : null;
   const sleep = (finding('bedtimeSeries')?.days || []).filter(day => !day.open && day.recorded && !day.held);
   const caffeine = finding('caffeineSummary')?.days || [];
   const caffeineByDate = new Map(caffeine.map(day => [day.date, day.status]));
@@ -58,8 +58,8 @@ function buildEvidence(engine) {
   const late = timed.filter(item => item.time >= 900).length;
   const zero = caffeine.filter(day => day.status === 'zero').length;
   const caffeineDays = intakes.length ? (timed.length
-    ? `시각을 기록한 카페인 섭취 ${timed.length}번 중 ${late}번은 오후 3시 이후였어요.`
-    : `카페인 섭취를 ${intakes.length}번 기록했어요.`) : zero ? `카페인을 안 마셨다고 기록한 날은 ${zero}일이에요.` : null;
+    ? `시각을 기록한 카페인 섭취 ${timed.length}번 중 ${late}번은 오후 3시 이후였습니다.`
+    : `카페인 섭취를 ${intakes.length}번 기록했습니다.`) : zero ? `카페인을 안 마셨다고 기록한 날은 ${zero}일입니다.` : null;
   const phoneGroups = finding('phoneBeforeBed')?.members?.map(dates => new Set(dates));
   const sleepHabits = phoneGroups?.length === 2 ? compare(phoneGroups.map(dates => sleep.filter(day => dates.has(day.date))),
     'hours', ['자기 전 스마트폰을 30분 이상 쓴 밤의 수면시간', '그보다 적게 사용했거나 사용하지 않은 밤의 수면시간'], '시간') : null;
@@ -76,7 +76,8 @@ function acceptedAnalysis(value, evidence) {
   for (const field of FIELDS.filter(field => evidence[field])) {
     const sentence = value[field];
     if (typeof sentence !== 'string' || sentence.trim().length < 8 || sentence.trim().length > 72 ||
-        !/[가-힣]/.test(sentence) || UNSAFE_TEXT.test(sentence)) continue;
+        !/(?:니다|십시오)[.!?]$/.test(sentence.trim()) || /요[.!?](?:\s|$)/.test(sentence) || UNSAFE_TEXT.test(sentence) ||
+        (field === 'memo' && /(?:격려|칭찬)합니다/.test(sentence))) continue;
     sentences[field] = sentence.trim();
   }
   const highlights = Array.isArray(value.highlights)
@@ -123,7 +124,7 @@ function useAnalysis(report, evidence, { sentences, highlights }) {
   delete feedback.aiResponseIssue;
 }
 
-const INSTRUCTIONS = 'Write Korean feedback for a school caffeine and sleep log using only the supplied aggregate evidence. Return one analysis per input, in order. For each non-null field write one natural 해요체 sentence, using 8 to 72 characters. For null fields return null. Interpret observations without changing their direction or scope, and never suggest that one observation caused another. The app displays the original figures separately: omit all numerals, dates, times, thresholds, scores and amounts from your sentences, even if they appear in the input. Do not add facts, names, diagnoses, medical advice, links or emojis. Use the plan topic to write one practical action. Use the memo evidence to write one supportive teacher comment. For highlights choose one or two distinct available fields from caffeineSleep, behavior, caffeineDays, sleepHabits, praise and difficulty, or return an empty list if none of them are available.';
+const INSTRUCTIONS = 'Write Korean feedback for a school caffeine and sleep log using only the supplied aggregate evidence. Return one analysis per input, in order. For each non-null field write one natural Korean sentence in formal 합니다체 for a teacher report, using 8 to 72 characters. End with a form such as 나타났습니다, 확인됩니다, or 권합니다. Use clear, natural Korean without exclamations, stiff filler such as 모습이 확인됩니다, or a paraphrase of the figures already shown. Prefer concrete verbs. Write 기준을 벗어난 날 instead of 일부 날 when describing missed days. In comparisons name both groups when useful and describe only the direction supported by the evidence. For difficulty, distinguish meeting a range from being below it: if the evidence only says a target was missed, do not infer why or which side of the range. For null fields return null. Interpret observations without changing their direction or scope, and never suggest that one observation caused another. The app displays the original figures separately: omit all numerals, dates, times, thresholds, scores and amounts from your sentences, even if they appear in the input. Do not add facts, names, diagnoses, medical advice, links or emojis. Use the plan topic for one practical recommendation, phrased naturally with 하는 것을 권합니다 when appropriate. For memo, address the student directly in formal but warm Korean using the given evidence, for example 꾸준히 기록해 주셔서 감사합니다. Do not describe the act of praise or encouragement with 격려합니다 or 칭찬합니다. For highlights choose one or two distinct available fields from caffeineSleep, behavior, caffeineDays, sleepHabits, praise and difficulty, or return an empty list if none of them are available.';
 
 async function requestDrafts(group, { fetchImpl, key, model }, retry) {
   try {
@@ -133,7 +134,7 @@ async function requestDrafts(group, { fetchImpl, key, model }, retry) {
       body:JSON.stringify({
         model, store:false, max_output_tokens:2400,
         ...(model.startsWith('gpt-6') ? { reasoning:{ effort:'none' } } : {}),
-        instructions:INSTRUCTIONS + (retry ? ' This is a second attempt. Check every non-null field has a short sentence, no digits, and only a supported observation. Return the complete requested analysis.' : ''),
+        instructions:INSTRUCTIONS + (retry ? ' This is a second attempt. Check that every non-null field has one short 합니다체 sentence, no digits, and only a supported observation. Return the complete requested analysis.' : ''),
         input:JSON.stringify(group.map(item => item.evidence)),
         text:{ format:{ type:'json_schema', name:'teacher_report_writing', strict:true, schema:{
           type:'object', additionalProperties:false, required:['analyses'], properties:{ analyses:{ type:'array', items:{

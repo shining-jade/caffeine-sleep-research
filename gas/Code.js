@@ -1662,7 +1662,7 @@ function feedbackRecordHabit_(days) {
     : '오늘은 잠자리에 든 시각처럼 기억하기 쉬운 한 가지부터 남겨 봐요.';
   const text = counted.length + '일 중 ' + count + '일을 기록했어요. ' + advice
     + (counted.length >= 7 && halves[1] > halves[0] ? ' 기간 후반에는 전반보다 더 자주 기록했어요.' : '');
-  return feedbackFinding_('recordHabit', 'record', { count, rate, halves,
+  return feedbackFinding_('recordHabit', 'record', { count, total: counted.length, rate, halves,
     streak: feedbackStreak_(days, recorded), zeroDays: days.filter(day => day.caffeine.status === 'zero').length },
   { text, featured: false });
 }
@@ -2198,8 +2198,8 @@ function feedbackSummaryReflection_(days, goals, standards) {
     : caffeineRecorded ? { kind: 'caffeineRecords', kept: caffeineRecorded, measured: days.filter(day => !day.open || day.caffeine.recorded).length } : null;
   const missed = hardest?.judged.filter(item => !item.kept).map(item => dayByDate.get(item.date)) || [];
   const overlapOptions = [
-    ['phone30', day => !day.open && ['30~60분', '60분 이상'].includes(day.habits.phone), '자기 전 스마트폰을 30분 이상 썼다고 기록했어요.', 'phone'],
-    ['afternoonCaffeine', day => day.caffeine.intakes.some(item => item.mg > 0 && item.time !== null && item.time >= 900), '오후 3시 이후에 카페인을 마신 기록이 있어요.', 'caffeineMax'],
+    ['phone30', day => !day.open && ['30~60분', '60분 이상'].includes(day.habits.phone), '자기 전 스마트폰을 30분 이상 사용했다고 기록했습니다.', 'phone'],
+    ['afternoonCaffeine', day => day.caffeine.intakes.some(item => item.mg > 0 && item.time !== null && item.time >= 900), '오후 3시 이후 카페인을 섭취한 기록이 있습니다.', 'caffeineMax'],
   ];
   const overlap = overlapOptions.map(([kind, matches, text, sameGoal]) => ({
     kind, text, count: hardest?.kind === sameGoal ? 0 : missed.filter(matches).length,
@@ -2211,17 +2211,17 @@ function feedbackSummaryReflection_(days, goals, standards) {
   };
   const example = (day, kind) => {
     if (kind === 'caffeineMax' && day.caffeine.totalMg !== null) return ['recordedCaffeine', feedbackDateLabel_(day.date) + ' 낮',
-      day.caffeine.status === 'zero' ? '카페인 안 마시기' : '카페인 섭취량을 ' + day.caffeine.totalMg + 'mg 정도로 맞춰 보기'];
+      day.caffeine.status === 'zero' ? '카페인이 없는 음료를 선택하는' : '카페인 섭취량을 ' + day.caffeine.totalMg + 'mg 정도로 조절하는'];
     if (day.open) return null;
     if (['range', 'bedtime', 'sleepMin'].includes(kind) && day.sleep.bed !== null) {
-      return ['recordedBedtime', feedbackDateLabel_(day.date) + ' 밤', clockWords(day.sleep.bed) + '쯤 누워 보기'];
+      return ['recordedBedtime', feedbackDateLabel_(day.date) + ' 밤', clockWords(day.sleep.bed) + '쯤 잠자리에 드는'];
     }
     if (kind === 'wakeTime' && day.sleep.wake !== null) {
-      return ['recordedWake', feedbackDateLabel_(shiftRecordDate_(day.date, 1)) + ' 아침', clockWords(day.sleep.wake) + '쯤 일어나 보기'];
+      return ['recordedWake', feedbackDateLabel_(shiftRecordDate_(day.date, 1)) + ' 아침', clockWords(day.sleep.wake) + '쯤 일어나는'];
     }
     if (kind === 'phone' && day.habits.phone !== null) return ['recordedPhone', feedbackDateLabel_(day.date) + ' 밤',
-      day.habits.phone === '안 함' ? '자기 전 스마트폰을 쓰지 않기' : '자기 전 스마트폰을 ' + day.habits.phone + ' 사용해 보기'];
-    if (kind === 'activity' && day.habits.activity !== null) return ['recordedActivity', feedbackDateLabel_(day.date) + ' 낮', '신체활동을 ' + day.habits.activity + ' 해 보기'];
+      day.habits.phone === '안 함' ? '자기 전 스마트폰 사용을 피하는' : '자기 전 스마트폰 사용 시간을 ' + day.habits.phone + '으로 정하는'];
+    if (kind === 'activity' && day.habits.activity !== null) return ['recordedActivity', feedbackDateLabel_(day.date) + ' 낮', '신체활동을 ' + day.habits.activity + ' 하는'];
     return null;
   };
   const sample = hardest?.judged.filter(item => item.kept)
@@ -2229,23 +2229,54 @@ function feedbackSummaryReflection_(days, goals, standards) {
   const plan = sample ? { kind: sample.basis[0] } : null;
   const progress = goal => '기록한 ' + goal.measured + '일 ' + (goal.kept === goal.measured ? '모두' : '중 ' + goal.kept + '일');
   const overlapText = overlap ? ' 지키지 못한 ' + missed.length + '일 중 ' + overlap.count + '일은 ' + overlap.text : '';
-  const praiseText = praise?.kind === 'sleepRecords' ? '수면은 ' + praise.measured + '일 중 ' + praise.kept + '일 기록했어요.'
-    : praise?.kind === 'caffeineRecords' ? '카페인은 ' + praise.measured + '일 중 ' + praise.kept + '일 기록했어요.' : '';
+  const praiseText = praise?.kind === 'sleepRecords' ? '수면 기록을 ' + praise.measured + '일 중 ' + praise.kept + '일 남겼습니다.'
+    : praise?.kind === 'caffeineRecords' ? '카페인 기록을 ' + praise.measured + '일 중 ' + praise.kept + '일 남겼습니다.' : '';
+  const planText = sample ? sample.basis[1] + '처럼 ' + sample.basis[2] + ' 것을 권합니다.' : '';
   const rule = {
-    praise: best ? '‘' + best.label + '’ 목표, ' + progress(best) + ' 지켰어요.' : praiseText,
-    difficulty: hardest ? '‘' + hardest.label + '’ 목표는 ' + progress(hardest) + ' 지켰어요.' + overlapText : '',
-    plan: sample ? sample.basis[1] + '처럼 ' + sample.basis[2] : '',
+    praise: best ? '‘' + best.label + '’ 목표를 ' + progress(best) + ' 지켰습니다.' : praiseText,
+    difficulty: hardest ? '‘' + hardest.label + '’ 목표를 ' + progress(hardest) + ' 지켰습니다.' + overlapText : '',
+    plan: planText,
   };
   const warm = {
     praise: best ? progress(best) + ' ‘' + best.label + '’ 목표를 지켰네요.' : praiseText,
     difficulty: hardest ? '‘' + hardest.label + '’ 목표를 지킨 날은 ' + progress(hardest) + '이었어요.' + overlapText : '',
-    plan: sample ? '다음에는 ' + sample.basis[1] + '처럼 ' + sample.basis[2] : '',
+    plan: planText,
   };
   return { facts: { praise, difficulty, plan }, rule, warm };
 }
 
+// These endings occur in the shared rule templates. Student-facing wording and
+// quoted record or goal labels keep their original text.
+function feedbackTeacherSentence_(text) {
+  const endings = {
+    '봐요': '보는 것이 좋습니다', '해요': '합니다', '돼요': '됩니다', '쉬워요': '쉽습니다',
+    '않아요': '않습니다', '있어요': '있습니다', '없어요': '없습니다', '줄어요': '줄어듭니다',
+    '가요': '갑니다', '들어요': '듭니다', '맞춰요': '맞추는 것이 좋습니다',
+    '이에요': '입니다', '예요': '입니다', '고마워요': '감사합니다',
+    '지켰네요': '지켰습니다',
+  };
+  return text.split(/(‘[^’]*’)/g).map((part, index) => index % 2 ? part : part
+    .replace('우리 또래는 몸이 바뀌면서 밤에 늦게 졸리기 쉬워요.', '청소년기에는 졸음을 느끼는 시각이 늦어질 수 있습니다.')
+    .replace(/무엇을 했나요\?/g, '무엇을 했는지 확인해 보는 것이 좋습니다.')
+    .replace(/(?:꾸준히 지켰네요\. |절반(?: 넘게|을) 지켰어요\. )/g, '')
+    .replace(/정말 (?:잘했어요|대단해요)!\s*/g, '')
+    .replace(/(고마워요|지켰네요|않아요|있어요|없어요|쉬워요|줄어요|들어요|맞춰요|이에요|예요|봐요|해요|돼요|가요|[았었였했됐랐뤘썼셨봤줬났겼켰렸졌갔]어요)(?=[.!?](?:\s|$))/g,
+      ending => endings[ending] || ending.replace(/어요$/, '습니다'))).join('').trim();
+}
+
+function feedbackTeacherFinding_(finding) {
+  const metric = finding.comparison;
+  if (metric?.groups?.length !== 2 || metric.groups.some(group => group.unit !== '점' || group.mean === null) ||
+      finding.text !== feedbackContrast_(metric.groups[0].label, metric)) return null;
+  const [first, second] = metric.groups.map(group =>
+    group.label + '(' + group.n + '일) 평균 ' + feedbackScoreText_(group.mean, false));
+  return '아침 컨디션은 ' + first + ', ' + second +
+    (metric.result === 'similar' ? '으로 비슷했습니다.' : '입니다.');
+}
+
 function buildFeedbackReport_(input) {
   const days = feedbackNormalizeDays_(input);
+  const teacher = input.audience === 'teacher';
   const minimum = feedbackMinimum_(days.length);
   const tier = days.length < 7 ? 'first' : days.length < 14 ? 'week' : days.length < 28 ? 'change' : 'flow';
   const mode = input.mode === 'final' && input.audience !== 'student' ? 'final' : 'ongoing';
@@ -2311,12 +2342,16 @@ function buildFeedbackReport_(input) {
       items: goals.flatMap(entry => ['‘' + entry.label + '’ 목표를 살펴봤어요. ' + entry.text, ...entry.details]) });
   }
   if (period) sections.push({ id: 'transition', title: mode === 'ongoing' && tier === 'change' ? '🔍 첫째 주와 둘째 주' : '🔍 기간의 처음과 끝', items: period.items });
-  const observations = featured.map(finding => { used.add(finding.id); return finding.text; });
+  const observations = featured.map(finding => {
+    used.add(finding.id);
+    return (teacher && feedbackTeacherFinding_(finding)) || finding.text;
+  });
   if (observations.length) sections.push({ id: 'findings', title: '🔍 이번 기록에서 찾은 것', items: observations });
   else if (!similar) sections.push({ id: 'findings', title: '🔍 이번 기록에서 찾은 것', items: [
     minimum ? '조건별로 비교할 기록이 아직 충분하지 않았어요.' : '기록한 날의 모습만 살펴봤어요. 7일 미만은 비교하지 않아요.',
   ] });
-  if (similar) sections.push({ id: 'similar', title: '비교해 본 기록', items: [similar.text.split(/(?<=요\.)\s+/)[0]] });
+  if (similar) sections.push({ id: 'similar', title: '비교해 본 기록',
+    items: [(teacher && feedbackTeacherFinding_(similar)) || similar.text.split(/(?<=요\.)\s+/)[0]] });
   const explanations = featured.filter(finding => finding.refs.length && finding.why);
   const why = [...new Set(explanations.map(finding => finding.why))];
   if (why.length) sections.push({ id: 'why', title: '💡 알아 두면 좋아요', items: why });
@@ -2331,6 +2366,16 @@ function buildFeedbackReport_(input) {
     summaryLateEntries: feedbackLateEntries_(input, days),
     summaryReflection: feedbackSummaryReflection_(days, goals, findings.find(finding => finding.id === 'healthStandards').data.rows),
   };
+  if (teacher) {
+    const total = record.data.total;
+    sections[0].items = [
+      '분석 대상 ' + total + '일 중 ' + count + '일에 수면 또는 카페인 기록이 있습니다.' +
+      (streak >= 2 ? ' 가장 긴 연속 기록은 ' + streak + '일입니다.' : ''),
+    ];
+    for (const section of sections.slice(1)) section.items = section.items.map(feedbackTeacherSentence_);
+    const whySection = sections.find(section => section.id === 'why');
+    if (whySection) whySection.title = '💡 참고 사항';
+  }
   return { ...summary, tier, mode, minimum, sections, findings, featuredFindingIds: featured.map(finding => finding.id),
     explanationFindingIds: explanations.map(finding => finding.id),
     usedFindingIds: [...used], references: [...refs].map(id => ({ id, ...FEEDBACK_REFS_[id] })),

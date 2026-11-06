@@ -3,11 +3,25 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
-const { root, makeSummaryFixture } = require('./fixtures/summary-report.cjs');
+const { root, gas, makeSummaryFixture } = require('./fixtures/summary-report.cjs');
 const context = vm.createContext({ window: {} });
 vm.runInContext(fs.readFileSync(path.join(root, 'vercel/public/js/teacher-report-files.js'), 'utf8'), context);
 const files = context.window.teacherReportFiles;
 const render = input => files.buildSummaryReportDocument(input).content;
+
+test('teacher rule feedback uses formal Korean without changing the student voice or record counts', () => {
+  const forAudience = audience => makeSummaryFixture({
+    buildEngine: input => gas.buildFeedbackReport_({ ...input, audience }),
+  }).feedback;
+  const teacher = forAudience('teacher');
+  const student = forAudience('student');
+  assert.deepEqual(teacher.engine.findings.find(item => item.id === 'recordHabit').data,
+    student.engine.findings.find(item => item.id === 'recordHabit').data);
+  assert.match(teacher.sections.find(section => section.id === 'record').items[0], /6일 중 6일에 수면 또는 카페인 기록이 있습니다/);
+  assert.match(student.sections.find(section => section.id === 'record').items[0], /기록했어요/);
+  assert.doesNotMatch(teacher.sections.flatMap(section => section.items).join('\n'), /요[.!?](?:\s|$)/);
+  assert.equal(gas.feedbackTeacherSentence_('‘오늘도 기록해요.’ 목표를 지켰어요.'), '‘오늘도 기록해요.’ 목표를 지켰습니다.');
+});
 
 test('renders two approved pages and keeps the sleep, wake, and condition in the target-day column', () => {
   const html = render(makeSummaryFixture());
@@ -47,7 +61,7 @@ test('distinguishes the registered target, default maximum, and 8–10 hour boun
   assert.match(personal, /하루 150mg 넘지 않기/);
   assert.match(defaults, /일일 최대 섭취량\(170mg\) 넘지 않기/);
   assert.match(personal, /8~10시간 취침/);
-  assert.match(personal, /8~10시간인 밤\(2일\) 평균[\s\S]*?\(반올림 전 기준\)/);
+  assert.match(personal, /8~10시간인 밤\(2일\) 평균[\s\S]*?반올림 전 값을 기준으로/);
   assert.match(personal, /class="summary-mark short"><span>짧음<\/span><small class="summary-mark-hours">6h<\/small>/);
   const longNight = makeSummaryFixture({ editDays(days) { days[0].sleep.hours = 11.7; } });
   assert.match(render(longNight), /class="summary-mark long"><span>긺<\/span><small class="summary-mark-hours">12h<\/small>/);
@@ -119,7 +133,7 @@ test('ranks drinks by servings, sums known amounts and groups all items after th
   assert.match(card, /아이스 커피[\s\S]*?5번 <small>1,000mg<\/small>[\s\S]*?녹차[\s\S]*?4번[\s\S]*?카페라떼[\s\S]*?3번[\s\S]*?에너지음료[\s\S]*?2번[\s\S]*?기타 \(콜라 등\)[\s\S]*?2번 <small>20mg<\/small>/);
   assert.doesNotMatch(card, /홍차/);
   assert.match(html, /섭취 16번 · 마신 날 1일/);
-  assert.match(html, /가장 자주 마신 건 ‘아이스 커피’\(5번\)예요/);
+  assert.match(html, /가장 자주 마신 음료는 ‘아이스 커피’\(5회\)입니다/);
   const unknown = caffeineCard(caffeineSection(render(caffeineReport([[{ drink:'', mg:null }]]))), 'drink');
   assert.match(unknown, /이름 없음[\s\S]*?1번/);
   assert.doesNotMatch(unknown, /0mg/);
@@ -138,9 +152,9 @@ test('counts each selected reason and symptom and separates the 15:00 boundary f
   assert.match(caffeineCard(c, 'drink'), /가상 차[\s\S]*?2번/);
   assert.match(caffeineCard(c, 'reason'), /졸음을 깨려고[\s\S]*?2번[\s\S]*?습관적으로[\s\S]*?2번[\s\S]*?공부·일에 집중[\s\S]*?1번/);
   assert.match(caffeineCard(c, 'symptom'), /적은 3번 중[\s\S]*?없음 1번[\s\S]*?있음 2번[\s\S]*?손이 떨렸다[\s\S]*?2번[\s\S]*?가슴이 두근거렸다[\s\S]*?1번/);
-  assert.match(c, /15시 이후에 마신 건 2번이에요/);
-  assert.match(c, /불편함을 적은 2번 중 0번은 15시 이후였어요/);
-  assert.doesNotMatch(c, /가장 자주 마신 건/);
+  assert.match(c, /15시 이후 섭취는 2회입니다/);
+  assert.match(c, /불편함을 기록한 2건 중 0건은 15시 이후 섭취 기록입니다/);
+  assert.doesNotMatch(c, /가장 자주 마신 음료는/);
   assert.doesNotMatch(html, /섭취 기록에서 시각 1건이 빠졌어요/);
 });
 
@@ -148,18 +162,18 @@ test('keeps missing caffeine out of section C and counts only explicit zero days
   const html = render(caffeineReport([[], null, [], [], null, []]));
   const c = caffeineSection(html);
   assert.doesNotMatch(c, /기록 없는 날|카페인 기록이 없는 날/);
-  assert.match(html, /카페인 기록이 없는 날은 2일이에요 \(10\.31, 11\.03\)\./);
+  assert.match(html, /카페인 기록이 없는 날은 2일입니다 \(10\.31, 11\.03\)\./);
   assert.match(html, /class="summary-caf-missing">기록 없음/);
   assert.match(c, /섭취 0번 · 안 마신 날 4일<\/span>/);
   assert.match(c, /class="summary-caf-none"/);
   assert.match(c, />0<small>mg<\/small>/);
   assert.match(c, /<b>2일<\/b>가장 길게 이어진 날/);
-  assert.match(c, /11\.01부터 11\.02까지 2일 이어졌어요/);
+  assert.match(c, /11\.01부터 11\.02까지 2일입니다/);
   assert.equal((c.match(/class="summary-caf-chip"/g) || []).length, 4);
   const single = caffeineSection(render(caffeineReport([[], null])));
   assert.doesNotMatch(single, /가장 길게/);
   const empty = caffeineSection(render(caffeineReport([null, null])));
-  assert.match(empty, /표시할 섭취 내역이 없어요/);
+  assert.match(empty, /표시할 섭취 내역이 없습니다/);
   assert.doesNotMatch(empty, /0mg|summary-caf-none/);
 });
 
@@ -170,8 +184,8 @@ test('uses four charts for a few intakes and preserves the single-symptom observ
   ]]);
   const c = caffeineSection(render(report));
   assert.equal((c.match(/data-caffeine-card=/g) || []).length, 4);
-  assert.match(c, /표시할 응답이 없어요/);
-  assert.match(c, /16:00에 카페인을 마시고 ‘잠이 잘 안 왔다’고 적었어요\. 그날 밤 23:27에 잠들었어요/);
+  assert.match(c, /표시할 응답이 없습니다/);
+  assert.match(c, /16:00에 카페인을 마시고 ‘잠이 잘 안 왔다’고 기록했습니다\. 그날 밤 23:27에 잠들었습니다/);
   report.feedback.summaryEdit = { caffeineDays:'교사가 고친 가짜 관찰' };
   const edited = caffeineSection(render(report));
   assert.match(edited, /교사가 고친 가짜 관찰/);
@@ -234,12 +248,12 @@ test('reports unrecorded sleep without treating held or incomplete records as un
   Object.assign(sleep[1], { recorded: true, held: true, hours: null, bed: null, wake: null, condition: null });
   const html = render(input);
   const review = html.match(/data-summary-text="recordReview"[^>]*>(.*?)<\/div>/s)[1];
-  assert.match(review, /수면 기록이 비어 있는 밤은 1일이에요 \(10\.30\)\./);
+  assert.match(review, /수면 기록이 없는 밤은 1일입니다 \(10\.30\)\./);
   assert.doesNotMatch(review, /보류|컨디션|10\.31|11\.04|카페인 기록이 없는/);
   const range = html.match(/data-daily-goal="range"[^>]*>([\s\S]*?)<\/span><\/div>/)[1];
   assert.match(range, /data-date="2026-10-30" class="summary-mark missing">기록 없음/);
   assert.match(range, /data-date="2026-10-31" class="summary-mark none">–/);
-  assert.doesNotMatch(review, /표시할 아쉬운 점이 없어요/);
+  assert.doesNotMatch(review, /기록에서 확인된 보완 사항이 없습니다/);
 });
 
 test('lists up to three dates for each unrecorded type and counts the remaining days', () => {
@@ -250,8 +264,8 @@ test('lists up to three dates for each unrecorded type and counts the remaining 
     for (const day of days.slice(9)) day.sleep.condition = null;
   } });
   const review = render(input).match(/data-summary-text="recordReview"[^>]*>(.*?)<\/div>/s)[1];
-  assert.match(review, /수면 기록이 비어 있는 밤은 5일이에요 \(10\.23, 10\.24, 10\.25 외 2일\)\./);
-  assert.match(review, /카페인 기록이 없는 날은 5일이에요 \(10\.23, 10\.24, 10\.25 외 2일\)\./);
+  assert.match(review, /수면 기록이 없는 밤은 5일입니다 \(10\.23, 10\.24, 10\.25 외 2일\)\./);
+  assert.match(review, /카페인 기록이 없는 날은 5일입니다 \(10\.23, 10\.24, 10\.25 외 2일\)\./);
   assert.doesNotMatch(review, /10\.26|10\.27|10\.31|11\.04/);
 });
 
@@ -301,8 +315,8 @@ test('reports only confirmed daily caffeine totals above the maximum, independen
   };
   const review = report => render(report).match(/data-summary-text="recordReview"[^>]*>(.*?)<\/div>/s)[1];
   assert.equal(review(reportWithLimit('weight',170,{length:9,editDays})),
-    '<p>일일 최대 섭취량(170mg)을 넘긴 날은 5일이에요 (10.30, 10.31, 11.01 외 2일).</p>');
-  assert.doesNotMatch(review(reportWithLimit('noWeight',150,{length:9,editDays})), /섭취량.*넘긴/);
+    '<p>일일 최대 섭취량(170mg)을 초과한 날은 5일입니다 (10.30, 10.31, 11.01 외 2일).</p>');
+  assert.doesNotMatch(review(reportWithLimit('noWeight',150,{length:9,editDays})), /섭취량.*초과/);
 });
 
 test('adds a recorded overlap only when it occurred on at least two missed nights', () => {
@@ -330,9 +344,9 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
   const makeData = (n = 1) => structuredClone({ success:true, reports:Array.from({length:n}, (_,i) =>
     ({ ...structuredClone(report), studentId:'synthetic-only-'+i, analysis:'규칙 기반 피드백' })) });
   const original = report.feedback.engine.summaryReflection.rule;
-  const comment = '기록에서 보인 차이는 다음 기간에도 함께 살펴볼 만해요.';
-  const plan = '잠자리에 들기 편한 시각을 미리 정하고 다음 기록에 남겨 봐요.';
-  const memo = '기록에서 찾은 잘된 습관을 다음에도 이어 가 봐요.';
+  const comment = '기록에서 보인 차이는 다음 기간에도 함께 살펴볼 수 있습니다.';
+  const plan = '잠자리에 들기 편한 시각을 미리 정하고 다음 기록에 남기는 것을 권합니다.';
+  const memo = '기록에서 확인된 좋은 습관을 다음에도 이어 가는 것을 권합니다.';
   const respond = value => Response.json({ status:'completed', output:[
     { type:'message', content:[{ type:'output_text', text:JSON.stringify(value) }] },
   ] });
@@ -367,7 +381,7 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
       assert.match(html,/data-summary-text="caffeineSleep"[^>]*>[^<]*기록에서 보인 차이/);
       assert.match(html,/data-summary-text="praise"[^>]*>[^<]*기록에서 보인 차이/);
       assert.match(html,/data-summary-text="plan"[^>]*>[^<]*잠자리에 들기 편한 시각/);
-      assert.match(html,/data-summary-text="memo">기록에서 찾은 잘된 습관을 다음에도 이어 가 봐요\.<\/p>/);
+      assert.match(html,/data-summary-text="memo">기록에서 확인된 좋은 습관을 다음에도 이어 가는 것을 권합니다\.<\/p>/);
       assert.deepEqual(item.feedback.engine.findings,makeData().reports[0].feedback.engine.findings);
       item.feedback.savedPdfFeedback = {summary:'이전에 저장한 한마디'};
       assert.match(render(item),/data-summary-text="memo">이전에 저장한 한마디<\/p>/);
@@ -379,14 +393,14 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
     }
   }
   const calls = [];
-  const repairedDifficulty = '목표에 맞지 않은 날의 기록도 다음 계획에 참고해 봐요.';
+  const repairedDifficulty = '목표를 지키지 못한 날의 기록도 다음 계획에 참고할 수 있습니다.';
   const mixed = await createTeacherOpenAI({ readKey:()=> 'fixture-only',
     fetchImpl:async (url,options)=>{
       assert.equal(url,'https://api.openai.com/v1/responses');
       const request = JSON.parse(options.body);
       assert.match(request.model,/^gpt-/);
       calls.push(JSON.parse(request.input).length);
-      return rewrite(options,(value,i)=>calls.length === 1 && i === 1 ? {...value, difficulty:'진단: 99시간'}
+      return rewrite(options,(value,i)=>calls.length === 1 && i === 1 ? {...value, difficulty:'기준에 맞지 않은 날도 있었어요.'}
         : calls.length === 2 ? {...value, praise:'숫자 99를 썼어요.', difficulty:repairedDifficulty} : value);
     },
   })(makeData(2));
@@ -448,7 +462,7 @@ test('recognizes a numeric Seoul sheet timestamp and uses observed kept-day fact
   assert.equal(result.summaryLateEntries.length, 1);
   assert.equal(result.summaryLateEntries[0].delayDays, 1);
   assert.equal(result.summaryReflection.facts.plan.kind, 'recordedCaffeine');
-  assert.match(result.summaryReflection.rule.plan, /11\.01 낮처럼 카페인 섭취량을 40mg 정도로 맞춰 보기/);
+  assert.match(result.summaryReflection.rule.plan, /11\.01 낮처럼 카페인 섭취량을 40mg 정도로 조절하는 것을 권합니다/);
 });
 
 test('keeps daily report cells through 14 days and switches both sections at 15', () => {
