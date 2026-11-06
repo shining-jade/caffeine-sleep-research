@@ -354,9 +354,12 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
     for (const item of result.reports) {
       assert.equal(item.feedback.mode,'ai');
       assert.equal(item.feedback.aiFallback,false);
+      assert.equal(item.feedback.aiApiStatus,'applied');
+      assert.match(files.aiCallStatusText(item.feedback),/API 키 사용 확인.*AI 응답 반영/);
       assert.match(item.analysis,/AI가 살펴본 기록[\s\S]*?기록에서 보인 차이/);
       assert.ok(item.feedback.sections.some(section=>section.items.some(text=>text.includes(comment))));
       const html = render(item);
+      assert.doesNotMatch(html,/API 키 사용 확인/);
       assert.match(html,/data-summary-text="caffeineSleep"[^>]*>[^<]*기록에서 보인 차이/);
       assert.match(html,/data-summary-text="praise"[^>]*>[^<]*기록에서 보인 차이/);
       assert.match(html,/data-summary-text="plan"[^>]*>[^<]*잠자리에 들기 편한 시각/);
@@ -375,11 +378,26 @@ test('AI writes feedback and report narration from anonymous aggregates for sing
     fetchImpl:async (_url,options)=>rewrite(options,(value,i)=>i ? {...value, difficulty:'진단: 99시간'} : value),
   })(makeData(2));
   assert.deepEqual(mixed.reports.map(item=>item.feedback.mode),['ai','rule']);
+  assert.deepEqual(mixed.reports.map(item=>item.feedback.aiApiStatus),['applied','response_rejected']);
   assert.deepEqual(mixed.reports[1].feedback.summaryReflection,structuredClone(original));
   assert.equal(mixed.reports[1].analysis,'규칙 기반 피드백');
   const offline = await createTeacherOpenAI({ readKey:()=> 'fixture-only', fetchImpl:async()=>{throw Error('offline');} })(makeData());
   assert.equal(offline.reports[0].feedback.aiFallback,true);
+  assert.equal(offline.reports[0].feedback.aiApiStatus,'request_failed');
   assert.deepEqual(offline.reports[0].feedback.summaryReflection,structuredClone(original));
+  const unauthorized = await createTeacherOpenAI({ readKey:()=> 'fixture-only', fetchImpl:async()=>new Response(null,{status:401}) })(makeData());
+  assert.equal(unauthorized.reports[0].feedback.aiApiStatus,'authentication_failed');
+  let notSentCalls = 0;
+  const unused = async()=>{ notSentCalls++; throw Error('Unexpected API call'); };
+  const missing = await createTeacherOpenAI({ readKey:()=> '', fetchImpl:unused })(makeData());
+  assert.equal(missing.reports[0].feedback.aiApiStatus,'missing_key');
+  const empty = {success:true,reports:[makeSummaryFixture({empty:true})]};
+  const noFacts = await createTeacherOpenAI({ readKey:()=> 'fixture-only', fetchImpl:unused })(empty);
+  assert.equal(noFacts.reports[0].feedback.aiApiStatus,'no_facts');
+  assert.equal(notSentCalls,0);
+  assert.match(files.aiCallStatusText({mode:'rule'}),/호출 안 함/);
+  assert.match(files.aiCallStatusText({mode:'rule',aiFallback:true}),/확인할 수 없음/);
+  assert.match(files.aiCallStatusText({aiApiStatus:'preview'}),/실제 API 호출 없음/);
 });
 
 test('recognizes a numeric Seoul sheet timestamp and uses observed kept-day facts for a caffeine plan', () => {

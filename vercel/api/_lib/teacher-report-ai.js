@@ -111,11 +111,16 @@ export async function writeTeacherReports(data, { fetchImpl, readKey, model }) {
   const pending = reports.filter(report => report.feedback.engine?.summaryReflection)
     .map(report => ({ report, evidence:buildEvidence(report.feedback.engine) })).filter(item => item.evidence.plan);
   const key = readKey()?.trim();
+  for (const report of reports) report.feedback.aiApiStatus = key ? 'no_facts' : 'missing_key';
   let state = key ? 'report_no_facts' : 'missing_key';
   if (key && pending.length) {
     const groups = [];
     for (let i = 0; i < pending.length; i += 4) groups.push(pending.slice(i,i+4));
     const states = await Promise.all(groups.map(async group => {
+      const setApiStatus = status => {
+        for (const { report } of group) report.feedback.aiApiStatus = status;
+      };
+      setApiStatus('request_failed');
       try {
         const response = await fetchImpl('https://api.openai.com/v1/responses', {
           method:'POST', redirect:'error', signal:AbortSignal.timeout(8000),
@@ -134,14 +139,24 @@ export async function writeTeacherReports(data, { fetchImpl, readKey, model }) {
             } } },
           }),
         });
-        if (!response.ok) return [401,403].includes(response.status) ? 'authentication_failed' : 'report_failed';
+        if (!response.ok) {
+          if ([401,403].includes(response.status)) {
+            setApiStatus('authentication_failed');
+            return 'authentication_failed';
+          }
+          return 'report_failed';
+        }
+        setApiStatus('response_rejected');
         const body = await response.json();
         const output = body.output?.flatMap(item => item.type === 'message' ? item.content : [])
           .find(item => item.type === 'output_text')?.text;
         const { analyses } = JSON.parse(output);
         if (body.status !== 'completed' || !Array.isArray(analyses) || analyses.length !== group.length) return 'report_failed';
         group.forEach(({ report, evidence }, i) => {
-          if (validAnalysis(analyses[i],evidence)) useAnalysis(report,evidence,analyses[i]);
+          if (validAnalysis(analyses[i],evidence)) {
+            useAnalysis(report,evidence,analyses[i]);
+            report.feedback.aiApiStatus = 'applied';
+          }
         });
         return 'report_failed';
       } catch {

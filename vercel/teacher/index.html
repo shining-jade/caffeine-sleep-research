@@ -658,6 +658,7 @@
         .report-result-header{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin-bottom:8px;}
         .report-result-header h4{margin:0;color:#20324c;font-size:15px;}
         .report-result-badge{border-radius:20px;background:#edf2f9;color:#334c69;padding:4px 9px;font-size:12px;font-weight:700;}
+        .report-ai-api-status{font-size:13px;font-weight:650;color:#405676;margin:6px 0;}
         .report-preview-button{margin-left:auto;background:#edf0fe;color:#36459a;border:1px solid #d8def8;min-height:42px;}
         .report-result summary{cursor:pointer;font-weight:650;color:#425574;padding:6px 0;}
         .report-feedback{display:grid;gap:10px;overflow-wrap:anywhere;color:#26364b;text-align:left;}
@@ -927,6 +928,7 @@
                 <button type="button" class="btn" id="batchPdfClose" autofocus>닫기</button>
             </div>
             <p id="batchPdfPeriod"></p>
+            <p id="batchPdfApiStatus" class="report-ai-api-status"></p>
             <p id="batchPdfStatus" role="status"></p>
             <iframe id="batchPdfFrame" title="학생 건강 기록 PDF" hidden></iframe>
             <a id="batchPdfOpen" target="_blank" rel="noopener" hidden>새 탭에서 PDF 열기</a>
@@ -1746,6 +1748,7 @@
                 <button class="btn" style="background:#f5f3ff;color:#6d28d9;border:none;" onclick="openManualAwardModal('single')">🏅 뱃지 수여</button>
                 <button class="btn" style="background:#ecfdf5;color:#065f46;border:none;" onclick="openMsgSendModal()">📨 메시지 옆에서 열기</button>
             </div>
+            <p id="individualReportApiStatus" class="report-ai-api-status" role="status" hidden></p>
             <p id="individualReportOutputStatus" role="status" hidden></p>
             <div style="margin-bottom:20px;">
                 <div class="ai-toggle-header" onclick="toggleAI()">
@@ -3893,12 +3896,18 @@ function getAIContextKey(){
 function isCurrentAIRequest(key,generation){
     return generation===aiViewGeneration&&key===aiViewKey&&key===getAIContextKey();
 }
+function setIndividualReportApiStatus(feedback){
+    const status = document.getElementById('individualReportApiStatus');
+    status.textContent = feedback ? window.teacherReportFiles.aiCallStatusText(feedback) : '';
+    status.hidden = !status.textContent;
+}
 function resetAIReportContext(){
     aiViewGeneration++;
     individualEngineReport = undefined;
     savedAIRequest = undefined;
     const outputStatus = document.getElementById('individualReportOutputStatus');
     if (outputStatus) { outputStatus.textContent = ''; outputStatus.hidden = true; }
+    setIndividualReportApiStatus();
     aiViewKey=getAIContextKey();
     aiReportContextKey='';
     const final = document.getElementById('individualFinalMode')?.checked;
@@ -4648,6 +4657,7 @@ async function requestSharedTeacherAnalysis(student, dates, { restoring = false 
     const button = document.getElementById('aiBtn');
     const badge = document.getElementById('aiStatusBadge');
     const mode = !restoring && document.getElementById('individualAiMode')?.checked ? 'ai' : 'rule';
+    setIndividualReportApiStatus();
     document.getElementById('aiBoxBody').classList.add('open');
     document.getElementById('aiArrow').classList.add('open');
     individualTextEditor?.reset();
@@ -4667,6 +4677,7 @@ async function requestSharedTeacherAnalysis(student, dates, { restoring = false 
         if (!isCurrentAIRequest(requestKey, requestGeneration)) return;
         applySavedSummaryEdit(result, saved);
         individualEngineReport = result;
+        setIndividualReportApiStatus(result.feedback);
         const edited = result.feedback.summaryEdit;
         const hasSavedText = typeof edited?.feedbackHtml === 'string';
         window.teacherReportFiles.renderFeedback(content, result.feedback, result.analysis);
@@ -4680,6 +4691,7 @@ async function requestSharedTeacherAnalysis(student, dates, { restoring = false 
         showAITools();
     } catch {
         if (!isCurrentAIRequest(requestKey, requestGeneration)) return;
+        if (mode === 'ai') setIndividualReportApiStatus({ aiApiStatus: 'unknown' });
         content.textContent = '분석을 불러오지 못했습니다. 기록을 새로고침한 후 다시 시도해 주세요.';
         badge.textContent = '(분석 실패)';
         badge.style.color = '#b91c1c';
@@ -5638,6 +5650,7 @@ async function runIndividualReportOutput(kind) {
         const report = await individualPdfReport();
         if (!report?.feedback?.engine) throw new Error('먼저 피드백을 만들어 주세요.');
         if (!isCurrentAIRequest(key, generation)) return;
+        setIndividualReportApiStatus(report.feedback);
         if (kind === 'preview') {
             await window.teacherBatchReports.previewIndividual(report, () => isCurrentAIRequest(key, generation));
             if (isCurrentAIRequest(key, generation)) note('');
@@ -7948,10 +7961,10 @@ function renderJourneyStatus(){
 
 </script>
 <script src="/public/js/teacher-goal-comparison.js?v=4"></script>
-<script src="/public/js/teacher-report-files.js?v=report-view-30"></script>
+<script src="/public/js/teacher-report-files.js?v=report-view-31"></script>
 <script src="/public/js/teacher-report-export.js?v=image-report-3"></script>
 <script src="/public/js/teacher-goal-comparison-ui.js?v=1"></script>
-<script src="/public/js/teacher-batch-reports.js?v=report-view-10"></script>
+<script src="/public/js/teacher-batch-reports.js?v=report-view-11"></script>
 <script type="module" src="/public/js/caffeine-companies.js"></script>
 </body>
 </html>

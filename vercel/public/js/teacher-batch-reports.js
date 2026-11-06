@@ -22,7 +22,7 @@
   const goalStatus = $('batchGoalStatus');
   const goalFile = $('batchGoalFile');
   const goalSave = $('batchGoalSave');
-  const { parseGoalCsv, createPdfZip, goalColumns, renderFeedback } = window.teacherReportFiles;
+  const { parseGoalCsv, createPdfZip, goalColumns, renderFeedback, aiCallStatusText } = window.teacherReportFiles;
   const output = window.teacherReportExport;
   const previewDialog = $('batchPdfPreview');
   // Individual preview also uses this dialog while the batch tab is hidden.
@@ -180,7 +180,10 @@
       if (mode !== 'ai') throw error;
       const response = await call('analyzeTeacherBatch', { ...request, mode: 'rule' });
       for (const report of response.reports) {
-        if (report.feedback) report.feedback.aiFallback = true;
+        if (report.feedback) {
+          report.feedback.aiFallback = true;
+          report.feedback.aiApiStatus = 'unknown';
+        }
       }
       return response;
     }
@@ -275,6 +278,10 @@
           if (!busy) void window.teacherGoalComparison.open(report.student, report.start, report.end, report);
         });
         header.append(edit, preview, goalComparison);
+        const apiStatus = document.createElement('span');
+        apiStatus.className = 'report-ai-api-status';
+        apiStatus.textContent = aiCallStatusText(report.feedback);
+        header.append(apiStatus);
       }
       const detail = document.createElement('details');
       detail.open = report.expanded ?? index === 0;
@@ -368,6 +375,7 @@
     const version = previewVersion;
     $('batchPdfTitle').textContent = report.student.이름 + ' 이미지 PDF 미리보기';
     $('batchPdfPeriod').textContent = report.start + ' ~ ' + report.end;
+    $('batchPdfApiStatus').textContent = aiCallStatusText(report.feedback);
     $('batchPdfStatus').textContent = 'PDF를 만드는 중입니다.';
     if (!previewDialog.open) previewDialog.showModal();
     try {
