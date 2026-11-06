@@ -1,6 +1,9 @@
 import { writeTeacherReports } from './teacher-report-ai.js';
 
 const MODEL = 'gpt-4.1-mini';
+const DEFAULT_REPORT_MODEL = 'gpt-6-luna';
+const REPORT_MODELS = new Set([MODEL, DEFAULT_REPORT_MODEL, 'gpt-6.1-terra']);
+export const isTeacherReportModel = model => REPORT_MODELS.has(model);
 const EXPLANATION_TITLE = '💡 알아 두면 좋아요';
 const TOPICS = ['sleep_duration', 'caffeine_amount', 'bedtime', 'screen', 'activity', 'tracking'];
 const UNSAFE_COACHING = /[\p{Extended_Pictographic}\r\n<>]|(?:질환|진단|장애|치료|처방|때문에\s*당신|네가|학생은|반드시|무조건|확실히|다음\s*주|보충했|약속)/u;
@@ -127,9 +130,11 @@ export function createTeacherOpenAI({ fetchImpl = fetch, readKey = () => process
     }
   }
 
-  return async function applyTeacherAI(data) {
+  return async function applyTeacherAI(data, reportModel = DEFAULT_REPORT_MODEL) {
     if (!data?.success || !Array.isArray(data.reports) || !data.reports.some(report => report.feedback)) return data;
-    if (data.reports.some(report => report.feedback?.engine?.summaryReflection)) return writeTeacherReports(data, { fetchImpl, readKey, model: MODEL });
+    if (data.reports.some(report => report.feedback?.engine?.summaryReflection)) {
+      return writeTeacherReports(data, { fetchImpl, readKey, model: reportModel });
+    }
     const { priorities, ...verification } = await getVerification();
     const explanations = new Map();
     for (const { feedback } of data.reports) {

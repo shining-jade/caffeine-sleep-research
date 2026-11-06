@@ -172,10 +172,10 @@
     return input;
   }
 
-  async function requestAnalysis(prepared, start, end, mode, thresholds = getCafThresholds(), reportMode = 'ongoing', includeSavedReportEdits = false) {
+  async function requestAnalysis(prepared, start, end, mode, thresholds = getCafThresholds(), reportMode = 'ongoing', includeSavedReportEdits = false, aiModel) {
     const request = { start, end, mode, thresholds, reportVersion: 2, reportMode, includeSavedReportEdits, students: prepared.map(analysisInput) };
     try {
-      return await call('analyzeTeacherBatch', request);
+      return await call('analyzeTeacherBatch', mode === 'ai' && aiModel ? { ...request, aiModel } : request);
     } catch (error) {
       if (mode !== 'ai') throw error;
       const response = await call('analyzeTeacherBatch', { ...request, mode: 'rule' });
@@ -189,9 +189,9 @@
     }
   }
 
-  async function analyzeStudent(student, dates, mode = 'rule', reportMode = 'ongoing') {
+  async function analyzeStudent(student, dates, mode = 'rule', reportMode = 'ongoing', aiModel) {
     const report = prepareReport(student, dates);
-    const response = await requestAnalysis([report], dates[0], dates[dates.length - 1], mode, undefined, reportMode);
+    const response = await requestAnalysis([report], dates[0], dates[dates.length - 1], mode, undefined, reportMode, false, aiModel);
     const result = response.reports?.[0];
     if (!result?.analysis || result.studentId !== student.학번) throw new Error(result?.error || '분석 결과를 확인할 수 없습니다.');
     return { ...report, ...result, start: dates[0], end: dates[dates.length - 1] };
@@ -413,6 +413,7 @@
       const prepared = students.map(student => prepareReport(student, dates));
       const thresholds = getCafThresholds();
       const mode = aiMode.checked ? 'ai' : 'rule';
+      const aiModel = mode === 'ai' ? $('batchGptModel')?.value : undefined;
       const reportMode = $('batchFinalMode')?.checked ? 'final' : 'ongoing';
       let verification;
       // Small requests stay within the API body limit even for a full year of daily records.
@@ -420,7 +421,7 @@
       for (let i = 0; i < prepared.length; i += chunkSize) {
         const chunk = prepared.slice(i, i + chunkSize);
         try {
-          const response = await requestAnalysis(chunk, range.start, range.end, mode, thresholds, reportMode, true);
+          const response = await requestAnalysis(chunk, range.start, range.end, mode, thresholds, reportMode, true, aiModel);
           verification = response.aiVerification || verification;
           for (const [index, report] of chunk.entries()) {
             const result = response.reports[index];
@@ -443,6 +444,7 @@
         const checks = {
           missing_key: '키 설정 확인 필요',
           authentication_failed: 'OpenAI 인증 확인 필요',
+          model_unavailable: '선택한 GPT 모델을 사용할 수 없음',
           organization_unavailable: 'OpenAI 조직 확인 필요',
           synthetic_failed: '가상 기록 검증 실패',
           connection_failed: 'OpenAI 연결 확인 필요',

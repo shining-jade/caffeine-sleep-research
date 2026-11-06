@@ -679,6 +679,9 @@
         .report-feedback-mode{margin:0!important;color:#405676;font-size:12px;font-weight:650;}
         .report-analysis-mode{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;margin:8px 0;font-size:13px;color:#344761;}
         .report-analysis-mode label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;}
+        .report-analysis-mode .report-gpt-model{display:none;}
+        .report-analysis-mode:has(input[value="ai"]:checked) .report-gpt-model{display:inline-flex;}
+        .report-gpt-model select{max-width:100%;font:inherit;color:inherit;border:1px solid #c8d2e3;border-radius:6px;background:#fff;padding:4px 6px;}
         #aiBtn,#batchReportRun{white-space:nowrap;flex-shrink:0;}
         .report-feedback-legacy{white-space:pre-wrap;overflow-wrap:anywhere;}
         .pdf-ai-content .report-feedback-items{font-size:11px;}
@@ -892,6 +895,13 @@
                     <strong>분석 방식</strong>
                     <label><input type="radio" name="batchAnalysisMode" id="batchRuleMode" value="rule" checked> 규칙 기반</label>
                     <label><input type="radio" name="batchAnalysisMode" id="batchAiMode" value="ai"> AI 분석</label>
+                    <label class="report-gpt-model" for="batchGptModel">GPT 모델
+                        <select id="batchGptModel">
+                            <option value="gpt-6-luna" selected>GPT-6 Luna (기본)</option>
+                            <option value="gpt-6.1-terra">GPT-6.1 Terra (문장 품질)</option>
+                            <option value="gpt-4.1-mini">GPT-4.1 Mini (기존)</option>
+                        </select>
+                    </label>
                     <label><input type="checkbox" id="batchFinalMode"> 연구 종료 – 마무리 분석</label>
                 </div>
                 <button id="batchReportRun" type="button" class="btn btn-primary">📊 피드백 만들기</button>
@@ -1736,6 +1746,13 @@
                 <strong>분석 방식</strong>
                 <label><input type="radio" name="individualAnalysisMode" value="rule" checked onchange="resetAIReportContext();loadSavedAIReport()"> 규칙 기반</label>
                 <label><input type="radio" name="individualAnalysisMode" id="individualAiMode" value="ai" onchange="resetAIReportContext();loadSavedAIReport()"> AI 분석</label>
+                <label class="report-gpt-model" for="individualGptModel">GPT 모델
+                    <select id="individualGptModel">
+                        <option value="gpt-6-luna" selected>GPT-6 Luna (기본)</option>
+                        <option value="gpt-6.1-terra">GPT-6.1 Terra (문장 품질)</option>
+                        <option value="gpt-4.1-mini">GPT-4.1 Mini (기존)</option>
+                    </select>
+                </label>
                 <label><input type="checkbox" id="individualFinalMode" onchange="resetAIReportContext();loadSavedAIReport()"> 연구 종료 – 마무리 분석</label>
             </div>
             <div class="modal-actions">
@@ -4657,6 +4674,7 @@ async function requestSharedTeacherAnalysis(student, dates, { restoring = false 
     const button = document.getElementById('aiBtn');
     const badge = document.getElementById('aiStatusBadge');
     const mode = !restoring && document.getElementById('individualAiMode')?.checked ? 'ai' : 'rule';
+    const aiModel = mode === 'ai' ? document.getElementById('individualGptModel')?.value : undefined;
     setIndividualReportApiStatus();
     document.getElementById('aiBoxBody').classList.add('open');
     document.getElementById('aiArrow').classList.add('open');
@@ -4671,7 +4689,7 @@ async function requestSharedTeacherAnalysis(student, dates, { restoring = false 
     try {
         const reportMode = document.getElementById('individualFinalMode')?.checked ? 'final' : 'ongoing';
         const [result, saved] = await Promise.all([
-            window.teacherBatchReports.analyzeStudent(student, dates, mode, reportMode),
+            window.teacherBatchReports.analyzeStudent(student, dates, mode, reportMode, aiModel),
             readSavedAIReport(student, dates),
         ]);
         if (!isCurrentAIRequest(requestKey, requestGeneration)) return;
@@ -7961,10 +7979,10 @@ function renderJourneyStatus(){
 
 </script>
 <script src="/public/js/teacher-goal-comparison.js?v=4"></script>
-<script src="/public/js/teacher-report-files.js?v=report-view-33"></script>
+<script src="/public/js/teacher-report-files.js?v=report-view-34"></script>
 <script src="/public/js/teacher-report-export.js?v=image-report-3"></script>
 <script src="/public/js/teacher-goal-comparison-ui.js?v=1"></script>
-<script src="/public/js/teacher-batch-reports.js?v=report-view-11"></script>
+<script src="/public/js/teacher-batch-reports.js?v=report-view-12"></script>
 <script type="module" src="/public/js/caffeine-companies.js"></script>
 </body>
 </html>

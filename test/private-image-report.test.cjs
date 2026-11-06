@@ -220,3 +220,59 @@ test('teacher gateway allows a full 3 MiB image PDF plus JSON and retains separa
   assert.equal(await post('renderTeacherReportPdf', ['x'.repeat(4 * 1024 * 1024)]), 413);
   assert.deepEqual(calls, ['sendPrivateTeacherReport']);
 });
+
+test('teacher gateway accepts only supported report models and keeps the choice out of Apps Script', async () => {
+  const { createActionHandler } = await import('../vercel/api/teacher/action.js');
+  const { createTeacherOpenAI } = await import('../vercel/api/_lib/teacher-openai.js');
+  const { makeSummaryFixture } = require('./fixtures/summary-report.cjs');
+  const apiRequests = [], gasRequests = [];
+  const applyTeacherAI = createTeacherOpenAI({ readKey: () => 'local-fixture-only', async fetchImpl(_url, options) {
+    const { model, reasoning, input } = JSON.parse(options.body);
+    apiRequests.push({ model, reasoning });
+    assert.doesNotMatch(input, /테스트 학생|fixture-owner/);
+    const analyses = JSON.parse(input).map(evidence => ({
+      ...Object.fromEntries(Object.entries(evidence).map(([field, fact]) => [
+        field, fact ? '기록에 나타난 습관을 다음에도 살펴봐요.' : null,
+      ])),
+      highlights: ['caffeineSleep'],
+    }));
+    return Response.json({ model, status: 'completed', output: [
+      { type: 'message', content: [{ type: 'output_text', text: JSON.stringify({ analyses }) }] },
+    ] });
+  } });
+  const handle = createActionHandler({ now, applyTeacherAI, callGas({ params: [input] }) {
+    gasRequests.push(input);
+    return { success: true, reports: [makeSummaryFixture()] };
+  } });
+  const cookie = await makeSession('teacher');
+  const post = async options => {
+    const params = [{ reportVersion: 2, mode: 'ai', ...options }];
+    const req = Readable.from([Buffer.from(JSON.stringify({ action: 'analyzeTeacherBatch', params }))]);
+    req.method = 'POST';
+    req.headers = { cookie };
+    const res = fakeResponse();
+    await handle(req, res);
+    return res;
+  };
+
+  for (const [model, reasoning] of [
+    [undefined, { effort: 'none' }],
+    ['gpt-6-luna', { effort: 'none' }],
+    ['gpt-6.1-terra', { effort: 'none' }],
+    ['gpt-4.1-mini', undefined],
+  ]) {
+    const res = await post(model ? { aiModel: model } : {});
+    assert.equal(res.statusCode, 200);
+    const expected = model || 'gpt-6-luna';
+    const feedback = JSON.parse(res.body).data.reports[0].feedback;
+    assert.equal(feedback.aiApiStatus, 'applied');
+    assert.equal(feedback.aiModel, expected);
+    assert.deepEqual(apiRequests.at(-1), { model: expected, reasoning });
+    assert.deepEqual(gasRequests.at(-1), { mode: 'rule', reportVersion: 2 });
+  }
+  assert.equal((await post({ aiModel: 'unlisted-model' })).statusCode, 400);
+  assert.equal((await post({ mode: 'rule', aiModel: 'gpt-6.1-terra' })).statusCode, 200);
+  assert.deepEqual(gasRequests.at(-1), { mode: 'rule', reportVersion: 2 });
+  assert.equal(gasRequests.length, 5);
+  assert.equal(apiRequests.length, 4);
+});

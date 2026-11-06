@@ -132,6 +132,7 @@ async function requestDrafts(group, { fetchImpl, key, model }, retry) {
       headers:{ Authorization:'Bearer '+key, 'Content-Type':'application/json' },
       body:JSON.stringify({
         model, store:false, max_output_tokens:2400,
+        ...(model.startsWith('gpt-6') ? { reasoning:{ effort:'none' } } : {}),
         instructions:INSTRUCTIONS + (retry ? ' This is a second attempt. Check every non-null field has a short sentence, no digits, and only a supported observation. Return the complete requested analysis.' : ''),
         input:JSON.stringify(group.map(item => item.evidence)),
         text:{ format:{ type:'json_schema', name:'teacher_report_writing', strict:true, schema:{
@@ -144,27 +145,33 @@ async function requestDrafts(group, { fetchImpl, key, model }, retry) {
         } } },
       }),
     });
-    if (!response.ok) return { status:[401,403].includes(response.status) ? 'authentication_failed' : 'request_failed' };
+    if (!response.ok) {
+      const status = response.status === 404 ? 'model_unavailable'
+        : [401,403].includes(response.status) ? 'authentication_failed' : 'request_failed';
+      return { status };
+    }
     const body = await response.json().catch(() => null);
+    const modelUsed = typeof body?.model === 'string' && /^gpt-[a-z0-9.-]{1,63}$/i.test(body.model) ? body.model : undefined;
+    const reply = { status:'response_rejected', modelUsed };
     const messages = Array.isArray(body?.output) ? body.output.flatMap(item =>
       item?.type === 'message' && Array.isArray(item.content) ? item.content : []) : [];
-    if (messages.some(item => item?.type === 'refusal')) return { status:'response_rejected', issue:'refusal' };
-    if (body?.status === 'incomplete') return { status:'response_rejected', issue:'incomplete' };
+    if (messages.some(item => item?.type === 'refusal')) return { ...reply, issue:'refusal' };
+    if (body?.status === 'incomplete') return { ...reply, issue:'incomplete' };
     const output = messages.find(item => item?.type === 'output_text')?.text;
     if (body?.status === 'completed' && typeof output === 'string') {
       let analyses;
       try { analyses = JSON.parse(output)?.analyses; }
-      catch { return { status:'response_rejected', issue:'format' }; }
-      if (Array.isArray(analyses) && analyses.length === group.length) return { status:'response_rejected', analyses };
+      catch { return { ...reply, issue:'format' }; }
+      if (Array.isArray(analyses) && analyses.length === group.length) return { ...reply, analyses };
     }
-    return { status:'response_rejected', issue:'format' };
+    return { ...reply, issue:'format' };
   } catch {
     return { status:'request_failed' };
   }
 }
 
 async function writeGroup(group, options) {
-  const applyDrafts = (items, { status, issue, analyses }) => {
+  const applyDrafts = (items, { status, issue, analyses, modelUsed }) => {
     const incomplete = [];
     items.forEach((item, i) => {
       const { report, evidence, draft } = item;
@@ -173,6 +180,7 @@ async function writeGroup(group, options) {
       if (status !== 'response_rejected' && feedback.aiApiStatus === 'response_rejected') return;
       feedback.aiApiStatus = status;
       if (status !== 'response_rejected') return;
+      if (modelUsed) feedback.aiModel = modelUsed;
       const result = acceptedAnalysis(analyses?.[i], evidence);
       if (result) {
         item.draft = {
@@ -194,7 +202,7 @@ async function writeGroup(group, options) {
   const first = await requestDrafts(group, options, false);
   const incomplete = applyDrafts(group, first);
   if (incomplete.length) applyDrafts(incomplete, await requestDrafts(incomplete, options, true));
-  return first.status === 'authentication_failed' ? first.status : 'report_failed';
+  return ['authentication_failed', 'model_unavailable'].includes(first.status) ? first.status : 'report_failed';
 }
 
 export async function writeTeacherReports(data, { fetchImpl, readKey, model }) {

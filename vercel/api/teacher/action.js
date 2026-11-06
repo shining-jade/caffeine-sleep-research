@@ -1,4 +1,4 @@
-import { applyTeacherAI as defaultApplyTeacherAI, interpretTeacherGoal as defaultInterpretTeacherGoal } from '../_lib/teacher-openai.js';
+import { applyTeacherAI as defaultApplyTeacherAI, interpretTeacherGoal as defaultInterpretTeacherGoal, isTeacherReportModel } from '../_lib/teacher-openai.js';
 import { callGas as defaultCallGas } from '../_lib/gas.js';
 import { DEFAULT_MAX_BYTES, readJson, sendJson } from '../_lib/http.js';
 import { readSessionCookie, verifySession } from '../_lib/session.js';
@@ -75,9 +75,19 @@ export function createActionHandler({
       }
       const request = normalized.action === 'analyzeTeacherBatch' ? normalized.params[0] : null;
       const wantsAI = request?.mode === 'ai' && !request.goalComparison;
-      const params = wantsAI ? [{ ...request, mode: 'rule' }] : normalized.params;
+      const aiModel = request?.aiModel;
+      if (wantsAI && aiModel !== undefined && (request.reportVersion !== 2 || !isTeacherReportModel(aiModel))) {
+        sendJson(res, 400, { success: false, error: 'INVALID_AI_MODEL' });
+        return;
+      }
+      let params = normalized.params;
+      if (wantsAI || (request && Object.hasOwn(request, 'aiModel'))) {
+        const { aiModel: _model, ...gasRequest } = request;
+        if (wantsAI) gasRequest.mode = 'rule';
+        params = [gasRequest, ...params.slice(1)];
+      }
       let data = await callGas({ role: 'teacher', ...normalized, params });
-      if (wantsAI) data = await applyTeacherAI(data);
+      if (wantsAI) data = await applyTeacherAI(data, aiModel);
       sendJson(res, 200, { success: true, data });
     } catch (error) {
       sendJson(res, error?.status || 500, {

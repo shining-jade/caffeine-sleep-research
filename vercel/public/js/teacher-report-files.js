@@ -108,6 +108,7 @@
     applied: 'OpenAI GPT API 키 사용 확인 · AI 응답 반영 완료',
     response_rejected: 'OpenAI API 키 사용 확인 · 응답 검증 실패로 규칙 기반 적용',
     authentication_failed: 'OpenAI API 호출 시도 · 키 인증 또는 접근 권한 확인 필요',
+    model_unavailable: 'OpenAI API 호출 시도 · 선택한 GPT 모델 사용 불가 · 규칙 기반 적용',
     request_failed: 'OpenAI API 호출 시도 · 요청 실패로 규칙 기반 적용',
     missing_key: 'OpenAI API 호출 안 함 · 키 미설정',
     no_facts: 'OpenAI API 호출 안 함 · AI가 해석할 기록 부족',
@@ -123,10 +124,11 @@
   function aiCallStatusText(feedback) {
     const status = feedback?.aiApiStatus;
     const issue = feedback?.aiResponseIssue;
+    const model = typeof feedback?.aiModel === 'string' ? ' · ' + feedback.aiModel : '';
     if (status === 'response_rejected' && Object.hasOwn(aiResponseIssueLabels, issue)) {
-      return 'OpenAI API 키 사용 확인 · ' + aiResponseIssueLabels[issue] + ' · 규칙 기반 적용';
+      return 'OpenAI API 키 사용 확인 · ' + aiResponseIssueLabels[issue] + ' · 규칙 기반 적용' + model;
     }
-    if (Object.hasOwn(aiCallLabels, status)) return aiCallLabels[status];
+    if (Object.hasOwn(aiCallLabels, status)) return aiCallLabels[status] + model;
     if (status === 'unknown' || feedback?.aiFallback || feedback?.mode === 'ai') return 'OpenAI API 호출 여부를 확인할 수 없음';
     return 'OpenAI API 호출 안 함 · 규칙 기반';
   }
