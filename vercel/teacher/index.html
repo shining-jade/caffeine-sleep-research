@@ -669,15 +669,17 @@
         .sleep-memo-analysis summary{cursor:pointer;font-size:13px;font-weight:600;color:#374467}
         .sleep-memo-sources{margin-top:16px}
         .sleep-memo-sources summary{cursor:pointer;font-size:14px;font-weight:600;color:#374467}
-        .sleep-memo-sources ol{list-style:none;display:grid;gap:8px;margin:10px 0 0;padding:0}
-        .sleep-memo-sources li{padding:10px 12px;border:1px solid #dce2eb;border-radius:8px;color:#253452}
-        .sleep-memo-sources strong{font-size:13px}
-        .sleep-memo-sources p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+        .sleep-memo-source-list{list-style:none;display:grid;gap:8px;margin:10px 0 0;padding:0}
+        .sleep-memo-source-list li{padding:10px 12px;border:1px solid #dce2eb;border-radius:8px;background:#fff;color:#253452}
+        .sleep-memo-source-list strong{font-size:13px}
+        .sleep-memo-source-list p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
         .sleep-memo-actions{margin-top:12px}
         .sleep-memo-categories{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;text-align:left;margin-top:12px}
         .sleep-memo-category{padding:10px 12px;border:1px solid #dce2eb;border-left:4px solid var(--topic-color);border-radius:8px;background:#f8faff}
-        .sleep-memo-category strong{color:var(--topic-color)}
+        .sleep-memo-category>strong{color:var(--topic-color)}
         .sleep-memo-category ul{list-style:none;padding:0;margin:4px 0 0;font-size:13px}
+        .sleep-memo-category .sleep-memo-topic{margin:6px 0}
+        .sleep-memo-topic>summary{text-decoration:underline;text-underline-offset:2px}
         .report-ai-api-status{font-size:13px;font-weight:650;color:#405676;margin:6px 0;}
         .report-preview-button{margin-left:auto;background:#edf0fe;color:#36459a;border:1px solid #d8def8;min-height:42px;}
         .report-result summary{cursor:pointer;font-weight:650;color:#425574;padding:6px 0;}
@@ -1113,15 +1115,15 @@
                 <h3 class="chart-title">📝 수면 메모 분석 <span class="sleep-memo-note">(<span id="sleepChartLabel2">7일</span> 기준)</span></h3>
                 <div id="sleepMemoNoData" class="sleep-memo-note sleep-memo-empty">선택한 기간에 남긴 수면 메모가 없습니다.</div>
                 <div id="sleepMemoAiArea" class="sleep-memo-analysis" hidden>
-                    <div id="sleepMemoAiResult" aria-live="polite"></div>
+                    <div id="sleepMemoAiResult" role="region" aria-label="수면 메모 분석 결과" aria-live="polite" tabindex="-1"></div>
                     <div class="sleep-memo-actions">
-                        <button id="sleepMemoAiBtn" class="btn btn-primary" type="button">Luna로 핵심 찾기</button>
+                        <button id="sleepMemoAiBtn" class="btn btn-primary" type="button" aria-controls="sleepMemoAiResult">Luna로 핵심 찾기</button>
                         <p class="sleep-memo-note">메모에서 찾은 주제와 건수로 핵심을 고릅니다.</p>
                     </div>
                 </div>
                 <details id="sleepMemoSources" class="sleep-memo-sources" hidden>
                     <summary id="sleepMemoSourceLabel">학생 메모 원문 보기</summary>
-                    <ol id="sleepMemoSourceList"></ol>
+                    <ol id="sleepMemoSourceList" class="sleep-memo-source-list"></ol>
                 </details>
             </div>
         </div>
@@ -3286,7 +3288,7 @@ function updateSleepTab(){
     const memos = filteredSleep.filter(entry => entry.메모?.trim()).map(entry => ({
         text: entry.메모, student: studentNames.get(entry.학번), date: getSleepLifeDate(entry),
     }));
-    import('/public/js/teacher-sleep-memo.js?v=3')
+    import('/public/js/teacher-sleep-memo.js?v=4')
         .then(({ renderSleepMemoAnalysis }) => renderSleepMemoAnalysis(memos))
         .catch(() => { document.getElementById('sleepMemoNoData').textContent = '수면 메모 주제를 불러오지 못했습니다.'; });
 }

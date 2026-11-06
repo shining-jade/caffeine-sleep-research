@@ -1,4 +1,4 @@
-import { sleepMemoCategories, sleepMemoPairId, sleepMemoTopics, summarizeSleepMemos } from './sleep-memo-topics.js';
+import { sleepMemoCategories, sleepMemoPairId, sleepMemoTopics, summarizeSleepMemos } from './sleep-memo-topics.js?v=2';
 
 const colorPalette = ['#6366f1', '#a3388c', '#986116', '#137b65', '#2858b3'];
 const topicSupport = {
@@ -27,6 +27,7 @@ const pairSupport = {
 const stateTopics = ['sleepOnset', 'nightWaking', 'fatigue', 'sleepiness', 'headache', 'worry', 'refreshed'];
 let summary = { topics: [], pairs: [] };
 let sources;
+let sourcesByTopic;
 let generation = 0;
 let pending = false;
 
@@ -37,25 +38,35 @@ function element(tag, text) {
   return node;
 }
 
-export function renderSleepMemoAnalysis(memos) {
-  const nextSources = memos.filter(({ text }) => typeof text === 'string' && text.trim());
-  if (sources?.length === nextSources.length && sources.every(({ text, student, date }, index) =>
-    text === nextSources[index].text && student === nextSources[index].student && date === nextSources[index].date)) return;
-  sources = nextSources;
-  summary = summarizeSleepMemos(sources.map(({ text }) => text));
-  generation++;
-  pending = false;
-  const details = get('sleepMemoSources');
-  details.open = false;
-  details.hidden = !sources.length;
-  get('sleepMemoSourceLabel').textContent = '학생 메모 원문 보기 (' + sources.length + '건)';
-  get('sleepMemoSourceList').replaceChildren(...sources.map(({ text, student, date }) => {
+function fillMemoSourceList(list, memos) {
+  list.replaceChildren(...memos.map(({ text, student, date }) => {
     const row = element('li', '');
     const label = [student, date && date + ' 밤'].filter(Boolean).join(' · ');
     if (label) row.append(element('strong', label));
     row.append(element('p', text));
     return row;
   }));
+}
+
+export function renderSleepMemoAnalysis(memos) {
+  const nextSources = memos.filter(({ text }) => typeof text === 'string' && text.trim());
+  if (sources?.length === nextSources.length && sources.every(({ text, student, date }, index) =>
+    text === nextSources[index].text && student === nextSources[index].student && date === nextSources[index].date)) return;
+  sources = nextSources;
+  sourcesByTopic = new Map();
+  summary = summarizeSleepMemos(sources.map(({ text }) => text), (index, topics) => {
+    for (const id of topics) {
+      if (!sourcesByTopic.has(id)) sourcesByTopic.set(id, []);
+      sourcesByTopic.get(id).push(sources[index]);
+    }
+  });
+  generation++;
+  pending = false;
+  const details = get('sleepMemoSources');
+  details.open = false;
+  details.hidden = !sources.length;
+  get('sleepMemoSourceLabel').textContent = '학생 메모 원문 보기 (' + sources.length + '건)';
+  fillMemoSourceList(get('sleepMemoSourceList'), sources);
   const button = get('sleepMemoAiBtn');
   const hasTopics = summary.topics.length > 0;
   const empty = get('sleepMemoNoData');
@@ -68,6 +79,7 @@ export function renderSleepMemoAnalysis(memos) {
   button.textContent = 'Luna로 핵심 찾기';
   button.onclick = analyze;
   if (hasTopics) renderResult(summary);
+  else get('sleepMemoAiResult').replaceChildren();
 }
 
 async function analyze() {
@@ -91,6 +103,30 @@ async function analyze() {
   button.disabled = false;
   button.textContent = 'Luna로 핵심 찾기';
   renderResult(snapshot, analysis, true);
+  const result = get('sleepMemoAiResult');
+  if (result.getClientRects().length) {
+    result.focus({ preventScroll: true });
+    const headerBottom = document.querySelector('header').getBoundingClientRect().bottom;
+    window.scrollBy(0, result.getBoundingClientRect().top - headerBottom - 12);
+  }
+}
+
+function renderTopic(id, count) {
+  const memos = sourcesByTopic.get(id);
+  const disclosure = element('details', '');
+  disclosure.className = 'sleep-memo-topic';
+  disclosure.dataset.topic = id;
+  disclosure.append(element('summary', sleepMemoTopics[id].label + ' (' + count + '건)'));
+  disclosure.ontoggle = () => {
+    if (!disclosure.open || disclosure.childElementCount > 1) return;
+    const originals = element('ol', '');
+    originals.className = 'sleep-memo-source-list';
+    fillMemoSourceList(originals, memos);
+    disclosure.append(originals);
+  };
+  const row = element('li', '');
+  row.append(disclosure);
+  return row;
 }
 
 function renderResult(snapshot, analysis, requested = false) {
@@ -98,7 +134,6 @@ function renderResult(snapshot, analysis, requested = false) {
   const usedLuna = analysis?.status === 'ai';
   const assignments = usedLuna ? new Map(analysis.assignments.map(({ topic, category }) => [topic, category])) : null;
   const countByTopic = new Map(snapshot.topics);
-  const describe = id => sleepMemoTopics[id].label + ' (' + countByTopic.get(id) + '건)';
   const topic = usedLuna ? analysis.highlights[0] :
     snapshot.topics.find(([id]) => stateTopics.includes(id))?.[0] ?? snapshot.topics[0][0];
   const cards = element('div', '');
@@ -111,7 +146,7 @@ function renderResult(snapshot, analysis, requested = false) {
     card.style.setProperty('--topic-color', colorPalette[index]);
     card.append(element('strong', label));
     const list = element('ul', '');
-    list.append(...ids.map(id => element('li', describe(id))));
+    list.append(...ids.map(id => renderTopic(id, countByTopic.get(id))));
     card.append(list);
     cards.append(card);
   });
@@ -136,6 +171,7 @@ function renderResult(snapshot, analysis, requested = false) {
   insight.append(element('strong', '메모에 나타난 학생 상태'), element('p', observation));
   insight.append(element('strong', '교사가 도울 수 있는 방법'), element('p', support));
   const details = element('details', '');
+  details.open = requested;
   details.append(element('summary', '주제별 메모 건수 보기'), cards);
   result.replaceChildren(status, insight, details);
 }

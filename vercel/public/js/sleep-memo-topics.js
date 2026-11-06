@@ -33,10 +33,12 @@ export const sleepMemoPairId = (left, right) => left + '|' + right;
 const noScreens = /(?:핸드폰|휴대폰|스마트폰|유튜브|휴대전화|화면|(?:^|\s)폰)(?:을|를|은|는|도)?\s*(?:(?:전혀|아예|거의)\s*)?(?:안\s*(?:봤|보|했|썼|쓰|켰|사용)|(?:보|쓰|켜|사용하|하)지\s*않)/;
 const noCaffeine = topics.find(([id]) => id === 'noCaffeine')[3];
 
-export function summarizeSleepMemos(memos) {
+export function summarizeSleepMemos(memos, onMemoTopics) {
   const counts = new Map();
   const pairs = new Map();
+  let index = -1;
   for (const memo of memos) {
+    index++;
     if (typeof memo !== 'string' || !memo.trim()) continue;
     const memoTopics = new Set();
     const memoPairs = new Set();
@@ -58,6 +60,7 @@ export function summarizeSleepMemos(memos) {
     }
     for (const id of memoTopics) counts.set(id, (counts.get(id) || 0) + 1);
     for (const id of memoPairs) pairs.set(id, (pairs.get(id) || 0) + 1);
+    onMemoTopics?.(index, memoTopics);
   }
   const byCount = (a, b) => b[1] - a[1];
   return {

@@ -281,11 +281,13 @@ test('teacher-only sleep memo analysis sends sentence-level aggregates and rejec
   const { createActionHandler } = await import('../vercel/api/teacher/action.js');
   const { analyzeSleepMemoTopics } = await import('../vercel/api/_lib/teacher-sleep-memo.js');
   const { summarizeSleepMemos } = await import('../vercel/public/js/sleep-memo-topics.js');
+  const topicsByMemo = [];
   const summary = summarizeSleepMemos([
     '수업용 합성 예시 · 가상 학생 이름 김가짜. 핸드폰을 보고 휴대폰을 내려놓았는데 잠이 오지 않았다.',
     '스마트폰을 봤다. 머리가 아프다.',
     '실제 학생 기록 아님.',
-  ]);
+  ], (index, topics) => { topicsByMemo[index] = [...topics]; });
+  assert.deepEqual(topicsByMemo, [['screens', 'sleepOnset'], ['screens', 'headache'], []]);
   assert.deepEqual(summary, {
     topics: [['screens', 2], ['sleepOnset', 1], ['headache', 1]],
     pairs: [['screens', 'sleepOnset', 1]],
