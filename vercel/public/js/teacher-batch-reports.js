@@ -483,6 +483,8 @@
     busy = true;
     updateActions();
     const files = [], failed = [];
+    const zipClasses = new Set();
+    const zipGrades = new Set();
     try {
       for (const [index, report] of ready.entries()) {
         status.textContent = (send ? 'PDF 전송' : kind === 'images' ? '이미지 생성' : '이미지 PDF 생성') + ' 중 ' + (index + 1) + '/' + ready.length + '명';
@@ -494,6 +496,12 @@
             report.sendError = false;
           } else {
             files.push(...rendered);
+            if (rendered.length) {
+              const year = normalizeGrade(report.student.학년);
+              const homeroom = normalizeClass(report.student.반);
+              zipGrades.add(year);
+              zipClasses.add(year === '교직원' || homeroom === '교직원' ? '' : year + '-' + homeroom + '반');
+            }
           }
         } catch {
           failed.push(report.student.학번 + ' ' + report.student.이름);
@@ -503,8 +511,15 @@
       if (!send) {
         clearZip();
         if (files.length) {
+          let classPrefix = '';
+          if (!zipClasses.has('')) {
+            if (zipClasses.size === 1) classPrefix = zipClasses.values().next().value + '_';
+            else if (zipGrades.size === 1) classPrefix = zipGrades.values().next().value + '학년_';
+            else classPrefix = '여러반_';
+          }
+          const typeLabel = kind === 'images' ? '이미지' : 'PDF';
           zipFile.href = URL.createObjectURL(createPdfZip(files));
-          zipFile.download = (kind === 'images' ? '기록_요약_이미지_' : '기록_요약_PDF_') + start + '_' + end + '.zip';
+          zipFile.download = classPrefix + '기록_요약_' + typeLabel + '_' + start + '_' + end + '.zip';
           zipFile.hidden = false;
           zipFile.click();
         }
