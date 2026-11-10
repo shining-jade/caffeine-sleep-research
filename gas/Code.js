@@ -2198,8 +2198,8 @@ function feedbackSummaryReflection_(days, goals, standards) {
     : caffeineRecorded ? { kind: 'caffeineRecords', kept: caffeineRecorded, measured: days.filter(day => !day.open || day.caffeine.recorded).length } : null;
   const missed = hardest?.judged.filter(item => !item.kept).map(item => dayByDate.get(item.date)) || [];
   const overlapOptions = [
-    ['phone30', day => !day.open && ['30~60분', '60분 이상'].includes(day.habits.phone), '자기 전 스마트폰을 30분 이상 사용했다고 기록했습니다.', 'phone'],
-    ['afternoonCaffeine', day => day.caffeine.intakes.some(item => item.mg > 0 && item.time !== null && item.time >= 900), '오후 3시 이후 카페인을 섭취한 기록이 있습니다.', 'caffeineMax'],
+    ['phone30', day => !day.open && ['30~60분', '60분 이상'].includes(day.habits.phone), '자기 전 스마트폰을 30분 이상 썼다고 같이 기록했다.', 'phone'],
+    ['afternoonCaffeine', day => day.caffeine.intakes.some(item => item.mg > 0 && item.time !== null && item.time >= 900), '오후 3시 이후에 카페인을 마셨다고 같이 기록했다.', 'caffeineMax'],
   ];
   const overlap = overlapOptions.map(([kind, matches, text, sameGoal]) => ({
     kind, text, count: hardest?.kind === sameGoal ? 0 : missed.filter(matches).length,
@@ -2229,13 +2229,30 @@ function feedbackSummaryReflection_(days, goals, standards) {
   const plan = sample ? { kind: sample.basis[0] } : null;
   const progress = goal => '기록한 ' + goal.measured + '일 ' + (goal.kept === goal.measured ? '모두' : '중 ' + goal.kept + '일');
   const overlapText = overlap ? ' 지키지 못한 ' + missed.length + '일 중 ' + overlap.count + '일은 ' + overlap.text : '';
-  const praiseText = praise?.kind === 'sleepRecords' ? '수면 기록을 ' + praise.measured + '일 중 ' + praise.kept + '일 남겼습니다.'
-    : praise?.kind === 'caffeineRecords' ? '카페인 기록을 ' + praise.measured + '일 중 ' + praise.kept + '일 남겼습니다.' : '';
-  const planText = sample ? sample.basis[1] + '처럼 ' + sample.basis[2] + ' 것을 권합니다.' : '';
+  const recordedLabel = praise?.kind === 'sleepRecords' ? '수면' : praise?.kind === 'caffeineRecords' ? '카페인' : '';
+  const praiseText = recordedLabel ? recordedLabel + ' 기록을 ' + praise.measured + '일 중 ' + praise.kept + '일 남겼다. 좋은 시작이에요!' : '';
+  const planText = sample ? sample.basis[1] + '처럼 ' + sample.basis[2] + ' 것부터 해 볼까요?' : '';
+  const alternatives = {
+    caffeineMax: '음료를 고를 때 카페인 함량을 먼저 확인해 볼까요?',
+    bedtime: '잠자리에 들기 전에 하던 일을 마무리할 시각을 정해 볼까요?',
+    sleepMin: '아침에 일어날 시각부터 생각해 보고 잠자리 준비 시간을 정해 볼까요?',
+    wakeTime: '잠들기 전에 아침 알람을 맞춰 볼까요?',
+    phone: '잠자리에 들기 전 스마트폰을 손이 닿지 않는 곳에 둬 볼까요?',
+    activity: '하교 후 걷기 편한 때를 정해 볼까요?',
+  };
+  const nextStep = overlap?.kind === 'phone30' ? alternatives.phone
+    : overlap?.kind === 'afternoonCaffeine' ? '오후에 마실 음료를 고를 때 카페인이 없는 선택지도 찾아볼까요?'
+    : planText || alternatives[hardest?.kind === 'range' ? 'sleepMin' : hardest?.kind] ||
+      (praise ? '기록하기 편했던 때를 골라 다음에도 같은 때에 남겨 볼까요?' : '');
+  const effort = best ? (best.kind === 'caffeineMax' ? '카페인 섭취량' : '‘' + best.label + '’') + ' 목표를 지킨 날을 만들었어요.'
+    : recordedLabel ? recordedLabel + ' 기록을 남기며 나를 돌아봤어요.' : '';
   const rule = {
-    praise: best ? '‘' + best.label + '’ 목표를 ' + progress(best) + ' 지켰습니다.' : praiseText,
-    difficulty: hardest ? '‘' + hardest.label + '’ 목표를 ' + progress(hardest) + ' 지켰습니다.' + overlapText : '',
-    plan: planText,
+    praise: best ? '‘' + best.label + '’ 목표를 ' + progress(best) + ' 지켰다.' +
+      (best.kind === 'caffeineMax' && days.some(day => day.caffeine.status === 'zero')
+        ? ' 안 마신 날까지 챙겨 적었네요!' : ' 실천한 날을 만든 것, 잘 해냈어요!') : praiseText,
+    difficulty: hardest ? '‘' + hardest.label + '’ 목표를 지킨 날은 ' + hardest.measured + '일 중 ' + hardest.kept + '일이다.' + overlapText : '',
+    plan: nextStep,
+    memo: effort,
   };
   const warm = {
     praise: best ? progress(best) + ' ‘' + best.label + '’ 목표를 지켰네요.' : praiseText,
@@ -2249,19 +2266,18 @@ function feedbackSummaryReflection_(days, goals, standards) {
 // quoted record or goal labels keep their original text.
 function feedbackTeacherSentence_(text) {
   const endings = {
-    '봐요': '보는 것이 좋습니다', '해요': '합니다', '돼요': '됩니다', '쉬워요': '쉽습니다',
-    '않아요': '않습니다', '있어요': '있습니다', '없어요': '없습니다', '줄어요': '줄어듭니다',
-    '가요': '갑니다', '들어요': '듭니다', '맞춰요': '맞추는 것이 좋습니다',
-    '이에요': '입니다', '예요': '입니다', '고마워요': '감사합니다',
-    '지켰네요': '지켰습니다',
+    '해요': '한다', '돼요': '된다', '쉬워요': '쉽다',
+    '않아요': '않는다', '있어요': '있다', '없어요': '없다', '줄어요': '줄어든다',
+    '가요': '간다', '들어요': '든다',
+    '이에요': '이다', '예요': '이다', '고마워요': '고맙다',
+    '지켰네요': '지켰다',
   };
   return text.split(/(‘[^’]*’)/g).map((part, index) => index % 2 ? part : part
-    .replace('우리 또래는 몸이 바뀌면서 밤에 늦게 졸리기 쉬워요.', '청소년기에는 졸음을 느끼는 시각이 늦어질 수 있습니다.')
-    .replace(/무엇을 했나요\?/g, '무엇을 했는지 확인해 보는 것이 좋습니다.')
+    .replace('우리 또래는 몸이 바뀌면서 밤에 늦게 졸리기 쉬워요.', '청소년기에는 졸음을 느끼는 시각이 늦어질 수 있다.')
     .replace(/(?:꾸준히 지켰네요\. |절반(?: 넘게|을) 지켰어요\. )/g, '')
     .replace(/정말 (?:잘했어요|대단해요)!\s*/g, '')
-    .replace(/(고마워요|지켰네요|않아요|있어요|없어요|쉬워요|줄어요|들어요|맞춰요|이에요|예요|봐요|해요|돼요|가요|[았었였했됐랐뤘썼셨봤줬났겼켰렸졌갔]어요)(?=[.!?](?:\s|$))/g,
-      ending => endings[ending] || ending.replace(/어요$/, '습니다'))).join('').trim();
+    .replace(/(고마워요|지켰네요|않아요|있어요|없어요|쉬워요|줄어요|들어요|이에요|예요|해요|돼요|가요|[았었였했됐랐뤘썼셨봤줬났겼켰렸졌갔]어요)(?=[.!?](?:\s|$))/g,
+      ending => endings[ending] || ending.replace(/어요$/, '다'))).join('').trim();
 }
 
 function feedbackTeacherFinding_(finding) {
@@ -2271,7 +2287,7 @@ function feedbackTeacherFinding_(finding) {
   const [first, second] = metric.groups.map(group =>
     group.label + '(' + group.n + '일) 평균 ' + feedbackScoreText_(group.mean, false));
   return '아침 컨디션은 ' + first + ', ' + second +
-    (metric.result === 'similar' ? '으로 비슷했습니다.' : '입니다.');
+    (metric.result === 'similar' ? '으로 비슷했다.' : '이다.');
 }
 
 function buildFeedbackReport_(input) {
@@ -2369,10 +2385,14 @@ function buildFeedbackReport_(input) {
   if (teacher) {
     const total = record.data.total;
     sections[0].items = [
-      '분석 대상 ' + total + '일 중 ' + count + '일에 수면 또는 카페인 기록이 있습니다.' +
-      (streak >= 2 ? ' 가장 긴 연속 기록은 ' + streak + '일입니다.' : ''),
+      '분석 대상 ' + total + '일 중 ' + count + '일에 수면 또는 카페인 기록이 있다.' +
+      (streak >= 2 ? ' 가장 긴 연속 기록은 ' + streak + '일이다.' : ''),
     ];
-    for (const section of sections.slice(1)) section.items = section.items.map(feedbackTeacherSentence_);
+    for (const section of sections.slice(1)) {
+      if (section.id === 'action') {
+        if (summary.summaryReflection?.rule.plan) section.items = [summary.summaryReflection.rule.plan];
+      } else section.items = section.items.map(feedbackTeacherSentence_);
+    }
     const whySection = sections.find(section => section.id === 'why');
     if (whySection) whySection.title = '💡 참고 사항';
   }

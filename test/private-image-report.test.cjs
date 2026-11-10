@@ -230,9 +230,17 @@ test('teacher gateway accepts only supported report models and keeps the choice 
     const { model, reasoning, input } = JSON.parse(options.body);
     apiRequests.push({ model, reasoning });
     assert.doesNotMatch(input, /테스트 학생|fixture-owner/);
+    const coach = {
+      recordGood: '안 마신 날도 빠뜨리지 않고 표시했어요.',
+      recordReview: '음료를 마셨는지부터 그날에 남겨 봐요.',
+      praise: '카페인 양을 목표 안으로 조절했어요.',
+      difficulty: '수면시간이 기준에 맞지 않은 밤도 있었다.',
+      plan: '잠자리에 들기 전에 하던 일을 먼저 마무리해 봐요.',
+      memo: '잘 맞았던 취침 준비를 부담 없는 날에 다시 해 봐요.',
+    };
     const analyses = JSON.parse(input).map(evidence => ({
       ...Object.fromEntries(Object.entries(evidence).map(([field, fact]) => [
-        field, fact ? field === 'memo' ? '나에게 맞았던 좋은 습관을 앞으로도 이어 가요.' : '기록에 나타난 습관을 다음에도 살펴볼 수 있습니다.' : null,
+        field, fact ? coach[field] ?? '기록에서 확인한 항목을 보고서에 표시했다.' : null,
       ])),
       highlights: ['caffeineSleep'],
     }));
