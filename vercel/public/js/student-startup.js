@@ -34,9 +34,9 @@ if (typeof window !== 'undefined') {
 }
 
 export function createStudentRecordCache(storage) {
-  const key = 'student-record-snapshot-v1';
+  const key = 'student-record-snapshot-v2';
   const ownerKey = subject => subject && typeof subject.studentId === 'string' && subject.studentId && typeof subject.name === 'string' && subject.name ? JSON.stringify([subject.studentId, subject.name]) : null;
-  function clear() { try { storage.removeItem(key); } catch {} }
+  function clear() { try { storage.removeItem(key); storage.removeItem('student-record-snapshot-v1'); } catch {} }
   function read(subject) {
     const owner = ownerKey(subject);
     if (!owner) return null;

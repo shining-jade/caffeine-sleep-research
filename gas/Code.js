@@ -135,7 +135,7 @@ var SleepRecordPolicy = (function () {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
     if (!match) return null;
     const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-    return Number.isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) || formatDate(date) !== String(value) ? null : date;
   }
 
   function formatDate(date) {
@@ -157,6 +157,50 @@ var SleepRecordPolicy = (function () {
     return new Set((values || []).filter((value) => parseDate(value)));
   }
 
+  function shiftDate(value, days) {
+    const date = parseDate(value);
+    if (!date) return '';
+    date.setUTCDate(date.getUTCDate() + days);
+    return formatDate(date);
+  }
+
+  function sleepWakeDates(records, dateBasis, policy) {
+    if (dateBasis !== 'caffeine_day_next_wake') return records.map(record => policy.describe(record).wakeDate);
+    const ids = new Set(records.map(record => policy.describe(record).id));
+    const episodes = records.map((record, index) => {
+      if (policy.describe(record).id) return record;
+      let key = 'badge-unassigned:' + index;
+      while (ids.has(key)) key += ':';
+      ids.add(key);
+      return {...record, recordId:key};
+    });
+    const dates = [];
+    policy.days(episodes, { allowProtocolCandidate: true }).forEach(group => {
+      if (group.status !== 'ready') return;
+      const record = group.record;
+      const selectedMain = record.type === 'main' && record.classificationStatus === 'student_selected';
+      // The server supplies this provenance for older rows without type metadata.
+      // Count their verified wake for participation without classifying them as main sleep.
+      const legacyWake = record.type === 'uncollected'
+        && record.classificationStatus === 'uncollected' && record.typeSource === 'legacy_uncollected';
+      if (record.eligibleMain || selectedMain || legacyWake) {
+        dates.push(record.wakeDate);
+      }
+    });
+    return dates;
+  }
+
+  // Intake day D is paired with the following actual wake day D+1.
+  // Keep the daily activity card on actual calendar dates, separate from this pairing.
+  function pairedSets(input) {
+    const paired = input.dateBasis === 'caffeine_day_next_wake';
+    const today = paired && parseDate(input.today) ? input.today : '';
+    const caffeine = uniqueValidDates((input.caffeineDates || []).filter(d => !today || d <= today));
+    const wake = uniqueValidDates((input.sleepDates || []).filter(d => !today || d <= today));
+    const sleep = paired ? new Set([...wake].map(d => shiftDate(d, -1))) : wake;
+    return { caffeine, wake, sleep };
+  }
+
   function countsForRange(caffeine, sleep, start, end) {
     const dates = dateRange(start, end);
     let caffeineCount = 0;
@@ -174,8 +218,8 @@ var SleepRecordPolicy = (function () {
 
   function summarize(input) {
     const schedule = input.schedule || {};
-    const caffeine = uniqueValidDates(input.caffeineDates);
-    const sleep = uniqueValidDates(input.sleepDates);
+    const { caffeine, sleep, wake } = pairedSets(input);
+    const dailyWake = input.dailySleepDates ? uniqueValidDates(input.dailySleepDates) : wake;
     const completeDates = dateRange(schedule.start, schedule.end).filter((date) => caffeine.has(date) && sleep.has(date));
     const today = String(input.today || '');
     return {
@@ -183,8 +227,8 @@ var SleepRecordPolicy = (function () {
       totalComplete: completeDates.length,
       today: {
         caffeine: caffeine.has(today),
-        sleep: sleep.has(today),
-        complete: caffeine.has(today) && sleep.has(today),
+        sleep: dailyWake.has(today),
+        complete: caffeine.has(today) && dailyWake.has(today),
       },
       initial: countsForRange(caffeine, sleep, schedule.initialStart, schedule.initialEnd),
       action: countsForRange(caffeine, sleep, schedule.actionStart, schedule.actionEnd),
@@ -196,14 +240,16 @@ var SleepRecordPolicy = (function () {
     return /^\d{4}$/.test(value) ? value.charAt(1) : '';
   }
 
-  function milestoneProgress(completeDates, badges) {
+  function milestoneProgress(completeDates, badges, schedule) {
     const current = uniqueValidDates(completeDates).size;
-    return (badges || []).map((badge) => ({
-      ...badge,
-      current,
-      earned: current >= Number(badge.days || 0),
-      remaining: Math.max(0, Number(badge.days || 0) - current),
-    }));
+    const totalDays = schedule ? dateRange(schedule.start, schedule.end).length : 0;
+    return (badges || []).map((badge) => {
+      const ratio = Number(badge.ratio);
+      const days = badge.ratio !== undefined
+        ? (ratio > 0 && ratio <= 1 && totalDays > 0 ? Math.ceil(totalDays * ratio) : 0)
+        : Number(badge.days || 0);
+      return { ...badge, days, totalDays, current, earned: days > 0 && current >= days, remaining: Math.max(0, days - current) };
+    });
   }
 
   function studentStage(schedule, today) {
@@ -217,21 +263,22 @@ var SleepRecordPolicy = (function () {
 
   function weekProgress(input) {
     const today = parseDate(input.today);
-    if (!today) return { dates: [], states: [], complete: 0 };
+    if (!today) return { dates: [], states: [], complete: 0, totalDays: 0 };
     const monday = new Date(today);
     const day = monday.getUTCDay();
     monday.setUTCDate(monday.getUTCDate() - (day === 0 ? 6 : day - 1));
     const sunday = new Date(monday);
     sunday.setUTCDate(sunday.getUTCDate() + 6);
     const dates = dateRange(formatDate(monday), formatDate(sunday));
-    const caffeine = uniqueValidDates(input.caffeineDates);
-    const sleep = uniqueValidDates(input.sleepDates);
+    const inSchedule = date => !input.schedule || (date >= input.schedule.start && date <= input.schedule.end);
+    const { caffeine, sleep } = pairedSets(input);
     const states = dates.map((date) => {
+      if (!inSchedule(date)) return 'empty';
       if (caffeine.has(date) && sleep.has(date)) return 'complete';
       if (caffeine.has(date) || sleep.has(date)) return 'partial';
       return 'empty';
     });
-    return { dates, states, complete: states.filter((state) => state === 'complete').length };
+    return { dates, states, complete: states.filter((state) => state === 'complete').length, totalDays: dates.filter(inSchedule).length };
   }
 
   function mergeConfig(config) {
@@ -251,97 +298,301 @@ var SleepRecordPolicy = (function () {
     };
   }
 
+  // Explicit teacher draft only. Never activate v5 by merely loading the app.
+  function prepareUpgrade(config) {
+    const current = mergeConfig(config);
+    const starts = { '1': '2026-10-12', '2': '2026-10-16', '3': '2026-10-06', '4': '2026-10-06' };
+    const finals = { '1': '2026-11-12', '2': '2026-11-12', '3': '2026-11-11', '4': '2026-11-10' };
+    const actions = { '1': '2026-11-06', '2': '2026-11-06', '3': '2026-11-04', '4': '2026-11-04' };
+    const schedules = {};
+    Object.keys(starts).forEach(key => {
+      schedules[key] = { ...current.schedules[key], start: starts[key], end: shiftDate(finals[key], -1), actionStart: actions[key], actionEnd: shiftDate(finals[key], -1), finalClassDate: finals[key] };
+    });
+    return { ...current, version: 5, dateBasis: 'caffeine_day_next_wake', schedules,
+      badges: [...DEFAULT_CONFIG.badges.slice(0, 3), { id: 'journey_finish_v5', name: '건강기록 여정 마무리', image: '🏁', ratio: 0.8, bg: '#fefce8', color: '#a16207', auto: true }] };
+  }
+
   root.BadgeJourney = Object.freeze({
     DEFAULT_CONFIG,
     classFromStudentId,
     dateRange,
     mergeConfig,
     milestoneProgress,
+    prepareUpgrade,
+    shiftDate,
+    sleepWakeDates,
     studentStage,
     summarize,
     weekProgress,
   });
 })(globalThis);
 
+// ===== Private durable journey awards =====
+// These rows are private server state, never part of the public badge configuration.
+// Caller mutations run under dispatch's script lock. Existing rows are append-only.
+var JOURNEY_AWARD_HEADERS_ = ['studentId', 'name', 'awardId', 'awardJson', 'preservedAt'];
+var JOURNEY_HISTORY_HEADERS_ = ['studentId', 'name', 'stateJson', 'updatedAt'];
+function journeyOwner_(id, name) {
+  var normalized = normalizeOwnerId_(id), trimmed = String(name || '').trim();
+  return normalized && trimmed ? JSON.stringify([makeTeacherUniqueId(normalized, trimmed), trimmed]) : '';
+}
+function journeyMatchesOwner_(rowId, rowName, studentId, studentName) {
+  var owner = journeyOwner_(studentId, studentName);
+  return !!owner && owner === journeyOwner_(rowId, rowName);
+}
+function sleepRecordOwners_(rows) {
+  var owners = new Map();
+  rows.forEach(function(row) {
+    var id = SleepRecordPolicy.id(row[13]);
+    if (!id) return;
+    if (!owners.has(id)) owners.set(id, new Set());
+    owners.get(id).add(journeyOwner_(row[4], row[5]));
+  });
+  return owners;
+}
+function journeyRows_(ss, name, required) {
+  var sheet = ss.getSheetByName(name);
+  if (!sheet) { if (required) throw new Error('BADGE_SOURCE_UNAVAILABLE'); return []; }
+  if (sheet.getLastRow() === 0) { if (required) throw new Error('BADGE_SOURCE_UNAVAILABLE'); return []; }
+  var rows = sheet.getDataRange().getValues();
+  if (!Array.isArray(rows) || !rows.length) throw new Error('BADGE_SOURCE_UNAVAILABLE');
+  return rows;
+}
+function journeyHistoryState_(raw) {
+  var state = JSON.parse(raw);
+  if (!state || [1, 2].indexOf(state.version) < 0 || !Array.isArray(state.automaticIds) || !Array.isArray(state.teacherKeys)
+      || state.automaticIds.concat(state.teacherKeys).some(function(id) { return typeof id !== 'string' || !id; })
+      || state.confirmedAutomaticIds !== undefined && (!Array.isArray(state.confirmedAutomaticIds)
+        || state.confirmedAutomaticIds.some(function(id) { return typeof id !== 'string' || !id || state.automaticIds.indexOf(id) < 0; }))) throw new Error('INVALID_BADGE_HISTORY');
+  return state;
+}
+function journeyReliableIds_(state, reusedId) {
+  if (!state || state.version !== 2) return [];
+  if (reusedId && state.ownerBound !== true) return [];
+  return !state.legacyHistoryUncertain ? state.automaticIds : state.confirmedAutomaticIds || [];
+}
+function journeySources_(ss) {
+  var roster = journeyRows_(ss, 'students', true), caffeine = journeyRows_(ss, 'caffeine', true), sleep = journeyRows_(ss, 'sleep', true);
+  var histories = journeyRows_(ss, 'badge_celebrations', false), subjects = new Map(), enrolled = new Set();
+  function subject(id, name) {
+    var key = journeyOwner_(id, name);
+    if (!key) return null;
+    if (!subjects.has(key)) { var identity = JSON.parse(key); subjects.set(key, {studentId: identity[0], name: identity[1], caffeineTimes: [], sleepRecords: []}); }
+    return subjects.get(key);
+  }
+  roster.slice(1).forEach(function(row) { var entry = subject(row[4], row[3]); if (entry) enrolled.add(journeyOwner_(entry.studentId, entry.name)); });
+  caffeine.slice(1).forEach(function(row) { var entry = subject(row[4], row[5]); if (entry) entry.caffeineTimes.push(row[8]); });
+  var sleepRows = sleep.slice(1), metadata = preservedSleepMetadataIndex_(), recordOwners = sleepRecordOwners_(sleepRows);
+  sleepRows.forEach(function(row) {
+    var entry = subject(row[4], row[5]);
+    if (!entry) return;
+    var record = Object.assign(preservedSleepRecordForPolicy_(row), {
+      memo:row[12], smartphone:row[14], activity:row[15], latency:row[16], awakenings:row[17], daytime:row[18]
+    }, preservedSleepMetadataView_(row, preservedSleepMetadataForRow_(row, metadata)));
+    if (recordOwners.get(SleepRecordPolicy.id(row[13]))?.size > 1) record.identityConflict = true;
+    entry.sleepRecords.push(record);
+  });
+  if (histories.length && JOURNEY_HISTORY_HEADERS_.some(function(h, i) { return histories[0][i] !== h; })) throw new Error('INVALID_BADGE_HISTORY_HEADER');
+  histories.slice(1).forEach(function(row, i) {
+    if (row.every(function(value) { return value === ''; })) return;
+    var entry = subject(row[0], row[1]);
+    if (!entry || entry.history) throw new Error('INVALID_BADGE_HISTORY_OWNER');
+    entry.history = journeyHistoryState_(row[2]); entry.historyRow = i + 2;
+  });
+  var ownersPerId = new Map();
+  subjects.forEach(function(entry) { ownersPerId.set(entry.studentId,(ownersPerId.get(entry.studentId) || 0) + 1); });
+  subjects.forEach(function(entry) { entry.reusedId = ownersPerId.get(entry.studentId) > 1; });
+  return {subjects:subjects, enrolled:enrolled};
+}
+function journeyLedger_(ss) {
+  var rows = journeyRows_(ss, 'badge_journey_awards', false), entries = new Map();
+  if (rows.length && JOURNEY_AWARD_HEADERS_.some(function(h, i) { return rows[0][i] !== h; })) throw new Error('INVALID_BADGE_LEDGER_HEADER');
+  rows.slice(1).forEach(function(row) {
+    if (row.every(function(value) { return value === ''; })) return;
+    var owner = journeyOwner_(row[0], row[1]), award = JSON.parse(row[3]), key = JSON.stringify([owner, row[2]]);
+    if (!owner || !row[2] || !award || award.awardId !== row[2] || journeyOwner_(award.studentId, award.studentName) !== owner
+        || award.kind !== 'automatic' || !award.preserved || !award.seenAt || entries.has(key)) throw new Error('INVALID_BADGE_LEDGER');
+    entries.set(key, award);
+  });
+  return entries;
+}
+function journeyPersist_(ss, entries, candidates) {
+  var missing = new Map();
+  candidates.forEach(function(award) {
+    var key = JSON.stringify([journeyOwner_(award.studentId, award.studentName), award.awardId]);
+    if (!entries.has(key) && !missing.has(key)) missing.set(key, award);
+  });
+  if (!missing.size) return entries;
+  var sheet = ss.getSheetByName('badge_journey_awards') || ss.insertSheet('badge_journey_awards');
+  if (sheet.getLastRow() === 0) sheet.appendRow(JOURNEY_AWARD_HEADERS_);
+  var rows = Array.from(missing.values()).map(function(a) { return [a.studentId, a.studentName, a.awardId, JSON.stringify(a), a.preservedAt]; });
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, JOURNEY_AWARD_HEADERS_.length).setValues(rows);
+  SpreadsheetApp.flush();
+  var verified = journeyLedger_(ss);
+  entries.forEach(function(award, key) { if (!verified.has(key) || JSON.stringify(verified.get(key)) !== JSON.stringify(award)) throw new Error('BADGE_PRESERVATION_NOT_VERIFIED'); });
+  missing.forEach(function(award, key) { if (!verified.has(key) || JSON.stringify(verified.get(key)) !== JSON.stringify(award)) throw new Error('BADGE_PRESERVATION_NOT_VERIFIED'); });
+  return verified;
+}
+function journeyEarned_(entry, cfg) {
+  var schedule = cfg.schedules[BadgeJourney.classFromStudentId(entry.studentId)] || cfg.schedules[cfg.defaultClass || '3'];
+  var caffeineDates = entry.caffeineTimes.map(function(time) {
+    return cfg.dateBasis === 'caffeine_day_next_wake' ? SleepRecordPolicy.date(time) : recordDateText_(time);
+  });
+  var sleepDates = BadgeJourney.sleepWakeDates(entry.sleepRecords, cfg.dateBasis, SleepRecordPolicy);
+  var summary = BadgeJourney.summarize({caffeineDates:caffeineDates, sleepDates:sleepDates, schedule:schedule, today:getKSTDate(), dateBasis:cfg.dateBasis});
+  return {schedule:schedule, badges:BadgeJourney.milestoneProgress(summary.completeDates, cfg.badges, schedule).filter(function(b) { return b.auto === true && b.earned && typeof b.id === 'string' && b.id; })};
+}
+function journeyAward_(entry, badge, cfg, schedule, source) {
+  var stamp = new Date().toISOString();
+  return Object.assign({}, badge, {awardId:badge.id, badgeId:badge.id, kind:'automatic', preserved:true,
+    studentId:entry.studentId, studentName:entry.name, grantedAt:stamp, seenAt:stamp, preservedAt:stamp,
+    // Observation time is not a fabricated historical earning timestamp.
+    earnedAt:null, confirmationSource:source, legacyHistoryUncertain:!!(entry.history && (entry.history.version === 1 || entry.history.legacyHistoryUncertain)),
+    badge:JSON.parse(JSON.stringify(badge)), criteria:{version:cfg.version, dateBasis:cfg.dateBasis || 'same_day', challengeName:cfg.challengeName, schedule:schedule}});
+}
+function journeyCandidates_(entry, cfg, computed, source) {
+  var reliable = new Set(journeyReliableIds_(entry.history,entry.reusedId));
+  var candidates = computed.badges.map(function(badge) {
+    return journeyAward_(entry, badge, cfg, computed.schedule, source === 'claim' && !reliable.has(badge.id) ? 'claim' : 'computed');
+  });
+  var legacy = BadgeJourney.mergeConfig({});
+  reliable.forEach(function(id) {
+    if (candidates.some(function(a) { return a.awardId === id; })) return;
+    var badge = cfg.badges.concat(legacy.badges).find(function(b) { return b.id === id; });
+    if (!badge) badge = {id:id, name:id, auto:true, metadataUnavailable:true};
+    candidates.push(journeyAward_(entry, badge, cfg, computed.schedule, 'notification_v2'));
+  });
+  return candidates;
+}
+function preserveJourneyBeforeConfig_(ss, cfg) {
+  var sources = journeySources_(ss), entries = journeyLedger_(ss), candidates = [];
+  sources.subjects.forEach(function(entry) { candidates = candidates.concat(journeyCandidates_(entry, cfg, journeyEarned_(entry, cfg))); });
+  return journeyPersist_(ss, entries, candidates);
+}
+function journeyStudentAwards_(ss, studentId, studentName) {
+  // No ID-only lookup: numeric IDs can be reused or shared by a different named person.
+  var key = journeyOwner_(studentId, studentName);
+  if (!key) return [];
+  return Array.from(journeyLedger_(ss).values()).filter(function(a) { return journeyOwner_(a.studentId, a.studentName) === key; });
+}
+function journeyValidateConfig_(config) {
+  var version = Number(config.version || 0);
+  if (version < 5) return; // Existing v4/custom configurations retain their prior contract.
+  function invalid() { throw new Error('INVALID_BADGE_CONFIG'); }
+  if (version !== 5 || config.dateBasis !== 'caffeine_day_next_wake') invalid();
+  var classes = ['1','2','3','4'];
+  if (!config.schedules || classes.some(function(key) { return !config.schedules[key]; })
+      || Object.keys(config.schedules).some(function(key) { return classes.indexOf(key) < 0; })
+      || config.defaultClass !== undefined && classes.indexOf(String(config.defaultClass)) < 0) invalid();
+  function validDate(value) {
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    var date = new Date(value + 'T00:00:00Z');
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }
+  classes.forEach(function(key) {
+    var schedule = config.schedules[key];
+    if (['start','end','initialStart','initialEnd','actionStart','actionEnd','finalClassDate'].some(function(field) { return !validDate(schedule[field]); })
+        || schedule.start > schedule.end || schedule.initialStart < schedule.start || schedule.initialEnd > schedule.end
+        || schedule.initialStart > schedule.initialEnd || schedule.actionStart < schedule.start || schedule.actionEnd > schedule.end
+        || schedule.actionStart > schedule.actionEnd || schedule.initialEnd >= schedule.actionStart
+        || BadgeJourney.shiftDate(schedule.end, 1) !== schedule.finalClassDate) invalid();
+  });
+  if (!Array.isArray(config.badges) || config.badges.length !== 4) invalid();
+  var required = {journey_3:3, journey_7:7, journey_14:14, journey_finish_v5:0}, seen = new Set();
+  config.badges.forEach(function(badge) {
+    if (!Object.prototype.hasOwnProperty.call(required, badge.id) || seen.has(badge.id) || badge.auto !== true) invalid();
+    seen.add(badge.id);
+    if (badge.id === 'journey_finish_v5') { if (Number(badge.ratio) !== 0.8) invalid(); }
+    else if (Number(badge.days) !== required[badge.id] || badge.ratio !== undefined) invalid();
+  });
+}
+function journeyPublicConfig_(config) {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) throw new Error('INVALID_BADGE_CONFIG');
+  function fields(input, keys) {
+    var result = {};
+    keys.forEach(function(key) {
+      if (Object.prototype.hasOwnProperty.call(input, key) && ['string','number','boolean'].indexOf(typeof input[key]) >= 0) result[key] = input[key];
+    });
+    return result;
+  }
+  var result = fields(config, ['version','challengeName','challengeStart','challengeEnd','dateBasis','defaultClass']);
+  if (typeof config.configSaved === 'boolean') result.configSaved = config.configSaved;
+  if (Array.isArray(config.badges)) result.badges = config.badges.map(function(badge) {
+    return fields(badge, ['id','name','image','bg','color','type','method','days','auto','ratio','description']);
+  });
+  if (config.schedules && typeof config.schedules === 'object' && !Array.isArray(config.schedules)) {
+    result.schedules = {};
+    Object.keys(config.schedules).filter(function(key) { return /^[1-9][0-9]*$/.test(key); }).forEach(function(key) {
+      result.schedules[key] = fields(config.schedules[key], ['start','end','initialStart','initialEnd','actionStart','actionEnd','finalClassDate']);
+    });
+  }
+  return result;
+}
+
 // ===== apps-script/BadgeCelebrations.gs =====
 // Called only through authenticated student dispatch, which holds the script lock.
 // Consume-before-response deliberately provides at-most-once authorization, not guaranteed delivery.
 function claimBadgeCelebrations(studentId, studentName) {
   try {
-    var ss = getSpreadsheet_();
-    var id = normalizeOwnerId_(studentId), name = String(studentName || '').trim();
-    var roster = ss.getSheetByName('students');
-    if (!id || !name || !roster || !roster.getDataRange().getValues().slice(1).some(function(row) {
-      var rowId = normalizeOwnerId_(row[4]), rowName = String(row[3] || '').trim();
-      return rowName === name && (rowId === id || rowId + '_' + rowName === id);
-    })) throw new Error('INVALID_SUBJECT');
-    var settings = getChallengeBadgeConfig();
+    var ss = getSpreadsheet_(), key = journeyOwner_(studentId, studentName), sources = journeySources_(ss);
+    if (!key || !sources.enrolled.has(key)) throw new Error('INVALID_SUBJECT');
+    var entry = sources.subjects.get(key), id = entry.studentId, name = entry.name;
+    var settings = journeyCurrentConfig_();
     if (!settings || settings.success !== true || !settings.config) throw new Error('CONFIG_UNAVAILABLE');
-    var cfg = BadgeJourney.mergeConfig(settings.config);
-    var schedule = cfg.schedules[BadgeJourney.classFromStudentId(id)] || cfg.schedules[cfg.defaultClass || '3'];
-    var caffeine = getCaffeineLogs(id, undefined, undefined, true);
-    var sleep = getSleepLogs(id, undefined, undefined, true);
-    var teacher = getTeacherAwardsForStudent(id);
-    if (!Array.isArray(caffeine) || !Array.isArray(sleep) || !teacher || teacher.success !== true || !Array.isArray(teacher.awards)) throw new Error('READ_UNAVAILABLE');
-    var summary = BadgeJourney.summarize({
-      caffeineDates: caffeine.map(function(log) { return String(log.time || '').slice(0, 10); }),
-      sleepDates: sleep.map(function(log) { return SleepRecordPolicy.describe(log).wakeDate; }),
-      schedule: schedule
-    });
-    var earned = BadgeJourney.milestoneProgress(summary.completeDates, cfg.badges).filter(function(badge) {
-      return badge.auto === true && badge.earned && typeof badge.id === 'string' && badge.id;
-    });
-    var headers = ['studentId', 'name', 'stateJson', 'updatedAt'];
-    var sheet = ss.getSheetByName('badge_celebrations');
-    if (!sheet) sheet = ss.insertSheet('badge_celebrations');
-    // A creation interrupted before the header write leaves an empty sheet; retry safely.
-    if (sheet.getLastRow() === 0) sheet.appendRow(headers);
-    var rows = sheet.getDataRange().getValues();
-    if (headers.some(function(h, i) { return rows[0][i] !== h; })) throw new Error('INVALID_STATE_HEADER');
-    var matches = [];
-    for (var i = 1; i < rows.length; i++) if (String(rows[i][0]) === id && String(rows[i][1]) === name) matches.push(i);
-    if (matches.length > 1) throw new Error('DUPLICATE_STATE');
-    var initialized = matches.length === 0;
-    var state = initialized ? { version: 2, automaticIds: [], teacherKeys: [] } : JSON.parse(rows[matches[0]][2]);
-    if (!state || [1, 2].indexOf(state.version) < 0 || !Array.isArray(state.automaticIds) || !Array.isArray(state.teacherKeys)
-        || state.automaticIds.concat(state.teacherKeys).some(function(key) { return typeof key !== 'string' || !key; })) throw new Error('INVALID_STATE');
-    // Legacy v1 combined silent baseline and consumed claims; do not replay ambiguous IDs.
-    var legacyHistoryUncertain = state.version === 1 || state.legacyHistoryUncertain === true;
-    state.version = 2; state.legacyHistoryUncertain = legacyHistoryUncertain;
+    var cfg = BadgeJourney.mergeConfig(settings.config), computed = journeyEarned_(entry, cfg);
+    var teacher = getTeacherAwardsForStudent(id, name);
+    if (!teacher || teacher.success !== true || !Array.isArray(teacher.awards)) throw new Error('READ_UNAVAILABLE');
+    var existing = journeyLedger_(ss);
+    var historical = Array.from(existing.values()).filter(function(award) { return journeyOwner_(award.studentId, award.studentName) === key; });
+    var initialized = !entry.history, state = entry.history || {version:2, automaticIds:[], teacherKeys:[]};
+    var legacyHistoryUncertain = state.version === 1 || state.legacyHistoryUncertain === true
+      || (!initialized && entry.reusedId && state.ownerBound !== true);
+    var confirmed = new Set(journeyReliableIds_(state,entry.reusedId));
+    journeyPersist_(ss, existing, journeyCandidates_(entry, cfg, computed, 'claim'));
     var autoIds = new Set(state.automaticIds), teacherKeys = new Set(state.teacherKeys), items = [];
-    var previouslyConsumedAutomatic = new Set(state.automaticIds);
+    historical.forEach(function(a) {
+      if (a.confirmationSource !== 'claim') autoIds.add(a.awardId);
+      confirmed.add(a.awardId);
+    });
+    var previouslyConsumedAutomatic = new Set(Array.from(autoIds));
     function matchesMilestone(award, badge) {
-      return award.awardId === badge.id || award.badgeId === badge.id
-        || (award.name && String(award.name).trim() === String(badge.name).trim());
+      var id = award.awardId || award.badgeId;
+      return id ? id === badge.id : !!award.name && String(award.name).trim() === String(badge.name).trim();
     }
+    var earned = new Map(computed.badges.map(function(badge) { return [badge.id, badge]; }));
+    historical.forEach(function(a) {
+      if (a.confirmationSource === 'claim') earned.set(a.awardId, a);
+    });
     earned.forEach(function(badge) {
-      var hasTeacherVersion = teacher.awards.some(function(award) { return matchesMilestone(award, badge); });
+      var hasTeacherVersion = teacher.awards.some(function(award) { return award.kind !== 'automatic' && matchesMilestone(award, badge); });
       if (!autoIds.has(badge.id) && !hasTeacherVersion) items.push({
-        kind: 'automatic', claimKey: 'automatic:' + badge.id, awardId: badge.id,
-        name: badge.name, image: badge.image, bg: badge.bg, color: badge.color,
-        message: '기록을 이어 온 나에게 박수를 보내요!'
+        kind:'automatic', claimKey:'automatic:' + badge.id, awardId:badge.id,
+        name:badge.name, image:badge.image, bg:badge.bg, color:badge.color,
+        message:'기록을 이어 온 나에게 박수를 보내요!'
       });
-      autoIds.add(badge.id);
+      autoIds.add(badge.id); confirmed.add(badge.id);
     });
-    teacher.awards.forEach(function(award) {
-      var key = JSON.stringify([award.awardId || award.badgeId || '', award.grantedAt || '', award.name || '']);
-      var automaticAlreadyConsumed = earned.some(function(badge) {
-        return previouslyConsumedAutomatic.has(badge.id) && matchesMilestone(award, badge);
+    teacher.awards.filter(function(a) { return a.kind !== 'automatic'; }).forEach(function(award) {
+      var teacherKey = JSON.stringify([award.awardId || award.badgeId || '', award.grantedAt || '', award.name || '']);
+      var automaticAlreadyConsumed = Array.from(earned.values()).concat(historical).some(function(badge) { return previouslyConsumedAutomatic.has(badge.id || badge.awardId) && matchesMilestone(award, badge); });
+      if (!award.seenAt && !teacherKeys.has(teacherKey) && !automaticAlreadyConsumed) items.push({
+        kind:'teacher', claimKey:'teacher:' + teacherKey, awardId:award.awardId || award.badgeId || '',
+        name:award.name, image:award.image, bg:award.bg, color:award.color, message:award.message, grantedAt:award.grantedAt
       });
-      if (!award.seenAt && !teacherKeys.has(key) && !automaticAlreadyConsumed) items.push({
-        kind: 'teacher', claimKey: 'teacher:' + key, awardId: award.awardId || award.badgeId || '',
-        name: award.name, image: award.image, bg: award.bg, color: award.color,
-        message: award.message, grantedAt: award.grantedAt
-      });
-      teacherKeys.add(key);
+      teacherKeys.add(teacherKey);
     });
-    state.automaticIds = Array.from(autoIds); state.teacherKeys = Array.from(teacherKeys);
-    var row = initialized ? sheet.getLastRow() + 1 : matches[0] + 1;
-    sheet.getRange(row, 1, 1, 4).setValues([[id, name, JSON.stringify(state), new Date().toISOString()]]);
+    state.version = 2; state.legacyHistoryUncertain = legacyHistoryUncertain; state.ownerBound = true;
+    state.automaticIds = Array.from(autoIds); state.confirmedAutomaticIds = Array.from(confirmed); state.teacherKeys = Array.from(teacherKeys);
+    var sheet = ss.getSheetByName('badge_celebrations') || ss.insertSheet('badge_celebrations');
+    if (sheet.getLastRow() === 0) sheet.appendRow(JOURNEY_HISTORY_HEADERS_);
+    var row = entry.historyRow || sheet.getLastRow() + 1, serialized = JSON.stringify(state);
+    sheet.getRange(row, 1, 1, 4).setValues([[id, name, serialized, new Date().toISOString()]]);
     SpreadsheetApp.flush();
-    return { success: true, initialized: initialized, legacyHistoryUncertain: legacyHistoryUncertain, items: items };
+    var saved = sheet.getRange(row, 1, 1, 4).getValues()[0];
+    if (journeyOwner_(saved[0], saved[1]) !== key || saved[2] !== serialized) throw new Error('BADGE_CLAIM_NOT_VERIFIED');
+    return {success:true, initialized:initialized, legacyHistoryUncertain:legacyHistoryUncertain, items:items};
   } catch (_) {
-    return { success: false, error: 'BADGE_CELEBRATION_UNAVAILABLE' };
+    return {success:false, error:'BADGE_CELEBRATION_UNAVAILABLE'};
   }
 }
 
@@ -533,7 +784,7 @@ function safeLog_() {}
 function normalizeOwnerId_(value) {
   if (value === null || value === undefined || value === '') return '';
   if (typeof value === 'number') return String(Math.round(value)).trim();
-  return String(value).replace(/\.0+$/, '').trim();
+  return String(value).trim().replace(/\.0+$/, '');
 }
 
 function ownerMatchesSubject_(rowId, rowName, subject) {
@@ -3250,7 +3501,11 @@ function dispatchStudentAction_(action, params, subject, diagnostic) {
   if (!rule) throw new Error('REQUEST_REJECTED');
   var safeParams = params.slice();
   if (rule === 'identityFirst') safeParams[0] = subject.studentId;
-  if (action === 'getTeacherMessages') safeParams[1] = subject.name;
+  if (action === 'getTeacherMessages' || action === 'getTeacherAwardsForStudent') safeParams[1] = subject.name;
+  if (action === 'getCaffeineLogs' || action === 'getSleepLogs') safeParams = [subject.studentId, safeParams[1], safeParams[2], false, subject.name];
+  if (action === 'getStudentBootstrap') safeParams = [subject.studentId, subject.name];
+  if (action === 'getStats') safeParams = [subject.studentId, false, subject.name];
+  if (action === 'getFilteredStats') safeParams = [subject.studentId, safeParams[1], subject.name];
   if (rule === 'identityPair') { safeParams[0] = subject.studentId; safeParams[1] = subject.name; }
   if (rule === 'identityPayload' || rule === 'caffeinePayload' || rule === 'sleepPayload') {
     if (!safeParams[0] || typeof safeParams[0] !== 'object' || Array.isArray(safeParams[0])) throw new Error('REQUEST_REJECTED');
@@ -3745,12 +4000,12 @@ function getWeightData(studentId, strictRead) {
 }
 
 // 학생 앱 재실행 시 필요한 초기 데이터를 한 번의 게이트웨이 요청으로 조회
-function getStudentBootstrap(studentId) {
+function getStudentBootstrap(studentId, studentName) {
   return {
     weight: getWeightData(studentId, true),
-    stats: getStats(studentId, true),
-    caffeineLogs: getCaffeineLogs(studentId, null, null, true),
-    sleepLogs: getSleepLogs(studentId, null, null, true),
+    stats: getStats(studentId, true, studentName),
+    caffeineLogs: getCaffeineLogs(studentId, null, null, true, studentName),
+    sleepLogs: getSleepLogs(studentId, null, null, true, studentName),
     sleepPolicyVersion: SleepRecordPolicy.version,
     sleepSettings: getSleepSettings(true)
   };
@@ -3891,7 +4146,7 @@ function deleteSleepData(id) {
   return deletePreservedSleep_(id);
 }
 
-function getCaffeineLogs(studentId, startDate, endDate, strictRead) {
+function getCaffeineLogs(studentId, startDate, endDate, strictRead, studentName) {
   try {
     const ss = getSpreadsheet_();
     const sheet = ss.getSheetByName("caffeine");
@@ -3915,7 +4170,7 @@ function getCaffeineLogs(studentId, startDate, endDate, strictRead) {
       const row = data[i];
       const rowStudentId = String(row[4]).trim(); // E열: 전체학번
 
-      if (rowStudentId === normalizeId(studentId)) {
+      if (studentName === undefined ? rowStudentId === normalizeId(studentId) : journeyMatchesOwner_(row[4], row[5], studentId, studentName)) {
         const intakeTime = row[8]; // I열: 섭취시간
         let timeStr = '';
 
@@ -3961,7 +4216,7 @@ function getCaffeineLogs(studentId, startDate, endDate, strictRead) {
 }
 
 // 수면 로그 조회 (강화된 디버깅 버전)
-function getSleepLogs(studentId, startDate, endDate, strictRead) {
+function getSleepLogs(studentId, startDate, endDate, strictRead, studentName) {
   try {
     safeLog_(`=== getSleepLogs 시작 ===`);
     safeLog_(`입력 파라미터:`);
@@ -3992,6 +4247,7 @@ function getSleepLogs(studentId, startDate, endDate, strictRead) {
 
     const logs = [];
     const sleepMetadataIndex = preservedSleepMetadataIndex_();
+    const recordOwners = sleepRecordOwners_(data);
     let matchCount = 0;
     let skipCount = 0;
 
@@ -4005,24 +4261,11 @@ function getSleepLogs(studentId, startDate, endDate, strictRead) {
       }
 
       // 학번 비교
-      if (rowStudentId === normalizeId(studentId)) {
+      if (studentName === undefined ? rowStudentId === normalizeId(studentId) : journeyMatchesOwner_(row[4], row[5], studentId, studentName)) {
         matchCount++;
         safeLog_(`  ✓ Row ${i + 2} 매칭됨!`);
 
-        const sleepDate = row[6]; // G열: 날짜
-        let dateStr = '';
-
-        // 날짜 형식 처리
-        if (sleepDate instanceof Date) {
-          dateStr = Utilities.formatDate(sleepDate, "Asia/Seoul", "yyyy-MM-dd");
-          safeLog_(`    날짜(Date): ${dateStr}`);
-        } else if (sleepDate) {
-          dateStr = String(sleepDate);
-          safeLog_(`    날짜(String): ${dateStr}`);
-        } else {
-          safeLog_(`    ⚠️ 날짜가 비어있음`);
-          dateStr = '';
-        }
+        const dateStr = recordDateText_(row[6]) || String(row[6] || '');
 
         // 날짜 필터링
         if (startDate && endDate) {
@@ -4033,28 +4276,9 @@ function getSleepLogs(studentId, startDate, endDate, strictRead) {
           }
         }
 
-        // 시간 데이터 처리
-        let startTime = '';
-        let endTime = '';
-
-        if (row[7] instanceof Date) {
-          startTime = Utilities.formatDate(row[7], "Asia/Seoul", "HH:mm");
-        } else {
-          startTime = String(row[7] || '');
-        }
-
-        let wakeDateStr = '';
-        if (row[8] instanceof Date) {
-          wakeDateStr = Utilities.formatDate(row[8], "Asia/Seoul", "yyyy-MM-dd");
-        } else {
-          wakeDateStr = String(row[8] || '').substring(0, 10);
-        }
-
-        if (row[9] instanceof Date) {
-          endTime = Utilities.formatDate(row[9], "Asia/Seoul", "HH:mm");
-        } else {
-          endTime = String(row[9] || '');
-        }
+        const startTime = recordTimeText_(row[7]) || String(row[7] || '');
+        const wakeDateStr = recordDateText_(row[8]) || String(row[8] || '');
+        const endTime = recordTimeText_(row[9]) || String(row[9] || '');
 
         // 로그 객체 생성
         const sleepMeta = preservedSleepMetadataForRow_(row, sleepMetadataIndex);
@@ -4079,7 +4303,7 @@ function getSleepLogs(studentId, startDate, endDate, strictRead) {
 
         safeLog_(`    로그 생성: ${JSON.stringify(log)}`);
         Object.assign(log, preservedSleepMetadataView_(row, sleepMeta));
-        if (data.filter(function(other) { return SleepRecordPolicy.id(other[13]) === SleepRecordPolicy.id(row[13]); }).length > 1) log.identityConflict = true;
+        if (recordOwners.get(SleepRecordPolicy.id(row[13]))?.size > 1) log.identityConflict = true;
         logs.push(log);
       }
     }
@@ -4185,20 +4409,20 @@ function getDashboardData(studentId, startDate, endDate) {
 }
 
 // 통계 조회 (최근 7일)
-function getStats(studentId, strictRead) {
+function getStats(studentId, strictRead, studentName) {
   try {
     if(strictRead){const ss=getSpreadsheet_();if(!ss.getSheetByName('caffeine')||!ss.getSheetByName('sleep'))throw new Error('BOOTSTRAP_SHEET_MISSING');}
-    return getFilteredStats(studentId,getKSTDate());
+    return getFilteredStats(studentId,getKSTDate(),studentName);
   } catch(error) {
     if(strictRead)throw error;
     return {todayTotal:0,todayHasRecord:false,labels:[],caffeineData:[],caffeineHasData:[],sleepData:[]};
   }
 }
 
-function getFilteredStats(studentId, endDateStr) {
+function getFilteredStats(studentId, endDateStr, studentName) {
   const end=recordDateText_(endDateStr);
   if(!end)throw new Error('분석 기간을 다시 선택해주세요.');
-  const data=getWeeklyDetailedData(studentId,shiftRecordDate_(end,-6),end);
+  const data=getWeeklyDetailedData(studentId,shiftRecordDate_(end,-6),end,studentName);
   const last=data.dailyRecords[data.dailyRecords.length-1];
   return {todayTotal:last?.caffeine ?? null,todayHasRecord:!!last && last.caffeineStatus!=='missing',todayCaffeineStatus:last?.caffeineStatus || 'missing',chartEndDate:end,
     labels:data.dailyRecords.map(r=>r.date.slice(5).replace('-','/')),
@@ -4262,7 +4486,7 @@ function debugCurrentCode(studentId) {
 // 주간 상세 데이터 수집 (카페인/수면 개별 카운트)
 // ============================================
 
-function getWeeklyDetailedData(studentId, startDate, endDate) {
+function getWeeklyDetailedData(studentId, startDate, endDate, studentName) {
   const ss=getSpreadsheet_(),dates=[];
   const end=endDate||Utilities.formatDate(new Date(),'Asia/Seoul','yyyy-MM-dd'),start=startDate||shiftRecordDate_(end,-6);
   const startTime=Date.parse(start+'T00:00:00Z'),endTime=Date.parse(end+'T00:00:00Z');
@@ -4270,8 +4494,10 @@ function getWeeklyDetailedData(studentId, startDate, endDate) {
   for(let day=start;day<=end;day=shiftRecordDate_(day,1))dates.push(day);
   const caffeineSheet=ss.getSheetByName('caffeine');
   // Load actual intake instants before applying the calendar-day analysis filter.
-  const caffeineRows=(caffeineSheet?caffeineSheet.getDataRange().getValues().slice(1):[]).filter(row=>normalizeOwnerId_(row[4])===normalizeOwnerId_(studentId)).map(row=>({id:String(row[9]||''),time:row[8],amount:row[7]}));
-  const caffeine=SleepRecordPolicy.caffeineDays(caffeineRows),allSleep=getSleepLogs(studentId,null,null,true),sleep=SleepRecordPolicy.days(allSleep);
+  const caffeineRows=(caffeineSheet?caffeineSheet.getDataRange().getValues().slice(1):[])
+    .filter(row=>studentName === undefined ? normalizeOwnerId_(row[4])===normalizeOwnerId_(studentId) : journeyMatchesOwner_(row[4],row[5],studentId,studentName))
+    .map(row=>({id:String(row[9]||''),time:row[8],amount:row[7]}));
+  const caffeine=SleepRecordPolicy.caffeineDays(caffeineRows),allSleep=getSleepLogs(studentId,null,null,true,studentName),sleep=SleepRecordPolicy.days(allSleep);
   const selection=SleepRecordPolicy.selectPeriod(allSleep,{basis:'target',start:start,end:end});
   const summarizeIds=rows=>new Set(rows.map((r,i)=>SleepRecordPolicy.id(r.id)||'unassigned-source-row:'+i)).size;
   const sleepEpisodes=selection.records.map(record=>{
@@ -4471,7 +4697,7 @@ function generateAIHealthReport(studentId, name, weekCaffeineTotal, avgCaffeine,
       analysis: buildRecordFeedback_({ feedbackEngine: engine }), sections: engine.sections,
       featuredFindingIds: engine.featuredFindingIds, references: engine.references };
   }
-  const data=getWeeklyDetailedData(studentId,period.start,period.end);
+  const data=getWeeklyDetailedData(studentId,period.start,period.end,name);
   return {success:true,source:'Rule',policyVersion:'2026-10-14',recordedDays:data.recordedDays,
     analysis:buildRecordFeedback_(data,Number(limit)||150,false,period.start+' ~ '+period.end)};
 }
@@ -4800,11 +5026,21 @@ function saveBadgeConfig(configJson) {
  * }
  */
 function getChallengeBadgeConfig() {
+  const current = journeyCurrentConfig_();
+  if (!current.success) return current;
+  try {
+    return {success:true, config:journeyPublicConfig_(current.config), revision:current.revision};
+  } catch (_) {
+    return {success:false, error:'BADGE_CONFIG_UNAVAILABLE'};
+  }
+}
+
+function journeyCurrentConfig_() {
   try {
     const props = PropertiesService.getScriptProperties();
     const raw = props.getProperty('BADGE_CONFIG_V3');
     if (raw) {
-      return { success: true, config: JSON.parse(raw) };
+      return { success: true, config: JSON.parse(raw), revision:syncHash_(['BADGE_CONFIG_V3',raw]) };
     }
     // v3 없으면 v2에서 변환 (하위 호환)
     const v2Raw = props.getProperty('BADGE_CONFIG_V2');
@@ -4827,12 +5063,13 @@ function getChallengeBadgeConfig() {
           };
         })
       };
-      return { success: true, config: v3 };
+      return { success: true, config: v3, revision:syncHash_(['BADGE_CONFIG_V2',v2Raw]) };
     }
     // 기본값 (미설정)
     return {
       success: true,
-      config: { challengeName: '', challengeStart: '', challengeEnd: '', badges: [] }
+      config: { challengeName: '', challengeStart: '', challengeEnd: '', badges: [] },
+      revision: syncHash_(['BADGE_CONFIG_DEFAULT'])
     };
   } catch(e) {
     return { success: false, error: e.message };
@@ -4843,15 +5080,27 @@ function getChallengeBadgeConfig() {
  * 챌린지 뱃지 설정 v3 저장
  * @param {Object} config  { challengeName, challengeStart, challengeEnd, badges: [...] }
  */
-function saveChallengeBadgeConfig(config) {
+function saveChallengeBadgeConfig(config, expectedRevision) {
+  var phase = 'validation';
   try {
-    const props = PropertiesService.getScriptProperties();
-    props.setProperty('BADGE_CONFIG_V3', JSON.stringify(config));
-    safeLog_('✅ saveChallengeBadgeConfig 저장 완료: ' + config.challengeName);
-    return { success: true };
-  } catch(e) {
-    safeLog_('❌ saveChallengeBadgeConfig 오류: ' + e.message);
-    return { success: false, error: e.message };
+    var next = journeyPublicConfig_(config);
+    journeyValidateConfig_(next);
+    next.configSaved = true;
+    phase = 'preservation';
+    var current = journeyCurrentConfig_();
+    if (!current || !current.success || !current.config) throw new Error('BADGE_CONFIG_UNAVAILABLE');
+    if (expectedRevision !== current.revision) return {success:false, error:'BADGE_CONFIG_CONFLICT'};
+    preserveJourneyBeforeConfig_(getSpreadsheet_(), BadgeJourney.mergeConfig(current.config));
+    phase = 'activation';
+    var props = PropertiesService.getScriptProperties(), serialized = JSON.stringify(next);
+    // A failed write response may still have committed. Resolve it by reading, never by blindly rewriting.
+    try { props.setProperty('BADGE_CONFIG_V3', serialized); } catch (_) {}
+    var stored = props.getProperty('BADGE_CONFIG_V3');
+    if (stored !== serialized) throw new Error('BADGE_CONFIG_NOT_VERIFIED');
+    return {success:true, config:journeyPublicConfig_(JSON.parse(stored)), revision:syncHash_(['BADGE_CONFIG_V3',stored])};
+  } catch (_) {
+    return {success:false, error:phase === 'validation' ? 'INVALID_BADGE_CONFIG'
+      : phase === 'activation' ? 'BADGE_CONFIG_NOT_VERIFIED' : 'BADGE_PRESERVATION_UNAVAILABLE'};
   }
 }
 
@@ -6048,7 +6297,7 @@ function getTeacherData() {
 
     for (let i = 1; i < studRaw.length; i++) {
       const r = studRaw[i];
-      const rawId = String(r[4]).trim();
+      const rawId = normalizeOwnerId_(r[4]);
       if (!rawId || rawId === 'undefined') continue;
       // ※ 테스트 계정(학번=0) 제외하려면 아래 주석 해제
       // if (rawId === '0') continue;
@@ -6074,7 +6323,7 @@ function getTeacherData() {
       const cafRaw = cafSheet.getRange(2, 1, cafLastRow - 1, Math.min(15, cafSheet.getLastColumn())).getValues();
       for (let i = 0; i < cafRaw.length; i++) {
         const r = cafRaw[i];
-        const cafRawId = String(r[4]).trim();  // E열: 전체학번
+        const cafRawId = normalizeOwnerId_(r[4]);  // E열: 전체학번
         if (!cafRawId || cafRawId === 'undefined') continue;
         const cafName = String(r[5] || '');    // F열: 성명
         // 교직원·교생 등 비수치 학번은 "학번_이름" 복합키
@@ -6112,46 +6361,23 @@ function getTeacherData() {
 
     if (sleepLastRow > 1) {
       const sleepRaw = sleepSheet.getRange(2, 1, sleepLastRow - 1, 19).getValues();
+      const recordOwners = sleepRecordOwners_(sleepRaw);
       for (let i = 0; i < sleepRaw.length; i++) {
         const r = sleepRaw[i];
-        const sleepRawId = String(r[4]).trim();  // E열: 전체학번
+        const sleepRawId = normalizeOwnerId_(r[4]);  // E열: 전체학번
         if (!sleepRawId || sleepRawId === 'undefined') continue;
         const sleepName = String(r[5] || '');    // F열: 성명
         // 교직원·교생 등 비수치 학번은 "학번_이름" 복합키
         const id = makeTeacherUniqueId(sleepRawId, sleepName);
 
-        // G열: 날짜 → "yyyy-MM-dd"
-        const dateVal = r[6];
-        const wakeDateVal = r[8];
-        let dateStr = '';
-        let wakeDateStr = '';
-        if (dateVal instanceof Date) {
-          dateStr = Utilities.formatDate(dateVal, 'Asia/Seoul', 'yyyy-MM-dd');
-        } else {
-          dateStr = String(dateVal || '').substring(0, 10);
-        }
-        if (wakeDateVal instanceof Date) {
-          wakeDateStr = Utilities.formatDate(wakeDateVal, 'Asia/Seoul', 'yyyy-MM-dd');
-        } else {
-          wakeDateStr = String(wakeDateVal || '').substring(0, 10);
-        }
-
-        // H열: 취침, I열: 기상 → "HH:mm" 형식
-        function toHHMM(val) {
-          if (!val) return '';
-          if (val instanceof Date) return Utilities.formatDate(val, 'Asia/Seoul', 'HH:mm');
-          const m = String(val).match(/^(\d{1,2}):(\d{2})/);
-          return m ? m[1].padStart(2, '0') + ':' + m[2] : String(val);
-        }
-
-        sleep.push(Object.assign({
+        const record=Object.assign({
           id:             String(r[13] || ''),
           학번:           id,
           name:           sleepName,
-          날짜:           dateStr,
-          wakeDate:       wakeDateStr,
-          취침:           toHHMM(r[7]),          // H열
-          기상:           toHHMM(r[9]),          // I열
+          날짜:           recordDateText_(r[6]) || String(r[6] || ''),
+          wakeDate:       recordDateText_(r[8]) || String(r[8] || ''),
+          취침:           recordTimeText_(r[7]) || String(r[7] || ''),
+          기상:           recordTimeText_(r[9]) || String(r[9] || ''),
           저장시각:        recordTimestampText_(r[0]),
           원본행번호:      i+2,
           시간:           recordNumber_(r[10]), // J열
@@ -6162,7 +6388,9 @@ function getTeacherData() {
           잠들기:          String(r[16] || ''),   // P열
           각성:           String(r[17] || ''),   // Q열
           낮졸림:          String(r[18] || '')    // R열
-        },preservedSleepMetadataView_(r,preservedSleepMetadataForRow_(r,sleepMetadataIndex))));
+        },preservedSleepMetadataView_(r,preservedSleepMetadataForRow_(r,sleepMetadataIndex)));
+        if (recordOwners.get(SleepRecordPolicy.id(r[13]))?.size > 1) record.identityConflict = true;
+        sleep.push(record);
       }
     }
 
@@ -6215,13 +6443,15 @@ function getTeacherData() {
         for (let i = 1; i < awardData.length; i++) {
           const row = awardData[i];
           const ts  = _tsToStr_(row[0]);
-          const sid = isNew2 ? normalizeId(row[4]) : normalizeId(row[1]);
+          const rawId = normalizeOwnerId_(isNew2 ? row[4] : row[1]);
+          const studentName = isNew2 ? String(row[5] || '').trim() : '';
+          const sid = rawId && studentName ? makeTeacherUniqueId(rawId,studentName) : rawId;
           if (!sid) continue; // 학번 없는 행 스킵
 
           if (!manualAwards[sid]) manualAwards[sid] = [];
           manualAwards[sid].push({
             grantedAt : ts,
-            studentName: isNew2 ? String(row[5] || '').trim() : '',
+            studentName: studentName,
             awardId   : isNew2 ? String(row[6]  || '') : String(row[2] || ''),
             name      : isNew2 ? String(row[7]  || '') : String(row[3] || ''),
             image     : isNew2 ? String(row[8]  || '🏅') : String(row[4] || '🏅'),
@@ -6237,6 +6467,30 @@ function getTeacherData() {
       safeLog_('⚠️ teacher_awards 로드 실패 (계속 진행): ' + awardErr);
     }
 
+    let preservedAutomaticAwards = [];
+    let preservedAutomaticAwardsAvailable = true;
+    try {
+      preservedAutomaticAwards = Array.from(journeyLedger_(ss).values());
+    } catch (_) {
+      // An unreadable badge ledger must not block teacher records or reports.
+      // Badge claims and setting saves continue to require a verified ledger.
+      preservedAutomaticAwardsAvailable = false;
+    }
+    const currentAwardOwners = new Map();
+    students.forEach(function(student) {
+      var owner = journeyOwner_(student.학번, student.이름);
+      if (!owner) return;
+      var id = JSON.parse(owner)[0];
+      if (!currentAwardOwners.has(id)) currentAwardOwners.set(id, new Set());
+      currentAwardOwners.get(id).add(owner);
+    });
+    preservedAutomaticAwards.forEach(function(award) {
+      var owners = currentAwardOwners.get(award.studentId);
+      if (!owners || owners.size !== 1 || !owners.has(journeyOwner_(award.studentId, award.studentName))) return;
+      if (!manualAwards[award.studentId]) manualAwards[award.studentId] = [];
+      manualAwards[award.studentId].push(award);
+    });
+
     return {
       success      : true,
       hiddenStudentIds: getTeacherHiddenStudents().hiddenStudentIds,
@@ -6244,6 +6498,8 @@ function getTeacherData() {
       caffeine     : caffeine,
       sleep        : sleep,
       info         : info,
+      preservedAutomaticAwardsAvailable: preservedAutomaticAwardsAvailable,
+      preservedAutomaticAwards: preservedAutomaticAwards, // Owner-bound full history, including former roster identities.
       manualAwards : manualAwards  // ⭐ 교사 앱 localStorage 동기화용
     };
 
@@ -6820,98 +7076,27 @@ function getApiErrorInfo(errorCode) {
  * @param {string} studentId  학번
  * @returns {{ success: boolean, awards: Array }}
  */
-function getTeacherAwardsForStudent(studentId) {
+function getTeacherAwardsForStudent(studentId, studentName) {
   try {
-    const ss    = getSpreadsheet_();
-    const sheet = _getOrCreateAwardSheet_(ss);
-
-    const data = sheet.getDataRange().getValues();
-    safeLog_('=== getTeacherAwardsForStudent ===');
-    safeLog_('요청 학번(원본): "' + studentId + '"');
-    safeLog_('시트 전체 행 수: ' + data.length + ' (헤더 포함)');
-
-    if (data.length <= 1) {
-      safeLog_('⚠️ 데이터 없음 (헤더만 존재)');
-      return { success: true, awards: [] };
-    }
-
-    const totalCols = data[0] ? data[0].length : 0;
-    const targetId  = normalizeId(studentId);
-    safeLog_('헤더 컬럼 수: ' + totalCols);
-    safeLog_('헤더: ' + JSON.stringify(data[0]));
-    safeLog_('정규화된 학번: "' + targetId + '"');
-
-    // ──────────────────────────────────────────────────────
-    // 컬럼 레이아웃 자동 감지
-    // 신규(12~13열): A=수여일시, B=학년, C=반, D=번호, E=학번, F=학생이름,
-    //                G=awardId,  H=뱃지이름, I=이미지, J=배경색, K=글자색,
-    //                L=코멘트,   M=수여교사(13열만 존재)
-    // 구버전(~9열): A=수여일시, B=학번, C=awardId, D=뱃지이름 ...
-    // ──────────────────────────────────────────────────────
-    // ⭐ 헤더 2번째 값(index1)으로 포맷 구분
-    //    신규: '학년' / 구버전: 'studentid' 또는 학번 직접
-    const hdr1 = String(data[0][1] || '').toLowerCase();
-    const isNewFormat = (totalCols >= 12) && (hdr1 === '학년' || hdr1 === 'grade');
-
-    safeLog_('포맷: ' + (isNewFormat ? '신규(12+열, B=학년)' : '구버전(B=학번)'));
-
-    // 데이터 샘플 로그 (최대 3행)
-    for (var si = 1; si < Math.min(4, data.length); si++) {
-      var sRow = data[si];
-      var sId  = isNewFormat ? normalizeId(sRow[4]) : normalizeId(sRow[1]);
-      safeLog_('  ' + si + '행 학번="' + sId + '" | 원본E="' + sRow[4] + '" | A열ts="' + sRow[0] + '"');
-    }
-
-    const awards = [];
-    for (let i = 1; i < data.length; i++) {
-      const row    = data[i];
-      const rowSid = isNewFormat ? normalizeId(row[4]) : normalizeId(row[1]);
-
-      if (rowSid !== targetId) continue;
-
-      safeLog_('✅ 매칭 행 ' + (i+1) + ': 학번=' + rowSid + ', 뱃지=' + (isNewFormat ? row[7] : row[3]));
-
-      if (isNewFormat) {
-        awards.push({
-          grantedAt   : _tsToStr_(row[0]),
-          grade       : String(row[1]  || ''),
-          classNum    : String(row[2]  || ''),
-          number      : String(row[3]  || ''),
-          studentId   : String(row[4]  || ''),
-          studentName : String(row[5]  || ''),
-          awardId     : String(row[6]  || ''),
-          name        : String(row[7]  || ''),
-          image       : String(row[8]  || '🏅'),
-          bg          : String(row[9]  || '#f5f3ff'),
-          color       : String(row[10] || '#7c3aed'),
-          message     : String(row[11] || ''),
-          grantedBy   : String(row[12] || ''), // 13열 없으면 빈 문자열
-          seenAt      : _tsToStr_(row[13])
-        });
-      } else {
-        // 구버전: B=학번, C=awardId, D=뱃지이름, E=이미지, F=배경색, G=글자색, H=메시지, I=교사
-        awards.push({
-          grantedAt : _tsToStr_(row[0]),
-          studentId : String(row[1] || ''),
-          awardId   : String(row[2] || ''),
-          name      : String(row[3] || ''),
-          image     : String(row[4] || '🏅'),
-          bg        : String(row[5] || '#f5f3ff'),
-          color     : String(row[6] || '#7c3aed'),
-          message   : String(row[7] || ''),
-          grantedBy : String(row[8] || ''),
-          seenAt    : _tsToStr_(row[9])
-        });
-      }
-    }
-
-    safeLog_('결과: ' + awards.length + '개 뱃지 반환');
-    awards.sort((a, b) => b.grantedAt.localeCompare(a.grantedAt));
-    return { success: true, awards: awards };
-
-  } catch (err) {
-    safeLog_('❌ getTeacherAwardsForStudent 오류: ' + err.message);
-    return { success: false, awards: [], error: err.message };
+    const ss = getSpreadsheet_();
+    const awards = journeyStudentAwards_(ss,studentId,studentName);
+    const sheet = ss.getSheetByName('teacher_awards');
+    const data = sheet ? sheet.getDataRange().getValues() : [];
+    const header = String(data[0]?.[1] || '').trim().toLowerCase();
+    // The legacy ID-only format cannot verify an award's owner.
+    if (!['grade','학년'].includes(header)) return {success:true, awards:awards};
+    data.slice(1).forEach(row => {
+      if (!journeyMatchesOwner_(row[4],row[5],studentId,studentName)) return;
+      const [id,name] = JSON.parse(journeyOwner_(row[4],row[5]));
+      awards.push({grantedAt:_tsToStr_(row[0]), grade:String(row[1] || ''), classNum:String(row[2] || ''),
+        number:String(row[3] || ''), studentId:id, studentName:name, awardId:String(row[6] || ''),
+        name:String(row[7] || ''), image:String(row[8] || '🏅'), bg:String(row[9] || '#f5f3ff'),
+        color:String(row[10] || '#7c3aed'), message:String(row[11] || ''), grantedBy:String(row[12] || ''), seenAt:_tsToStr_(row[13])});
+    });
+    awards.sort((a,b)=>b.grantedAt.localeCompare(a.grantedAt));
+    return {success:true, awards:awards};
+  } catch (_) {
+    return {success:false, awards:[], error:'AWARD_READ_UNAVAILABLE'};
   }
 }
 
@@ -6943,17 +7128,16 @@ function markTeacherAwardsSeen(studentId, studentName, awardKeys) {
     });
     if (!validStudent) return { success: false, updated: 0, error: '로그인 학생 정보가 일치하지 않습니다.' };
 
-    const sheet = _getOrCreateAwardSheet_(ss);
-    const lock = LockService.getScriptLock();
-    lock.waitLock(10000);
-    try {
+    const sheet = ss.getSheetByName('teacher_awards');
+    if (!sheet) return {success:true, updated:0};
     const data = sheet.getDataRange().getValues();
     if (data.length <= 1) return { success: true, updated: 0 };
 
     const totalCols = data[0] ? data[0].length : 0;
     const hdr1 = String(data[0][1] || '').toLowerCase();
     const isNewFormat = (totalCols >= 12) && (hdr1 === '학년' || hdr1 === 'grade');
-    const seenColumn = isNewFormat ? 14 : 10;
+    if (!isNewFormat) return {success:true, updated:0};
+    const seenColumn = 14;
     const seenAt = _nowKST_();
 
     if (!data[0][seenColumn - 1]) {
@@ -6963,11 +7147,10 @@ function markTeacherAwardsSeen(studentId, studentName, awardKeys) {
     let updated = 0;
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
-      const rowSid = isNewFormat ? normalizeId(row[4]) : normalizeId(row[1]);
-      if (rowSid !== targetId) continue;
+      if (!journeyMatchesOwner_(row[4],row[5],targetId,targetName)) continue;
 
-      const rowAwardId = String((isNewFormat ? row[6] : row[2]) || '');
-      const rowName = String((isNewFormat ? row[7] : row[3]) || '');
+      const rowAwardId = String(row[6] || '');
+      const rowName = String(row[7] || '');
       const rowGrantedAt = _tsToStr_(row[0]);
       const matched = keys.some(function(key) {
         const keyAwardId = String(key && key.awardId || '');
@@ -6987,9 +7170,6 @@ function markTeacherAwardsSeen(studentId, studentName, awardKeys) {
 
     safeLog_('✅ 학생 뱃지 확인 저장: 학번=' + targetId + ', ' + updated + '건');
     return { success: true, updated: updated };
-    } finally {
-      lock.releaseLock();
-    }
   } catch (err) {
     safeLog_('❌ markTeacherAwardsSeen 오류: ' + err.message);
     return { success: false, updated: 0, error: err.message };
@@ -7010,9 +7190,9 @@ function markTeacherAwardsSeen(studentId, studentName, awardKeys) {
 function grantTeacherAwards(params) {
   try {
     const ss    = getSpreadsheet_();
-    const sheet = _getOrCreateAwardSheet_(ss);
 
     const studentIds = params.studentIds || [];
+    const studentNames = params.studentNames || {};
     const awards     = params.awards     || [];
     const message    = params.message    || '';
     const grantedBy  = params.grantedBy  || '';
@@ -7026,59 +7206,38 @@ function grantTeacherAwards(params) {
       return { success: false, error: '수여 대상 또는 뱃지가 없습니다.' };
     }
 
-    // students 시트에서 학생 정보 조회 (학번 → 학년/반/번호/이름)
-    const studentMap = {};
-    try {
-      const studSheet = ss.getSheetByName('students');
-      if (studSheet) {
-        const studData = studSheet.getDataRange().getValues();
-        for (let i = 1; i < studData.length; i++) {
-          const sid = normalizeId(studData[i][4]); // E열: 학번
-          if (sid) {
-            studentMap[sid] = {
-              grade  : String(studData[i][0] || ''), // A: 학년
-              cls    : String(studData[i][1] || ''), // B: 반
-              number : String(studData[i][2] || ''), // C: 번호
-              name   : String(studData[i][3] || '')  // D: 이름
-            };
-          }
-        }
-      }
-    } catch (mapErr) {
-      safeLog_('⚠️ 학생 정보 조회 실패 (계속 진행): ' + mapErr);
-    }
+    const roster = journeyRows_(ss,'students',true).slice(1);
+    const targets = studentIds.map(sid => {
+      const owner = journeyOwner_(sid,studentNames[sid]);
+      const matches = owner ? roster.filter(row=>journeyOwner_(row[4],row[3])===owner) : [];
+      if (matches.length !== 1) throw new Error('AWARD_TARGET_UNVERIFIED');
+      return matches[0];
+    });
+    const sheet = _getOrCreateAwardSheet_(ss);
 
-    // 중복 수여 방지: 시트에서 기존 수여 내역 읽기 (학번+뱃지ID 조합)
+    // Existing awards belong to the named owner even if the number is reused.
     const existingSet = new Set();
-    try {
-      const lastRow = sheet.getLastRow();
-      if (lastRow > 1) {
-        const existing = sheet.getRange(2, 1, lastRow - 1, 7).getValues();
-        existing.forEach(r => {
-          const sid = normalizeId(r[4]);
-          const aid = String(r[6] || '');
-          if (sid && aid) existingSet.add(sid + '|' + aid);
-        });
-      }
-    } catch(e) { safeLog_('⚠️ 중복 체크 조회 실패 (계속 진행): ' + e); }
+    sheet.getDataRange().getValues().slice(1).forEach(row => {
+      const owner = journeyOwner_(row[4],row[5]);
+      if (owner && row[6]) existingSet.add(JSON.stringify([owner,String(row[6])]));
+    });
 
     const rows = [];
-    studentIds.forEach(sid => {
-      const normSid = normalizeId(sid);
-      const info = studentMap[normSid] || { grade: '', cls: '', number: '', name: '' };
+    targets.forEach(target => {
+      const owner = journeyOwner_(target[4],target[3]);
+      const [studentId,name] = JSON.parse(owner);
       awards.forEach(a => {
         const awardId = String(a.awardId || '');
-        if (existingSet.has(normSid + '|' + awardId)) {
-          safeLog_('⏭️ 중복 수여 건너뜀: ' + normSid + ' / ' + awardId);
-          return;
-        }
+        const key = JSON.stringify([owner,awardId]);
+        if (!awardId || existingSet.has(key)) return;
+        existingSet.add(key);
         rows.push([
           grantedAt,                       // A: 수여 일시
-          String(info.grade),              // B: 학년
-          String(info.cls),                // C: 반
-          String(info.number),             // D: 번호
-          normSid,                         // E: 학번
-          String(info.name),               // F: 학생 이름
+          String(target[0] || ''),         // B: 학년
+          String(target[1] || ''),         // C: 반
+          String(target[2] || ''),         // D: 번호
+          studentId,                       // E: 학번
+          name,                            // F: 학생 이름
           awardId,                         // G: 뱃지 ID
           String(a.name     || ''),        // H: 뱃지 이름
           String(a.image    || '🏅'),      // I: 이모지/URL
@@ -7117,88 +7276,25 @@ function grantTeacherAwards(params) {
  * @param {string} awardId     뱃지 ID (C열 값)
  * @returns {{ success: boolean }}
  */
-function revokeTeacherAward(studentId, grantedAt, awardId) {
+function revokeTeacherAward(studentId, grantedAt, awardId, studentName) {
   try {
-    const ss    = getSpreadsheet_();
-    const sheet = _getOrCreateAwardSheet_(ss);
-    const data  = sheet.getDataRange().getValues();
-
-    const targetSid  = normalizeId(studentId);
-    const targetTs   = String(grantedAt || '').substring(0, 16); // "YYYY-MM-DD HH:mm"
-    const targetDate = String(grantedAt || '').substring(0, 10); // "YYYY-MM-DD"
-    const aidTarget  = String(awardId || '').trim();
-
-    // ⭐ 포맷 감지: 헤더 B열(index1) 값으로 신규/구버전 판단
-    // 신규(12+열): B=학년 → E열(index4)=학번, G열(index6)=awardId
-    // 구버전(~9열): B=학번 → B열(index1)=학번, C열(index2)=awardId
-    const totalCols = data[0] ? data[0].length : 0;
-    const hdr1 = String(data[0] ? (data[0][1] || '') : '').toLowerCase();
-    const isNewFormat = (totalCols >= 12) && (hdr1 === '학년' || hdr1 === 'grade');
-
-    safeLog_('revokeTeacherAward: 학번=' + studentId + ', grantedAt=' + grantedAt + ', awardId=' + awardId);
-    safeLog_('포맷: ' + (isNewFormat ? '신규(12+열)' : '구버전') + ', 컬럼수=' + totalCols + ', B헤더="' + hdr1 + '"');
-
-    function getRowSid(row) {
-      return isNewFormat ? normalizeId(row[4]) : normalizeId(row[1]);
+    if (!studentName || !grantedAt || !awardId) return {success:false, error:'AWARD_TARGET_UNVERIFIED'};
+    const sheet = getSpreadsheet_().getSheetByName('teacher_awards');
+    if (!sheet) return {success:false, error:'AWARD_TARGET_UNVERIFIED'};
+    const data = sheet.getDataRange().getValues();
+    const header = String(data[0]?.[1] || '').trim().toLowerCase();
+    if (!['grade','학년'].includes(header)) return {success:false, error:'AWARD_TARGET_UNVERIFIED'};
+    const matchedRows = [];
+    for (let i = 1; i < data.length; i++) {
+      const row = data[i];
+      if (journeyMatchesOwner_(row[4],row[5],studentId,studentName)
+          && _tsToStr_(row[0]) === _tsToStr_(grantedAt) && String(row[6] || '') === String(awardId)) matchedRows.push(i+1);
     }
-    function getRowAid(row) {
-      return isNewFormat ? String(row[6] || '').trim() : String(row[2] || '').trim();
-    }
-
-    // ─── 1단계: 학번 + 시간(16자리) + awardId 완전 매칭 ───────────
-    for (let i = data.length - 1; i >= 1; i--) {
-      const row   = data[i];
-      const rowTs = _tsToStr_(row[0]);
-      const rowSid = getRowSid(row);
-      const rowAid = getRowAid(row);
-
-      if (rowSid !== targetSid) continue;
-      if (rowTs.substring(0, 16) !== targetTs) continue;
-      if (aidTarget && rowAid !== aidTarget) continue;
-
-      sheet.deleteRow(i + 1);
-      safeLog_('✅ 뱃지 취소(완전매칭): 학번=' + studentId + ', ts=' + rowTs + ', aid=' + aidTarget);
-      return { success: true };
-    }
-
-    // ─── 2단계: 학번 + 날짜(10자리) + awardId 완화 매칭 ─────────
-    for (let i = data.length - 1; i >= 1; i--) {
-      const row    = data[i];
-      const rowTs  = _tsToStr_(row[0]);
-      const rowSid = getRowSid(row);
-      const rowAid = getRowAid(row);
-
-      if (rowSid !== targetSid) continue;
-      if (rowTs.substring(0, 10) !== targetDate) continue;
-      if (aidTarget && rowAid !== aidTarget) continue;
-
-      sheet.deleteRow(i + 1);
-      safeLog_('✅ 뱃지 취소(날짜+id 매칭): 학번=' + studentId + ', date=' + targetDate);
-      return { success: true };
-    }
-
-    // ─── 3단계: 학번 + 날짜만 (awardId 무시, 최후 수단) ──────────
-    if (aidTarget) {
-      for (let i = data.length - 1; i >= 1; i--) {
-        const row    = data[i];
-        const rowTs  = _tsToStr_(row[0]);
-        const rowSid = getRowSid(row);
-
-        if (rowSid !== targetSid) continue;
-        if (rowTs.substring(0, 10) !== targetDate) continue;
-
-        sheet.deleteRow(i + 1);
-        safeLog_('⚠️ 뱃지 취소(날짜만 매칭): 학번=' + studentId);
-        return { success: true };
-      }
-    }
-
-    safeLog_('❌ revokeTeacherAward 매칭 실패: 학번=' + studentId + ', grantedAt=' + grantedAt + ', awardId=' + awardId + ', isNewFormat=' + isNewFormat + ', totalCols=' + totalCols);
-    return { success: false, error: '해당 뱃지 기록을 찾을 수 없습니다.' };
-
-  } catch (err) {
-    safeLog_('❌ revokeTeacherAward 오류: ' + err.message);
-    return { success: false, error: err.message };
+    if (matchedRows.length !== 1) return {success:false, error:'AWARD_TARGET_UNVERIFIED'};
+    sheet.deleteRow(matchedRows[0]);
+    return {success:true};
+  } catch (_) {
+    return {success:false, error:'AWARD_DELETE_UNAVAILABLE'};
   }
 }
 

@@ -23,7 +23,7 @@
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ''));
     if (!match) return null;
     const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-    return Number.isNaN(date.getTime()) ? null : date;
+    return Number.isNaN(date.getTime()) || formatDate(date) !== String(value) ? null : date;
   }
 
   function formatDate(date) {
@@ -45,6 +45,50 @@
     return new Set((values || []).filter((value) => parseDate(value)));
   }
 
+  function shiftDate(value, days) {
+    const date = parseDate(value);
+    if (!date) return '';
+    date.setUTCDate(date.getUTCDate() + days);
+    return formatDate(date);
+  }
+
+  function sleepWakeDates(records, dateBasis, policy) {
+    if (dateBasis !== 'caffeine_day_next_wake') return records.map(record => policy.describe(record).wakeDate);
+    const ids = new Set(records.map(record => policy.describe(record).id));
+    const episodes = records.map((record, index) => {
+      if (policy.describe(record).id) return record;
+      let key = 'badge-unassigned:' + index;
+      while (ids.has(key)) key += ':';
+      ids.add(key);
+      return {...record, recordId:key};
+    });
+    const dates = [];
+    policy.days(episodes, { allowProtocolCandidate: true }).forEach(group => {
+      if (group.status !== 'ready') return;
+      const record = group.record;
+      const selectedMain = record.type === 'main' && record.classificationStatus === 'student_selected';
+      // The server supplies this provenance for older rows without type metadata.
+      // Count their verified wake for participation without classifying them as main sleep.
+      const legacyWake = record.type === 'uncollected'
+        && record.classificationStatus === 'uncollected' && record.typeSource === 'legacy_uncollected';
+      if (record.eligibleMain || selectedMain || legacyWake) {
+        dates.push(record.wakeDate);
+      }
+    });
+    return dates;
+  }
+
+  // Intake day D is paired with the following actual wake day D+1.
+  // Keep the daily activity card on actual calendar dates, separate from this pairing.
+  function pairedSets(input) {
+    const paired = input.dateBasis === 'caffeine_day_next_wake';
+    const today = paired && parseDate(input.today) ? input.today : '';
+    const caffeine = uniqueValidDates((input.caffeineDates || []).filter(d => !today || d <= today));
+    const wake = uniqueValidDates((input.sleepDates || []).filter(d => !today || d <= today));
+    const sleep = paired ? new Set([...wake].map(d => shiftDate(d, -1))) : wake;
+    return { caffeine, wake, sleep };
+  }
+
   function countsForRange(caffeine, sleep, start, end) {
     const dates = dateRange(start, end);
     let caffeineCount = 0;
@@ -62,8 +106,8 @@
 
   function summarize(input) {
     const schedule = input.schedule || {};
-    const caffeine = uniqueValidDates(input.caffeineDates);
-    const sleep = uniqueValidDates(input.sleepDates);
+    const { caffeine, sleep, wake } = pairedSets(input);
+    const dailyWake = input.dailySleepDates ? uniqueValidDates(input.dailySleepDates) : wake;
     const completeDates = dateRange(schedule.start, schedule.end).filter((date) => caffeine.has(date) && sleep.has(date));
     const today = String(input.today || '');
     return {
@@ -71,8 +115,8 @@
       totalComplete: completeDates.length,
       today: {
         caffeine: caffeine.has(today),
-        sleep: sleep.has(today),
-        complete: caffeine.has(today) && sleep.has(today),
+        sleep: dailyWake.has(today),
+        complete: caffeine.has(today) && dailyWake.has(today),
       },
       initial: countsForRange(caffeine, sleep, schedule.initialStart, schedule.initialEnd),
       action: countsForRange(caffeine, sleep, schedule.actionStart, schedule.actionEnd),
@@ -84,14 +128,16 @@
     return /^\d{4}$/.test(value) ? value.charAt(1) : '';
   }
 
-  function milestoneProgress(completeDates, badges) {
+  function milestoneProgress(completeDates, badges, schedule) {
     const current = uniqueValidDates(completeDates).size;
-    return (badges || []).map((badge) => ({
-      ...badge,
-      current,
-      earned: current >= Number(badge.days || 0),
-      remaining: Math.max(0, Number(badge.days || 0) - current),
-    }));
+    const totalDays = schedule ? dateRange(schedule.start, schedule.end).length : 0;
+    return (badges || []).map((badge) => {
+      const ratio = Number(badge.ratio);
+      const days = badge.ratio !== undefined
+        ? (ratio > 0 && ratio <= 1 && totalDays > 0 ? Math.ceil(totalDays * ratio) : 0)
+        : Number(badge.days || 0);
+      return { ...badge, days, totalDays, current, earned: days > 0 && current >= days, remaining: Math.max(0, days - current) };
+    });
   }
 
   function studentStage(schedule, today) {
@@ -105,21 +151,22 @@
 
   function weekProgress(input) {
     const today = parseDate(input.today);
-    if (!today) return { dates: [], states: [], complete: 0 };
+    if (!today) return { dates: [], states: [], complete: 0, totalDays: 0 };
     const monday = new Date(today);
     const day = monday.getUTCDay();
     monday.setUTCDate(monday.getUTCDate() - (day === 0 ? 6 : day - 1));
     const sunday = new Date(monday);
     sunday.setUTCDate(sunday.getUTCDate() + 6);
     const dates = dateRange(formatDate(monday), formatDate(sunday));
-    const caffeine = uniqueValidDates(input.caffeineDates);
-    const sleep = uniqueValidDates(input.sleepDates);
+    const inSchedule = date => !input.schedule || (date >= input.schedule.start && date <= input.schedule.end);
+    const { caffeine, sleep } = pairedSets(input);
     const states = dates.map((date) => {
+      if (!inSchedule(date)) return 'empty';
       if (caffeine.has(date) && sleep.has(date)) return 'complete';
       if (caffeine.has(date) || sleep.has(date)) return 'partial';
       return 'empty';
     });
-    return { dates, states, complete: states.filter((state) => state === 'complete').length };
+    return { dates, states, complete: states.filter((state) => state === 'complete').length, totalDays: dates.filter(inSchedule).length };
   }
 
   function mergeConfig(config) {
@@ -139,12 +186,29 @@
     };
   }
 
+  // Explicit teacher draft only. Never activate v5 by merely loading the app.
+  function prepareUpgrade(config) {
+    const current = mergeConfig(config);
+    const starts = { '1': '2026-10-12', '2': '2026-10-16', '3': '2026-10-06', '4': '2026-10-06' };
+    const finals = { '1': '2026-11-12', '2': '2026-11-12', '3': '2026-11-11', '4': '2026-11-10' };
+    const actions = { '1': '2026-11-06', '2': '2026-11-06', '3': '2026-11-04', '4': '2026-11-04' };
+    const schedules = {};
+    Object.keys(starts).forEach(key => {
+      schedules[key] = { ...current.schedules[key], start: starts[key], end: shiftDate(finals[key], -1), actionStart: actions[key], actionEnd: shiftDate(finals[key], -1), finalClassDate: finals[key] };
+    });
+    return { ...current, version: 5, dateBasis: 'caffeine_day_next_wake', schedules,
+      badges: [...DEFAULT_CONFIG.badges.slice(0, 3), { id: 'journey_finish_v5', name: '건강기록 여정 마무리', image: '🏁', ratio: 0.8, bg: '#fefce8', color: '#a16207', auto: true }] };
+  }
+
   root.BadgeJourney = Object.freeze({
     DEFAULT_CONFIG,
     classFromStudentId,
     dateRange,
     mergeConfig,
     milestoneProgress,
+    prepareUpgrade,
+    shiftDate,
+    sleepWakeDates,
     studentStage,
     summarize,
     weekProgress,

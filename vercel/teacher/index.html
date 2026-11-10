@@ -736,7 +736,7 @@
   <script src="/public/js/api-bridge.js"></script>
   <script src="/public/js/sleep-record-policy.js"></script>
   <script src="/public/js/sleep-comparison-chart.js"></script>
-  <script src="/public/js/badge-journey.js"></script>
+  <script src="/public/js/badge-journey.js?v=journey-5-review"></script>
   <script src="/public/js/safe-render.js?v=feedback-format-2"></script>
   <script src="/public/js/teacher-auth.js"></script>
   <script type="module" src="/public/js/teacher-save-feedback.js"></script>
@@ -1292,7 +1292,7 @@
             <div class="responsive-table-wrap" tabindex="0" aria-label="학생별 건강기록 현황 표">
                 <table style="width:100%;border-collapse:collapse;min-width:760px;font-size:12px;">
                     <thead><tr style="background:#f9fafb;color:#4b5563;text-align:left;">
-                        <th style="padding:9px;">학번</th><th>이름</th><th>누적 완료일</th><th>이번 주</th><th>초기 7일</th><th>행동실험 7일</th><th>현재 단계</th>
+                        <th style="padding:9px;">학번</th><th>이름</th><th>누적 완료일</th><th>이번 주</th><th>초기 관찰</th><th>행동실험</th><th>현재 단계</th>
                     </tr></thead>
                     <tbody id="journeyStatusBody"><tr><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;">데이터를 불러오는 중...</td></tr></tbody>
                 </table>
@@ -1662,10 +1662,10 @@
             <!-- 🏅 뱃지 관리 카드 -->
             <div class="settings-card" style="grid-column:1/-1;">
                 <div class="settings-card-title">🏅 학생 뱃지 달성 기준 (교사 설정)
-                    <span style="font-size:12px;font-weight:400;color:#9ca3af;margin-left:8px;">챌린지 뱃지는 교사 승인 후 학생에게 수여됩니다</span>
+                    <span style="font-size:12px;font-weight:400;color:#9ca3af;margin-left:8px;">기록 뱃지는 자동 수여되며, 이미 받은 뱃지는 보존됩니다</span>
                 </div>
                 <div class="settings-info-box" style="margin-bottom:16px;">
-                    카페인과 수면을 같은 날 모두 남긴 경우를 <strong>하루 기록 완료</strong>로 계산합니다.<br>
+                    새 기준은 <strong>카페인 기록일 + 다음 날 아침 수면 기록</strong>을 하루 완료로 계산합니다. 6차시 전날 카페인과 수업 당일 아침 수면까지 포함합니다.<br>
                     누적 기록 뱃지는 자동으로 표시하며, 건강수치가 아닌 <strong>기록·성찰 과정</strong>만 격려합니다.
                 </div>
 
@@ -1697,10 +1697,10 @@
                 <!-- 저장 / 초기화 -->
                 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                     <button onclick="saveChallengeBadgeSettings()" style="padding:8px 20px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">💾 챌린지 설정 저장</button>
-                    <button onclick="resetChallengeSettings()" style="padding:8px 18px;background:#fef2f2;color:#dc2626;border:1.5px solid #fecaca;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">🔄 초기화</button>
+                    <button onclick="resetChallengeSettings()" style="padding:8px 18px;background:#fef2f2;color:#dc2626;border:1.5px solid #fecaca;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">🔄 새 기준 불러오기</button>
                     <span id="challengeSaveStatus" style="font-size:12px;color:#6b7280;"></span>
                 </div>
-                <div style="margin-top:8px;font-size:11px;color:#6b7280;">💡 저장 후 달성한 학생이 <b>뱃지 현황 탭</b> "승인 대기"에 표시됩니다. 초기화 시 승인 대기 목록이 비워집니다.</div>
+                <div style="margin-top:8px;font-size:11px;color:#6b7280;">💡 새 기준: 연구 안내·동의일부터 누적 3·7·14일, 반별 가능 일수의 80% 마무리 배지. 불러오기는 미리보기이며, 기존 획득 보존을 확인한 뒤 서버 저장이 성공해야 적용됩니다. 초기 관찰 기간은 그대로 유지합니다.</div>
 
                 <!-- 교사 수여 팔레트 뱃지 설정 (수동 수여용) -->
                 <div style="margin-top:20px;border-top:1px solid #e5e7eb;padding-top:16px;">
@@ -2711,7 +2711,8 @@ function loadDataFromSheet(onReady,onError){
                 }
 
                 if(onReady)window.teacherLoadingProgress?.(90,'통계와 화면을 준비하고 있습니다');
-                document.getElementById('lastUpdate').textContent=isCached?'최근 조회 자료: '+new Date(cached.savedAt).toLocaleString('ko-KR')+' · 최신 데이터 확인 중...':'마지막 업데이트: '+new Date().toLocaleString('ko-KR');
+                const refreshLabel=isCached?'최근 조회 자료: '+new Date(cached.savedAt).toLocaleString('ko-KR')+' · 최신 데이터 확인 중...':'마지막 업데이트: '+new Date().toLocaleString('ko-KR');
+                document.getElementById('lastUpdate').textContent=refreshLabel+(result.preservedAutomaticAwardsAvailable===false?' · 보존 배지를 확인하지 못했습니다.':'');
                 initFilters();
                 updateDashboard();
                 try { updateCaffeineTab(); } catch(e) { console.error('[카페인탭 오류]', e); }
@@ -3442,9 +3443,10 @@ function getFilteredStudents(){
             }
             if(hasAwardFilter){
                 const af=activeFilters.award;
-                const hasTodayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd));
-                const hasTodaySleep=hasSleepRecordOnWakeDate(s.학번,fd);
-                const sAwards=getManualAwardsFor(s.학번);
+                const dailyBadges=evaluateAutoTodayBadges(s.학번,fd,null,s.이름);
+                const hasTodayCaf=dailyBadges.some(b=>b.id==='today_caf');
+                const hasTodaySleep=dailyBadges.some(b=>b.id==='today_sleep');
+                const sAwards=getManualAwardsFor(s.학번,s.이름);
                 // 자동 뱃지 그룹 (OR)
                 const hasAutoFilter=af.has('auto_today_caf')||af.has('auto_today_sleep');
                 const autoMatch=(af.has('auto_today_caf')&&hasTodayCaf)||(af.has('auto_today_sleep')&&hasTodaySleep);
@@ -3455,10 +3457,10 @@ function getFilteredStudents(){
                 if(badgeKeys.length>0){
                     teacherMatch=teacherMatch||badgeKeys.some(k=>{
                         const bid=k.replace('badge_','');
-                        return sAwards.some(a=>(a.awardId||a.badgeId)===bid)||evaluateJourneyBadges(s.학번,fd).some(a=>a.id===bid);
+                        return sAwards.some(a=>(a.awardId||a.badgeId)===bid)||evaluateJourneyBadges(s.학번,fd,null,s.이름).some(a=>a.id===bid);
                     });
                 }
-                if(af.has('awardNoTeacher'))teacherMatch=teacherMatch||(sAwards.length===0);
+                if(af.has('awardNoTeacher'))teacherMatch=teacherMatch||!sAwards.some(a=>a.kind!=='automatic');
                 if(hasAutoFilter&&hasTeachFilter)awardMatch=autoMatch&&teacherMatch;
                 else if(hasAutoFilter)awardMatch=autoMatch;
                 else if(hasTeachFilter)awardMatch=teacherMatch;
@@ -3512,14 +3514,15 @@ function updateBadges(){
 
     // 뱃지 카운트
     const fd2=getStudentFilterDate();
-    n('cntAuto_today_caf',   getAnalysisStudents().filter(s=>caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd2))).length);
-    n('cntAuto_today_sleep', getAnalysisStudents().filter(s=>hasSleepRecordOnWakeDate(s.학번,fd2)).length);
-    n('cntAwardNoTeacher',   getAnalysisStudents().filter(s=>getManualAwardsFor(s.학번).length===0).length);
+    const dailyBadges=getAnalysisStudents().map(s=>evaluateAutoTodayBadges(s.학번,fd2,null,s.이름));
+    n('cntAuto_today_caf',   dailyBadges.filter(badges=>badges.some(b=>b.id==='today_caf')).length);
+    n('cntAuto_today_sleep', dailyBadges.filter(badges=>badges.some(b=>b.id==='today_sleep')).length);
+    n('cntAwardNoTeacher',   getAnalysisStudents().filter(s=>!getManualAwardsFor(s.학번,s.이름).some(a=>a.kind!=='automatic')).length);
     // 개별 뱃지별 카운트
     challengeBadges.forEach(b=>{
         const el=document.getElementById('cntBadge_'+b.id);
         if(!el)return;
-        el.textContent=getAnalysisStudents().filter(s=>getManualAwardsFor(s.학번).some(a=>(a.awardId||a.badgeId)===b.id)||evaluateJourneyBadges(s.학번,fd2).some(a=>a.id===b.id)).length;
+        el.textContent=getAnalysisStudents().filter(s=>getManualAwardsFor(s.학번,s.이름).some(a=>(a.awardId||a.badgeId)===b.id)||evaluateJourneyBadges(s.학번,fd2,null,s.이름).some(a=>a.id===b.id)).length;
     });
 }
 // 드롭다운 토글
@@ -4724,8 +4727,9 @@ function exportStudentExcel(){
         const todaySleep=hasSleepRecordOnWakeDate(s.학번,fd)?'O':'X';
         const info=getPersonalInfo(s.학번);
         // 뱃지 정보
-        const autoList=evaluateAwards(s.학번,d7,fd);
-        const manualList=getManualAwardsFor(s.학번);
+        const awardGroups=composeStudentAwards(s.학번,evaluateAwards(s.학번,d7,fd,s.이름),undefined,s.이름);
+        const autoList=awardGroups.automatic;
+        const manualList=awardGroups.manual;
         const autoBadgeText=autoList.map(a=>a.name).join(' / ')||'-';
         const manualBadgeText=manualList.map(a=>a.name).join(' / ')||'-';
         const manualMsgText=manualList.map(a=>a.message).filter(Boolean).join(' / ')||'-';
@@ -4782,8 +4786,9 @@ function exportStudentToSheet(){
         const todayCaf=caffeineData.some(c=>c.학번===s.학번&&c.섭취시간.startsWith(fd))?'O':'X';
         const todaySleep=hasSleepRecordOnWakeDate(s.학번,fd)?'O':'X';
         const info=getPersonalInfo(s.학번);
-        const autoList=evaluateAwards(s.학번,d7,fd);
-        const manualList=getManualAwardsFor(s.학번);
+        const awardGroups=composeStudentAwards(s.학번,evaluateAwards(s.학번,d7,fd,s.이름),undefined,s.이름);
+        const autoList=awardGroups.automatic;
+        const manualList=awardGroups.manual;
 
         summaryRows.push([
             s.학년, s.반, s.번호, s.이름, s.학번,
@@ -4809,7 +4814,7 @@ function exportStudentToSheet(){
     const CAF_STATUS_VALUES = ['미기록','카페인 섭취 안 함','1단계: 안전','2단계: 적정/제한','3단계: 과다','4단계: 고위험','5단계: 위험/중독'];
     const SLEEP_STATUS_VALUES = ['미기록','권장보다 짧음','권장 범위','권장보다 김'];
     const AUTO_BADGE_VALUES = [...new Set(['카페인 오늘 기록','수면 오늘 기록',...summaryRows.slice(1).map(row=>row[16]).filter(Boolean)])];
-    const allManualNames = [...new Set([...students.flatMap(s=>getManualAwardsFor(s.학번).map(a=>a.name)),...summaryRows.slice(1).map(row=>row[17])])].filter(Boolean);
+    const allManualNames = [...new Set([...students.flatMap(s=>getManualAwardsFor(s.학번,s.이름).filter(a=>a.kind!=='automatic').map(a=>a.name)),...summaryRows.slice(1).map(row=>row[17])])].filter(Boolean);
     const MANUAL_BADGE_VALUES = allManualNames.length ? allManualNames : ['(없음)'];
     // G=7:카페인상태, I=9:수면상태, Q=17:자동뱃지목록, R=18:교사수여뱃지목록
     const dropdownCols = [
@@ -4931,7 +4936,8 @@ function exportPDF(options){
     const printTitle=`${studentId}_${s.이름}_${dates[0]}_${dates[dates.length-1]}`;
     if (report?.feedback?.engine) {
         const layout = options.mode === 'send' || options.pdfLayout === 'phone' ? 'phone' : 'paper';
-        const pdf = window.teacherReportFiles.buildGoalPdfDocument(report, pdfOptions, layout);
+        const awards = composeStudentAwards(studentId, [], report.awards, s.이름).all;
+        const pdf = window.teacherReportFiles.buildGoalPdfDocument({...report, awards}, pdfOptions, layout);
         return { ...pdf, student: s, dates, fileName: printTitle + (pdf.detailed ? '_상세기록' : '') + '.pdf' };
     }
     const originalTitle=document.title;
@@ -5018,12 +5024,13 @@ function exportPDF(options){
     const pdfAwardSection = document.getElementById('pdf_awardSection');
     const pdfAwardChips = document.getElementById('pdf_awardChips');
     if (pdfAwardSection && pdfAwardChips) {
-        const autoEarned = report ? [...evaluateAutoTodayBadges(studentId, endDate, report), ...evaluateJourneyBadges(studentId, endDate, report)] : evaluateAwards(studentId, dates, endDate);
-        const manualList = report ? report.awards : getManualAwardsFor(studentId)
+        const autoEarned = report ? [...evaluateAutoTodayBadges(studentId, endDate, report,s.이름), ...evaluateJourneyBadges(studentId, endDate, report,s.이름)] : evaluateAwards(studentId, dates, endDate,s.이름);
+        const storedAwards = (report ? report.awards : getManualAwardsFor(studentId,s.이름))
             .filter(award => options.mode !== 'send' || award.studentName === s.이름.trim());
+        const awardGroups=composeStudentAwards(studentId,autoEarned,storedAwards,s.이름);
         const allBadges = [
-            ...autoEarned.map(a => ({ ...a, type: 'auto' })),
-            ...manualList.map(a => ({ ...a, type: 'manual' }))
+            ...awardGroups.automatic.map(a => ({ ...a, type: 'auto' })),
+            ...awardGroups.manual.map(a => ({ ...a, type: 'manual' }))
         ];
         if (allBadges.length > 0) {
             pdfAwardChips.innerHTML = allBadges.map(a => {
@@ -6291,8 +6298,44 @@ function saveManualAwards() {
 }
 
 // 특정 학생의 수여 뱃지 목록
-function getManualAwardsFor(studentId) {
-    return manualAwards[String(studentId)] || [];
+function teacherAwardOwnerName(studentId, studentName) {
+    if (String(studentName || '').trim()) return String(studentName).trim();
+    const id=String(studentId).trim().replace(/\.0+$/,'');
+    const names=[...new Set(studentsData.filter(s=>String(s.학번).trim().replace(/\.0+$/,'')===id).map(s=>String(s.이름||'').trim()).filter(Boolean))];
+    return names.length===1?names[0]:'';
+}
+function teacherAwardMatchesOwner(award, studentId, studentName) {
+    if (!award || typeof award!=='object') return false;
+    const normalize=value=>String(value||'').trim().replace(/\.0+$/,'');
+    if (award.studentId && normalize(award.studentId)!==normalize(studentId)) return false;
+    const name=teacherAwardOwnerName(studentId,studentName), owner=String(award.studentName||'').trim();
+    return !!name && owner===name;
+}
+function getOwnedAwardEntries(studentId, studentName) {
+    return (manualAwards[String(studentId)]||[]).map((award,index)=>({award,index}))
+        .filter(entry=>teacherAwardMatchesOwner(entry.award,studentId,studentName));
+}
+function getManualAwardsFor(studentId, studentName) {
+    // Historical name: this collection also contains durable automatic awards.
+    return getOwnedAwardEntries(studentId,studentName).map(entry=>entry.award);
+}
+function composeStudentAwards(studentId, computed, stored, studentName) {
+    const entries=Array.isArray(stored)
+        ? stored.map(award=>({award,index:(manualAwards[String(studentId)]||[]).indexOf(award)})).filter(entry=>teacherAwardMatchesOwner(entry.award,studentId,studentName))
+        : getOwnedAwardEntries(studentId,studentName);
+    const same=(a,b)=>{
+        const aId=a.awardId||a.badgeId||a.id, bId=b.awardId||b.badgeId||b.id;
+        return aId&&bId?String(aId)===String(bId):!!String(a.name||'').trim()&&String(a.name).trim()===String(b.name||'').trim();
+    };
+    // A real teacher copy retains its note and source index; recomputation never
+    // replaces the original metadata of a durable automatic award.
+    const manual=entries.filter(e=>e.award.kind!=='automatic').map(e=>({...e.award,kind:e.award.kind||'teacher',_manualAwardIndex:e.index}));
+    const automatic=[];
+    const candidates=entries.filter(e=>e.award.kind==='automatic').map(e=>e.award).concat(computed||[]);
+    candidates.forEach(award=>{
+        if (!manual.some(a=>same(a,award))&&!automatic.some(a=>same(a,award))) automatic.push({...award,kind:'automatic'});
+    });
+    return {automatic,manual,all:[...automatic,...manual]};
 }
 
 // 수여 뱃지 취소 (개별)
@@ -6514,6 +6557,8 @@ function submitManualAward() {
         targets = getBatchTargetStudents().map(s => s.학번);
     }
     if (targets.length === 0) { alert('수여 대상 학생을 선택해주세요.'); return; }
+    const studentNames=Object.fromEntries(targets.map(id=>[id,teacherAwardOwnerName(id)]));
+    if (Object.values(studentNames).some(name=>!name)) { alert('수여 대상 학생의 이름을 확인해 주세요.'); return; }
 
     // ① localStorage 저장 (즉각 UI 반영 + 폴백 보장)
     targets.forEach(sid => {
@@ -6521,6 +6566,7 @@ function submitManualAward() {
         if (!manualAwards[id]) manualAwards[id] = [];
         selectedAwards.forEach(award => {
             manualAwards[id].push({
+                studentName: studentNames[id],
                 awardId  : award.id || award.awardId || '',
                 name     : award.name,
                 image    : award.image || '🏅',
@@ -6573,6 +6619,7 @@ function submitManualAward() {
         })
         .grantTeacherAwards({
             studentIds : targets.map(String),
+            studentNames,
             awards     : awardsForGAS,
             message,
             grantedBy  : '',
@@ -6595,23 +6642,25 @@ function submitManualAward() {
 
 // ─── 오늘 기록 상태 + 누적 달성 뱃지 + 교사 수여 뱃지 ───
 function renderAwardChips(studentId, dates, baseDate, showDelete) {
-    const manualList = getManualAwardsFor(studentId);
-    const autoEarned = evaluateAwards(studentId, dates, baseDate).filter(a=>!manualList.some(m=>(m.awardId||m.badgeId)===a.id||String(m.name||'').trim()===a.name));
+    const awards = composeStudentAwards(studentId,evaluateAwards(studentId,dates,baseDate));
+    const manualList = awards.manual;
+    const autoEarned = awards.automatic;
     let html = '';
     // 오늘 기록 상태와 누적 달성 뱃지는 표시만 하며 수여 API를 호출하지 않는다.
     autoEarned.forEach(a => {
-        html += `<span class="award-chip" style="background:${a.bg||'#f3f4f6'};color:${a.color||'#374151'};" title="자동 뱃지">
+        html += `<span class="award-chip" data-award-kind="automatic" style="background:${a.bg||'#f3f4f6'};color:${a.color||'#374151'};" title="자동 기록">
             <span style="font-size:13px;">${a.image||'🏅'}</span> ${a.name}
         </span>`;
     });
     // 교사 수여 뱃지
-    manualList.forEach((a, idx) => {
+    manualList.forEach(a => {
+        const idx=a._manualAwardIndex;
         const isUrl = a.image && (a.image.startsWith('http') || a.image.startsWith('/'));
         const imgHtml = isUrl
             ? `<img src="${a.image}" class="_badge-img-popup" data-src="${a.image.replace(/"/g,'&quot;')}" data-name="${(a.name||'').replace(/"/g,'&quot;')}" style="width:14px;height:14px;object-fit:contain;vertical-align:middle;cursor:pointer;" onerror="this.style.display='none'">`
             : `<span style="font-size:13px;">${a.image||'🏅'}</span>`;
         const msgTitle = a.message ? ` — ${a.message}` : '';
-        const delBtn = showDelete
+        const delBtn = showDelete && idx>=0
             ? `<button onclick="event.stopPropagation();deleteManualAward('${studentId}',${idx})" title="뱃지 삭제" style="margin-left:3px;background:none;border:none;cursor:pointer;color:${a.color||'#6366f1'};font-size:10px;opacity:0.7;padding:0;line-height:1;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">✕</button>` : '';
         html += `<span class="award-chip" style="background:${a.bg||'#f3f4f6'};color:${a.color||'#374151'};outline:2px solid ${a.color||'#6366f1'}44;" title="교사 수여${msgTitle}">${imgHtml} ${a.name} <span style="font-size:9px;opacity:0.7;">👩‍🏫</span>${delBtn}</span>`;
     });
@@ -6623,8 +6672,9 @@ function deleteManualAward(studentId, idx) {
     const id = String(studentId);
     if (!manualAwards[id] || !manualAwards[id][idx]) return;
     const award = manualAwards[id][idx];
+    if (award.kind==='automatic'||!teacherAwardMatchesOwner(award,studentId)) return;
     const student = studentsData.find(s => String(s.학번) === id);
-    const studentLabel = studen
+    const studentLabel = student
         ? `<strong>${student.학번} ${student.이름}</strong>`
         : `<strong>${studentId}</strong>`;
     showTeacherConfirm(
@@ -6638,6 +6688,7 @@ function _doDeleteManualAward(studentId, idx) {
     const id = String(studentId);
     if (!manualAwards[id] || !manualAwards[id][idx]) return;
     const award = manualAwards[id][idx];
+    if (award.kind==='automatic'||!teacherAwardMatchesOwner(award,studentId)) return;
 
     // 삭제 전 백업 (GAS 실패 시 롤백용)
     const backup = JSON.parse(JSON.stringify(manualAwards));
@@ -6699,7 +6750,7 @@ function _doDeleteManualAward(studentId, idx) {
             showTeacherModal('❌', '삭제 실패',
                 `GAS 연결 실패로 삭제하지 못했습니다.\n\n🔄 데이터 새로고침 후 다시 시도해주세요.`, 'error');
         })
-        .revokeTeacherAward(String(studentId), award.grantedAt || '', award.awardId || '');
+        .revokeTeacherAward(String(studentId), award.grantedAt || '', award.awardId || award.badgeId || '', award.studentName);
 }
 
 
@@ -6740,7 +6791,7 @@ function renderAwardsTab() {
     let allEntries = []; // { studentId, studentName, grade, classNum, number, award }
     Object.keys(manualAwards).forEach(sid => {
         const student = studentsData.find(s => s.학번 === sid);
-        (manualAwards[sid] || []).forEach(award => {
+        composeStudentAwards(sid,[],undefined,student&&student.이름).all.forEach(award => {
             allEntries.push({
                 studentId   : sid,
                 studentName : student ? student.이름 : (award.studentName || '?'),
@@ -6792,22 +6843,24 @@ function renderAwardsTab() {
     );
 
     container.innerHTML = sorted.map(entry => {
-        const chipsHtml = entry.awards.map((a, idx) => {
+        const chipsHtml = entry.awards.map(a => {
             const isUrl = a.image && (a.image.startsWith('http') || a.image.startsWith('/'));
             const imgHtml = isUrl
                 ? `<img src="${a.image}" style="width:16px;height:16px;object-fit:contain;vertical-align:middle;" onerror="this.style.display='none'">`
                 : `<span style="font-size:15px;">${a.image || '🏅'}</span>`;
             const dateStr = a.grantedAt ? a.grantedAt.substring(0, 10) : '';
             const msgStr  = a.message   ? `<span style="font-size:11px;color:#6b7280;font-style:italic;">"${a.message}"</span>` : '';
+            const deleteButton=a.kind==='automatic'||a._manualAwardIndex<0?'':`<button onclick="event.stopPropagation();deleteManualAward('${entry.studentId}',${a._manualAwardIndex})"
+                    title="뱃지 삭제"
+                    style="background:none;border:none;cursor:pointer;color:${a.color||'#7c3aed'};font-size:12px;opacity:0.6;padding:0 2px;margin-left:2px;"
+                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">✕</button>`;
             return `<div style="display:inline-flex;align-items:center;gap:6px;background:${a.bg||'#f5f3ff'};color:${a.color||'#7c3aed'};
                         padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;border:1.5px solid ${a.color||'#7c3aed'}33;margin:3px;">
                 ${imgHtml} ${a.name}
+                ${a.kind==='automatic'?'<span style="font-size:10px;opacity:0.7;">자동 기록</span>':''}
                 ${dateStr ? `<span style="font-size:10px;opacity:0.7;font-weight:400;">${dateStr}</span>` : ''}
                 ${msgStr}
-                <button onclick="event.stopPropagation();deleteManualAward('${entry.studentId}',${idx})"
-                    title="뱃지 삭제"
-                    style="background:none;border:none;cursor:pointer;color:${a.color||'#7c3aed'};font-size:12px;opacity:0.6;padding:0 2px;margin-left:2px;"
-                    onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">✕</button>
+                ${deleteButton}
             </div>`;
         }).join('');
 
@@ -6905,30 +6958,37 @@ function saveAwardSettings({silent=false}={}) {
     });
 }
 
+function badgeOwnerRecords(rows, studentId, studentName) {
+    const owner=teacherAwardOwnerName(studentId,studentName);
+    const normalize=id=>String(id).trim().replace(/\.0+$/,'');
+    return owner ? rows.filter(row=>normalize(row.학번)===normalize(studentId)&&String(row.name||'').trim()===owner) : [];
+}
+
 // 자동 뱃지: 오늘 카페인/수면 기록만 (교사 승인 없이 자동 표시)
-function evaluateAutoTodayBadges(studentId, baseDate, report) {
+function evaluateAutoTodayBadges(studentId, baseDate, report, studentName) {
     const earned = [];
-    const todayCaf = (report?.cafRecords || caffeineData).some(c => c.학번 === studentId && SleepRecordPolicy.date(c.섭취시간) === baseDate);
-    const todaySleep = report ? report.studentSleep.some(row => getSleepWakeDate(row) === baseDate) : hasSleepRecordOnWakeDate(studentId,baseDate);
+    const todayCaf = badgeOwnerRecords(report?.cafRecords || caffeineData,studentId,studentName).some(c=>SleepRecordPolicy.date(c.섭취시간)===baseDate);
+    const todaySleep = badgeOwnerRecords(report?.studentSleep || sleepData,studentId,studentName).some(row=>SleepRecordPolicy.describe(row).wakeDate===baseDate);
     if (todayCaf)   earned.push({ id:'today_caf',   name:'카페인 오늘 기록', image:'☕', bg:'#ecfdf5', color:'#059669' });
     if (todaySleep) earned.push({ id:'today_sleep', name:'수면 오늘 기록',   image:'😴', bg:'#eff6ff', color:'#2563eb' });
     return earned;
 }
 // 학생 화면 및 서버와 동일하게 기상 날짜 기준으로 하루 기록 완료를 집계한다.
-function evaluateJourneyBadges(studentId, baseDate, report){
+function evaluateJourneyBadges(studentId, baseDate, report, studentName){
     const cfg=BadgeJourney.mergeConfig(journeyConfig);
     const schedule=cfg.schedules[BadgeJourney.classFromStudentId(studentId)]||cfg.schedules[cfg.defaultClass||'3'];
-    const end=baseDate&&baseDate<schedule.end?baseDate:schedule.end;
+    const countSchedule=cfg.version>=5? schedule : {...schedule,end:baseDate&&baseDate<schedule.end?baseDate:schedule.end};
+    const today=getKSTDate(0);
     const summary=BadgeJourney.summarize({
-        caffeineDates:(report?.studentCaffeine || caffeineData).filter(r=>String(r.학번)===String(studentId)).map(r=>String(r.섭취시간||'').slice(0,10)),
-        sleepDates:(report?.studentSleep || sleepData).filter(r=>String(r.학번)===String(studentId)).map(getSleepWakeDate),
-        schedule:{...schedule,end}
+        caffeineDates:badgeOwnerRecords(report?.studentCaffeine || caffeineData,studentId,studentName).map(r=>cfg.version>=5?SleepRecordPolicy.date(r.섭취시간):String(r.섭취시간||'').slice(0,10)),
+        sleepDates:BadgeJourney.sleepWakeDates(badgeOwnerRecords(report?.studentSleep || sleepData,studentId,studentName),cfg.dateBasis,SleepRecordPolicy),
+        schedule:countSchedule, today:baseDate&&baseDate<today?baseDate:today, dateBasis:cfg.dateBasis
     });
-    return BadgeJourney.milestoneProgress(summary.completeDates,cfg.badges).filter(b=>b.auto===true&&b.earned);
+    return BadgeJourney.milestoneProgress(summary.completeDates,cfg.badges,schedule).filter(b=>b.auto===true&&b.earned);
 }
 // CSV/PDF와 학생 목록에서도 동일한 자동 뱃지를 사용한다.
-function evaluateAwards(studentId, dates, baseDate) {
-    return [...evaluateAutoTodayBadges(studentId, baseDate),...evaluateJourneyBadges(studentId,baseDate)];
+function evaluateAwards(studentId, dates, baseDate, studentName) {
+    return [...evaluateAutoTodayBadges(studentId,baseDate,null,studentName),...evaluateJourneyBadges(studentId,baseDate,null,studentName)];
 }
 
 // ── 설정 에디터 렌더 ──────────────────────────────────────
@@ -7073,6 +7133,10 @@ document.addEventListener('click', function(e) {
 
 // 챌린지/연속 뱃지 정의 (교사 설정, localStorage 저장)
 let journeyConfig = BadgeJourney.mergeConfig(null);
+let journeyDraftConfig = null;
+let journeySavePending = false;
+let journeyConfigLoaded = false;
+let journeyConfigRevision = '';
 let challengeBadges = journeyConfig.badges.map(b=>({...b, type:'complete', method:'cumulative'}));
 let pendingBadges  = [];
 let dismissedBadges = [];
@@ -7225,19 +7289,20 @@ function retryPendingSyncs() {
     const toRetry = {}; // { badgeKey: { aw, studentIds: [] } }
     Object.entries(manualAwards).forEach(([sid, list]) => {
         (list || []).forEach(aw => {
-            if (!aw._pendingSync) return;
+            if (!aw._pendingSync || !teacherAwardMatchesOwner(aw,sid)) return;
             const bid = aw.badgeId || aw.awardId || '';
             if (!bid) return;
             const key = bid + '|' + (aw.grantedAt || '');
-            if (!toRetry[key]) toRetry[key] = { aw, studentIds: [] };
+            if (!toRetry[key]) toRetry[key] = { aw, studentIds: [], studentNames: {} };
             toRetry[key].studentIds.push(sid);
+            toRetry[key].studentNames[sid]=aw.studentName;
         });
     });
     if (Object.keys(toRetry).length === 0) return;
     console.log('[재시도] _pendingSync 항목 감지:', Object.keys(toRetry).length, '종류 → GAS 저장 재시도');
 
     // 2) 각 그룹을 GAS에 재전송
-    Object.values(toRetry).forEach(({ aw, studentIds }) => {
+    Object.values(toRetry).forEach(({ aw, studentIds, studentNames }) => {
         const bid = aw.badgeId || aw.awardId || '';
         const grantedAt = aw.grantedAt || new Date().toISOString().split('T')[0];
         try {
@@ -7247,7 +7312,7 @@ function retryPendingSyncs() {
                         // 성공 시 _pendingSync 해제
                         studentIds.forEach(sid => {
                             if (manualAwards[sid]) manualAwards[sid].forEach(a => {
-                                if ((a.badgeId || a.awardId) === bid && a.grantedAt === grantedAt) delete a._pendingSync;
+                                if (a.studentName===studentNames[sid] && (a.badgeId || a.awardId) === bid && a.grantedAt === grantedAt) delete a._pendingSync;
                             });
                         });
                         saveManualAwards();
@@ -7259,6 +7324,7 @@ function retryPendingSyncs() {
                 })
                 .grantTeacherAwards({
                     studentIds,
+                    studentNames,
                     awards: [{ awardId: bid, name: aw.name, image: aw.image, bg: aw.bg, color: aw.color, grantedAt }],
                     message: aw.message || '',
                     grantedBy: aw.grantedBy || '교사승인',
@@ -7582,11 +7648,13 @@ function bulkApprovePending(){
     );
 }
 function _doBulkApprovePending(items){
+    if (items.some(({studentId,student})=>teacherAwardOwnerName(studentId)!==String(student.이름).trim())) return;
+    const studentNames=Object.fromEntries(items.map(({studentId,student})=>[studentId,String(student.이름).trim()]));
     const grantedAt=new Date().toISOString().split('T')[0];
     items.forEach(({studentId,badgeId,badge})=>{
         const id=String(studentId);
         if(!manualAwards[id])manualAwards[id]=[];
-        manualAwards[id].push({badgeId:badge.id,name:badge.name,image:badge.image,bg:badge.bg,color:badge.color,grantedAt,grantedBy:'교사승인',message:'',_pendingSync:true});
+        manualAwards[id].push({studentName:studentNames[id],badgeId:badge.id,name:badge.name,image:badge.image,bg:badge.bg,color:badge.color,grantedAt,grantedBy:'교사승인',message:'',_pendingSync:true});
         pendingBadges=pendingBadges.filter(p=>!(p.studentId===studentId&&p.badgeId===badgeId));
     });
     saveManualAwards();
@@ -7612,7 +7680,7 @@ function _doBulkApprovePending(items){
                     }catch(e){syncedAwards.forEach(aw=>aw._pendingSync=true);failed();}
                 })
                 .withFailureHandler(failed)
-                .grantTeacherAwards({studentIds,awards:[{awardId:badge.id,name:badge.name,image:badge.image,bg:badge.bg,color:badge.color,grantedAt,message:''}],message:'',grantedBy:'교사승인',grantedAt});
+                .grantTeacherAwards({studentIds,studentNames,awards:[{awardId:badge.id,name:badge.name,image:badge.image,bg:badge.bg,color:badge.color,grantedAt,message:''}],message:'',grantedBy:'교사승인',grantedAt});
         }catch(e){failed();}
     }));
     renderPendingBadges();
@@ -7665,9 +7733,11 @@ function approvePendingBadge(studentId, badgeId){
 }
 function _doApprovePendingBadge(studentId,badgeId,badge,displayName){
     const id=String(studentId);
+    const studentName=teacherAwardOwnerName(id);
+    if (!studentName || studentName!==String(displayName).trim()) return;
     if(!manualAwards[id])manualAwards[id]=[];
     const grantedAt=new Date().toISOString().split('T')[0];
-    manualAwards[id].push({badgeId:badge.id,name:badge.name,image:badge.image,bg:badge.bg,color:badge.color,grantedAt,grantedBy:'교사승인',message:'',_pendingSync:true});
+    manualAwards[id].push({studentName,badgeId:badge.id,name:badge.name,image:badge.image,bg:badge.bg,color:badge.color,grantedAt,grantedBy:'교사승인',message:'',_pendingSync:true});
     saveManualAwards();
     pendingBadges=pendingBadges.filter(p=>!(p.studentId===studentId&&p.badgeId===badgeId));
     savePendingBadges();
@@ -7690,7 +7760,7 @@ function _doApprovePendingBadge(studentId,badgeId,badge,displayName){
                 console.warn('[뱃지수여] GAS 연결 실패 — 다음 새로고침 시 재동기화:', err);
                 failed();
             })
-            .grantTeacherAwards({studentIds:[id],awards:[{awardId:badge.id,name:badge.name,image:badge.image,bg:badge.bg,color:badge.color,grantedAt,message:''}],message:'',grantedBy:'교사승인',grantedAt});
+            .grantTeacherAwards({studentIds:[id],studentNames:{[id]:studentName},awards:[{awardId:badge.id,name:badge.name,image:badge.image,bg:badge.bg,color:badge.color,grantedAt,message:''}],message:'',grantedBy:'교사승인',grantedAt});
     }catch(e){failed();}
     renderPendingBadges();renderAwardsTab();updateStudentGrid();
 }
@@ -7753,22 +7823,25 @@ function renderJourneyScheduleRows(){
     const body=document.getElementById('journeyScheduleRows');
     if(!body)return;
     body.innerHTML=['1','2','3','4'].map(classNo=>{
-        const s=journeyConfig.schedules[classNo];
+        const cfg=journeyDraftConfig||journeyConfig;
+        const s=cfg.schedules[classNo];
+        const finish=BadgeJourney.milestoneProgress([],cfg.badges,s).find(b=>b.ratio);
         return `<tr style="border-top:1px solid #dcfce7;"><td style="padding:7px 5px;font-weight:700;">2-${classNo}반</td>
             <td data-label="전체 시작">${journeyDateInput(classNo,'start',s.start)}</td><td data-label="전체 종료">${journeyDateInput(classNo,'end',s.end)}</td>
             <td data-label="초기 시작">${journeyDateInput(classNo,'initialStart',s.initialStart)}</td><td data-label="초기 종료">${journeyDateInput(classNo,'initialEnd',s.initialEnd)}</td>
-            <td data-label="실천 시작">${journeyDateInput(classNo,'actionStart',s.actionStart)}</td><td data-label="실천 종료">${journeyDateInput(classNo,'actionEnd',s.actionEnd)}</td></tr>`;
+            <td data-label="실천 시작">${journeyDateInput(classNo,'actionStart',s.actionStart)}</td><td data-label="실천 종료">${journeyDateInput(classNo,'actionEnd',s.actionEnd)}${finish?`<div style="margin-top:4px;">마무리 ${finish.days}/${finish.totalDays}일 · 마지막 기상 ${s.finalClassDate}</div>`:''}</td></tr>`;
     }).join('');
 }
 
 function readJourneySchedules(){
     const schedules={};
     ['1','2','3','4'].forEach(classNo=>{
-        const previous=journeyConfig.schedules[classNo];
+        const previous=(journeyDraftConfig||journeyConfig).schedules[classNo];
         schedules[classNo]={...previous};
         ['start','end','initialStart','initialEnd','actionStart','actionEnd'].forEach(field=>{
             schedules[classNo][field]=document.getElementById(`journey_${classNo}_${field}`)?.value||previous[field];
         });
+        if((journeyDraftConfig||journeyConfig).version>=5) schedules[classNo].finalClassDate=BadgeJourney.shiftDate(schedules[classNo].end,1);
     });
     return schedules;
 }
@@ -7776,20 +7849,25 @@ function readJourneySchedules(){
 function renderChallengeBadgeList(){
     const container=document.getElementById('challengeBadgeList');
     if(!container)return;
-    challengeBadges=journeyConfig.badges.map(b=>({...b,type:'complete',method:'cumulative',auto:true}));
-    container.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">${challengeBadges.map(b=>`
+    const previewBadges=(journeyDraftConfig||journeyConfig).badges;
+    container.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;">${previewBadges.map(b=>`
         <div style="display:flex;align-items:center;gap:9px;border:1px solid #e5e7eb;border-radius:10px;padding:10px;background:${b.bg};">
             <span style="font-size:24px;">${b.image}</span><div><div style="font-size:12px;font-weight:700;color:${b.color};">${b.name}</div>
-            <div style="font-size:10px;color:#6b7280;margin-top:2px;">하루 기록 완료 누적 ${b.days}일 · 자동</div></div>
+            <div style="font-size:10px;color:#6b7280;margin-top:2px;">${b.ratio?'반별 전체 기간의 80% (올림)':'하루 기록 완료 누적 '+b.days+'일'} · 자동</div></div>
         </div>`).join('')}</div>`;
     renderJourneyScheduleRows();
 }
 
 function loadBadgeConfigFromGAS(){
+    journeyConfigLoaded=false;
     google.script.run
         .withSuccessHandler(function(result){
             const remote=result&&result.success?result.config:null;
+            if(!remote){const status=document.getElementById('challengeSaveStatus');if(status)status.textContent='현재 설정을 불러오지 못했습니다. 새로고침 후 확인하세요.';return;}
+            journeyConfigRevision=typeof result.revision==='string'?result.revision:'';
+            journeyConfigLoaded=!!journeyConfigRevision;
             journeyConfig=BadgeJourney.mergeConfig(remote);
+            journeyDraftConfig=null;
             challengeBadges=journeyConfig.badges.map(b=>({...b,type:'complete',method:'cumulative',auto:true}));
             challengeConfigSaved=!!(remote&&remote.configSaved&&Number(remote.version)>=4);
             S.challengeName=journeyConfig.challengeName;
@@ -7806,45 +7884,55 @@ function loadBadgeConfigFromGAS(){
 }
 
 function saveChallengeBadgeSettings(){
-    journeyConfig={
-        ...journeyConfig,
-        version:4,
+    if(journeySavePending)return;
+    if(!journeyConfigLoaded){const status=document.getElementById('challengeSaveStatus');if(status)status.textContent='현재 서버 설정을 먼저 불러와야 저장할 수 있습니다. 새로고침해 주세요.';return;}
+    const candidate={
+        ...(journeyDraftConfig||journeyConfig),
         challengeName:document.getElementById('setting_challengeName')?.value.trim()||'나의 건강기록 여정',
         schedules:readJourneySchedules(),
-        badges:BadgeJourney.DEFAULT_CONFIG.badges.map(b=>({...b})),
         configSaved:true
     };
-    challengeBadges=journeyConfig.badges.map(b=>({...b,type:'complete',method:'cumulative',auto:true}));
-    challengeConfigSaved=true;
-    S.challengeName=journeyConfig.challengeName;
-    saveChallengeBadges();
-    try{localStorage.setItem('challengeConfigSaved','1');localStorage.setItem('monSettings',JSON.stringify(S));}catch(e){}
-    rebuildAwardDropdown();renderChallengeBadgeList();renderJourneyStatus();
     const status=document.getElementById('challengeSaveStatus');
+    const setPending=value=>{
+        journeySavePending=value;
+        document.querySelectorAll?.('.journey-date-input, #setting_challengeName, button[onclick="saveChallengeBadgeSettings()"], button[onclick="resetChallengeSettings()"]').forEach(el=>{el.disabled=value;});
+    };
     const failed=()=>{
-        if(status)status.textContent='⚠️ 저장 실패 — 다시 시도해 주세요';
+        setPending(false);
+        journeyConfigLoaded=false;
+        if(status)status.textContent='⚠️ 저장을 확인하지 못했습니다. 이 화면은 이전 기준을 유지합니다. 새로고침하여 서버 적용 여부를 확인해 주세요.';
         else showTeacherModal('⚠️','챌린지 설정 저장 실패','서버에 저장하지 못했습니다. 다시 시도해 주세요.','warning');
     };
     if(status)status.textContent='저장 중…';
+    setPending(true);
     try{
         google.script.run
             .withSuccessHandler(res=>{
-                if(res?.success!==true){failed();return;}
+                if(res?.success!==true||!res.config||!res.revision){failed();return;}
+                setPending(false);
+                journeyConfig=BadgeJourney.mergeConfig(res.config);
+                journeyConfigRevision=res.revision;
+                journeyDraftConfig=null;
+                challengeBadges=journeyConfig.badges.map(b=>({...b,type:'complete',method:'cumulative',auto:true}));
+                challengeConfigSaved=true;
+                S.challengeName=journeyConfig.challengeName;
+                saveChallengeBadges();
+                try{localStorage.setItem('challengeConfigSaved','1');localStorage.setItem('monSettings',JSON.stringify(S));}catch(e){}
+                rebuildAwardDropdown();renderChallengeBadgeList();renderJourneyStatus();
                 if(status)status.textContent='';
                 showTeacherModal('✅','챌린지 설정 저장 완료','챌린지 설정을 저장했습니다.','success');
             })
             .withFailureHandler(failed)
-            .saveChallengeBadgeConfig(journeyConfig);
+            .saveChallengeBadgeConfig(candidate,journeyConfigRevision);
     }catch(e){failed();}
 }
 
 function resetChallengeSettings(){
-    if(!confirm('건강기록 여정을 수업 운영 일정의 기본 날짜로 되돌리시겠습니까?'))return;
-    journeyConfig=BadgeJourney.mergeConfig(null);
-    challengeBadges=journeyConfig.badges.map(b=>({...b,type:'complete',method:'cumulative',auto:true}));
-    const nameEl=document.getElementById('setting_challengeName');if(nameEl)nameEl.value=journeyConfig.challengeName;
-    renderChallengeBadgeList();renderJourneyStatus();
-    const status=document.getElementById('challengeSaveStatus');if(status)status.textContent='기본 날짜를 불러왔습니다. 저장 버튼을 눌러 적용하세요.';
+    if(journeySavePending)return;
+    if(!journeyConfigLoaded){const status=document.getElementById('challengeSaveStatus');if(status)status.textContent='현재 서버 설정을 먼저 불러와야 합니다. 새로고침해 주세요.';return;}
+    journeyDraftConfig=BadgeJourney.prepareUpgrade({...journeyConfig,schedules:readJourneySchedules()});
+    renderChallengeBadgeList();
+    const status=document.getElementById('challengeSaveStatus');if(status)status.textContent='새 기준 미리보기입니다. 시작일 2-1 10/12, 2-2 10/16, 2-3·4 10/6과 마지막 기상일을 확인한 뒤 저장하세요. 아직 적용되지 않았습니다.';
 }
 
 function renderJourneyStatus(){
@@ -7856,15 +7944,16 @@ function renderJourneyStatus(){
     if(!students.length){body.innerHTML='<tr><td colspan="7" style="padding:20px;text-align:center;color:#9ca3af;">표시할 학생이 없습니다.</td></tr>';return;}
     body.innerHTML=students.map(s=>{
         const schedule=journeyConfig.schedules[String(s.반)]||journeyConfig.schedules['3'];
-        const caf=caffeineData.filter(r=>r.학번===s.학번).map(r=>String(r.섭취시간||'').substring(0,10));
-        const sleep=sleepData.filter(r=>r.학번===s.학번).map(r=>r.날짜);
-        const summary=BadgeJourney.summarize({caffeineDates:caf,sleepDates:sleep,schedule,today:todayKst});
-        const week=BadgeJourney.weekProgress({caffeineDates:caf,sleepDates:sleep,today:todayKst});
+        const caf=badgeOwnerRecords(caffeineData,s.학번,s.이름).map(r=>journeyConfig.version>=5?SleepRecordPolicy.date(r.섭취시간):String(r.섭취시간||'').slice(0,10));
+        const sleepRows=badgeOwnerRecords(sleepData,s.학번,s.이름);
+        const sleep=journeyConfig.version>=5?BadgeJourney.sleepWakeDates(sleepRows,journeyConfig.dateBasis,SleepRecordPolicy):sleepRows.map(r=>r.날짜);
+        const summary=BadgeJourney.summarize({caffeineDates:caf,sleepDates:sleep,schedule,today:todayKst,dateBasis:journeyConfig.dateBasis});
+        const week=BadgeJourney.weekProgress({caffeineDates:caf,sleepDates:sleep,today:todayKst,schedule:journeyConfig.version>=5?schedule:null,dateBasis:journeyConfig.dateBasis});
         const stage=BadgeJourney.studentStage(schedule,todayKst);
         return `<tr style="border-top:1px solid #e5e7eb;"><td style="padding:9px;">${escapeHtml(s.학번)}</td><td>${escapeHtml(s.이름)}</td>
-            <td><strong>${summary.totalComplete}일</strong></td><td>${week.complete}/7</td>
-            <td>완료 ${summary.initial.complete}/7<br><span style="font-size:10px;color:#6b7280;">카페인 ${summary.initial.caffeine} · 수면 ${summary.initial.sleep}</span></td>
-            <td>완료 ${summary.action.complete}/7<br><span style="font-size:10px;color:#6b7280;">카페인 ${summary.action.caffeine} · 수면 ${summary.action.sleep}</span></td>
+            <td><strong>${summary.totalComplete}일</strong></td><td>${week.totalDays?week.complete+'/'+week.totalDays:'기간 밖'}</td>
+            <td>완료 ${summary.initial.complete}/${summary.initial.totalDays}<br><span style="font-size:10px;color:#6b7280;">카페인 ${summary.initial.caffeine} · 수면 ${summary.initial.sleep}</span></td>
+            <td>완료 ${summary.action.complete}/${summary.action.totalDays}<br><span style="font-size:10px;color:#6b7280;">카페인 ${summary.action.caffeine} · 수면 ${summary.action.sleep}</span></td>
             <td><span style="background:#ecfdf5;color:#047857;padding:4px 8px;border-radius:12px;font-size:11px;font-weight:700;">${stage.label}</span></td></tr>`;
     }).join('');
 }
