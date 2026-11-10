@@ -28,35 +28,35 @@ function compare(groups, field, labels, unit) {
   const values = groups.map(group => group.map(day => day[field]).filter(Number.isFinite));
   if (values.some(group => group.length < 2)) return null;
   const [first, second] = values.map(group => (group.reduce((sum, value) => sum + value, 0) / group.length).toFixed(1));
-  return `${labels[0]}은 평균 ${first}${unit}(${values[0].length}일), ${labels[1]}은 평균 ${second}${unit}(${values[1].length}일)이다.`;
+  return `${labels[0]}은 평균 ${first}${unit}(${values[0].length}일), ${labels[1]}은 평균 ${second}${unit}(${values[1].length}일)입니다.`;
 }
 
 function goalEvidence(goal) {
   if (!goal || !Object.hasOwn(GOAL_LABELS, goal.kind) || !Number.isInteger(goal.measured) ||
       !Number.isInteger(goal.kept) || goal.measured < 1 || goal.measured > 366 || goal.kept < 0 || goal.kept > goal.measured) return null;
   const label = GOAL_LABELS[goal.kind];
-  if (goal.kind === 'sleepRecords' || goal.kind === 'caffeineRecords') return `${label}을 ${goal.measured}일 중 ${goal.kept}일 남겼다.`;
+  if (goal.kind === 'sleepRecords' || goal.kind === 'caffeineRecords') return `${label}을 ${goal.measured}일 중 ${goal.kept}일 남겼습니다.`;
   const observation = goal.observation;
-  const observed = observation?.kind === 'phone30' ? '자기 전 스마트폰을 30분 이상 사용했다고 기록했다.' :
-    observation?.kind === 'afternoonCaffeine' ? '오후 3시 이후 카페인을 섭취했다고 기록했다.' : '';
+  const observed = observation?.kind === 'phone30' ? '자기 전 스마트폰을 30분 이상 사용했다고 기록했습니다.' :
+    observation?.kind === 'afternoonCaffeine' ? '오후 3시 이후 카페인을 섭취했다고 기록했습니다.' : '';
   const overlap = observed && Number.isInteger(observation.count) && observation.count >= 2 && observation.count <= goal.measured - goal.kept
     ? ` 지키지 못한 날 중 ${observation.count}일은 ${observed}` : '';
-  return `확인 가능한 ${goal.measured}일 중 ${goal.kept}일은 ${label}에 맞았다.${overlap}`;
+  return `확인 가능한 ${goal.measured}일 중 ${goal.kept}일은 ${label}에 맞았습니다.${overlap}`;
 }
 
 // Counts come from the validated goal fact, never the model's prose.
 function praiseProgress(goal) {
   const label = GOAL_LABELS[goal.kind];
   const days = goal.measured + '일 ' + (goal.kept === goal.measured ? '모두' : '중 ' + goal.kept + '일');
-  if (goal.kind === 'sleepRecords' || goal.kind === 'caffeineRecords') return label + '을 ' + days + ' 남겼다.';
-  return '확인한 ' + days + ' ' + label + '에 맞았다.';
+  if (goal.kind === 'sleepRecords' || goal.kind === 'caffeineRecords') return label + '을 ' + days + ' 남겼습니다.';
+  return '확인한 ' + days + ' ' + label + '에 맞았습니다.';
 }
 
 function buildEvidence({ engine, reportMode }) {
   const finding = id => engine.findings?.find(item => item.id === id)?.data;
   const habit = finding('recordHabit');
   const record = Number.isInteger(habit?.count) && habit.count > 0
-    ? `수면이나 카페인 기록을 ${habit.count}일 남겼다.${habit.streak > 1 ? ` 가장 긴 연속 기록은 ${habit.streak}일이다.` : ''}` : null;
+    ? `수면이나 카페인 기록을 ${habit.count}일 남겼습니다.${habit.streak > 1 ? ` 가장 긴 연속 기록은 ${habit.streak}일입니다.` : ''}` : null;
   const closed = (finding('bedtimeSeries')?.days || []).filter(day => !day.open);
   const sleep = closed.filter(day => day.recorded && !day.held);
   const caffeine = finding('caffeineSummary')?.days || [];
@@ -74,8 +74,8 @@ function buildEvidence({ engine, reportMode }) {
   const late = timed.filter(item => item.time >= 900).length;
   const zero = caffeine.filter(day => day.status === 'zero').length;
   const caffeineDays = intakes.length ? (timed.length
-    ? `시각을 기록한 카페인 섭취 ${timed.length}번 중 ${late}번은 오후 3시 이후였다.`
-    : `카페인 섭취를 ${intakes.length}번 기록했다.`) : zero ? `카페인을 안 마셨다고 기록한 날은 ${zero}일이다.` : null;
+    ? `시각을 기록한 카페인 섭취 ${timed.length}번 중 ${late}번은 오후 3시 이후였습니다.`
+    : `카페인 섭취를 ${intakes.length}번 기록했습니다.`) : zero ? `카페인을 안 마셨다고 기록한 날은 ${zero}일입니다.` : null;
   const phoneGroups = finding('phoneBeforeBed')?.members?.map(dates => new Set(dates));
   const sleepHabits = phoneGroups?.length === 2 ? compare(phoneGroups.map(dates => sleep.filter(day => dates.has(day.date))),
     'hours', ['자기 전 스마트폰을 30분 이상 쓴 밤의 수면시간', '그보다 적게 사용했거나 사용하지 않은 밤의 수면시간'], '시간') : null;
@@ -85,18 +85,18 @@ function buildEvidence({ engine, reportMode }) {
   const limitDays = finding('healthStandards')?.rows?.find(row => row.id === 'caffeineMax')?.days || [];
   const exceeded = limitDays.filter(day => day.kept === false && caffeineByDate.get(day.date) === 'known').length;
   const recordGood = [
-    sleep.length ? `완료된 밤 ${closed.length}일 중 유효한 수면 기록을 ${sleep.length}일 남겼다.` : '',
-    zero ? `마시지 않은 날을 ‘안 마심’으로 ${zero}일 남겼다.` : '',
+    sleep.length ? `완료된 밤 ${closed.length}일 중 유효한 수면 기록을 ${sleep.length}일 남겼습니다.` : '',
+    zero ? `마시지 않은 날을 ‘안 마심’으로 ${zero}일 남겼습니다.` : '',
   ].filter(Boolean).join(' ') || null;
   const recordReview = [
-    exceeded ? `일일 최대 섭취량을 넘긴 날이 ${exceeded}일이다.` : '',
-    missingCaffeine ? `카페인 기록이 없는 날은 ${missingCaffeine}일이다.` : '',
-    missingSleep ? `수면 기록이 없는 밤은 ${missingSleep}일이다.` : '',
+    exceeded ? `일일 최대 섭취량을 넘긴 날이 ${exceeded}일입니다.` : '',
+    missingCaffeine ? `카페인 기록이 없는 날은 ${missingCaffeine}일입니다.` : '',
+    missingSleep ? `수면 기록이 없는 밤은 ${missingSleep}일입니다.` : '',
   ].filter(Boolean).join(' ') || null;
   const praiseFact = goalEvidence(praise);
   const evidence = { record, caffeineSleep, behavior, caffeineDays, sleepHabits, recordGood, recordReview,
     praise: praiseFact && zero && praise.kind === 'caffeineMax'
-      ? praiseFact + ' 마시지 않은 날도 안 마심으로 남겼다.' : praiseFact,
+      ? praiseFact + ' 마시지 않은 날도 안 마심으로 남겼습니다.' : praiseFact,
     difficulty: goalEvidence(difficulty) };
   const success = evidence.praise || recordGood || record;
   const challenge = evidence.difficulty || recordReview;
@@ -144,7 +144,7 @@ function acceptedAnalysis(value, evidence) {
       if (!/요[.!?]$/.test(sentence) || /(?:니다|십시오)[.!?](?:\s|$)/.test(sentence) || COACH_FILLER.test(sentence)) continue;
     } else if (field === 'memo') {
       if (!/(?:요|니다)[.!?]$/.test(sentence) || COACH_FILLER.test(sentence) || /감사|고맙|고마|(?:격려|칭찬)(?:합니다|해요)/.test(sentence)) continue;
-    } else if (!/다\.$/.test(sentence) || /(?:요|니다|십시오)[.!?](?:\s|$)/.test(sentence)) continue;
+    } else if (!/니다\.$/.test(sentence) || /요[.!?](?:\s|$)/.test(sentence)) continue;
     if (field === 'difficulty' && evidence[field].includes(GOAL_LABELS.range) && RANGE_DIRECTION.test(sentence)) continue;
     if ((field === 'praise' || field === 'difficulty') && FREQUENCY_COMPARISON.test(sentence)) continue;
     sentences[field] = sentence;
@@ -198,15 +198,15 @@ const INSTRUCTIONS = [
   'Write Korean feedback for a school caffeine and sleep log. Return one analysis per input, in order. Use only the evidence supplied for each field. Return null for null inputs.',
   'Blend two roles: a warm, upbeat coach who notices small wins and an objective data expert who states exactly what the log supports. Make success feel attainable without exaggerating, judging or promising a benefit.',
   'The app adds verified figures in the report, including a friendly goal count before praise. Do not generate numbers, dates, clock times, thresholds, scores or amounts. Do not add facts, names, diagnoses, medical advice, links or emojis. Describe co-occurrence without inferring causes. Missing records do not mean a behavior did not happen.',
-  'For record, caffeineSleep, behavior, caffeineDays, sleepHabits and difficulty, use plain Korean declarative -다 style, such as 기록을 남겼다 or 함께 나타났다. Do not use -습니다 or -해요 for these factual observations. In comparisons name both groups and follow the observed direction.',
+  'For record, caffeineSleep, behavior, caffeineDays, sleepHabits and difficulty, use Korean 합니다체 for factual observations, ending in -습니다, -ㅂ니다, or -입니다. For example: 기록이 있었습니다 or 함께 나타났습니다. In comparisons name both groups and follow the observed direction.',
   'For recordGood, recordReview, praise and plan, speak directly to the student in friendly 해요체. End in 요. Use 8 to 72 characters total, or at most 55 for recordGood and recordReview. Use simple verbs, no scolding or commands. Avoid 모습이 확인됩니다, 참고할 수 있어요, 이어가면 좋겠어요, 앞으로도 꾸준히 and vague 살펴봐요.',
   'For recordGood, celebrate a specific entry the student took care to leave. An occasional exclamation mark is fine. For recordReview, offer one gentle alternative tied to a missing entry or verified intake limit. If a caffeine entry is missing, suggest recording whether a drink was consumed without assuming abstinence.',
-  'For praise, add a warm, specific reaction to the app’s verified result without repeating it. Notice a small step the student actually took. For example, only when supported: 안 마신 날도 놓치지 않고 적었네요. 잘 챙겼어요! Do not claim a partly met goal was fully met. For difficulty, state only the observed facts in -다 style. Put suggestions in plan. For a missed sleep range say 기준을 벗어난 날. Do not infer that the sleep was short or long or that another behavior caused the result.',
+  'For praise, add a warm, specific reaction to the app’s verified result without repeating it. Notice a small step the student actually took. For example, only when supported: 안 마신 날도 놓치지 않고 적었네요. 잘 챙겼어요! Do not claim a partly met goal was fully met. For difficulty, state only the observed facts in 합니다체. Put suggestions in plan. For a missed sleep range say 기준을 벗어난 날. Do not infer that the sleep was short or long or that another behavior caused the result.',
   'For plan, choose just one of the supplied 제안할 행동 options. Choose the most practical option for the observed pattern instead of always choosing the first one. Turn it into one small experiment with a cue about when or where. Vary inviting endings such as 둬 볼까요?, 먼저 확인해 보세요, or 골라 봐요. In a final review choose an action the student can continue after the study.',
   'For memo, write one or two warm sentences, 8 to 72 characters total, as a teacher cheering the student on. Use mostly 해요체. Recognize a specific effort, then encourage the action you chose for plan without copying its wording. Name the action instead of saying 다음 걸음을 골라 봐요. In a final review recognize the effort through the study and encourage continuation without assuming more study records. Avoid generic praise, gratitude, diagnoses and promises.',
   'For highlights choose one or two distinct available fields from caffeineSleep, behavior, caffeineDays, sleepHabits, praise and difficulty, or return an empty list if none are available.',
 ].join(' ');
-const RETRY_INSTRUCTIONS = ' This is a second attempt. Return every supported field. Use plain -다 style for record, caffeineSleep, behavior, caffeineDays, sleepHabits and difficulty. Use 해요체 for recordGood, recordReview, praise and plan, and warm polite Korean for memo. Keep recordGood and recordReview within 55 characters. Use no digits or generic filler. Use only the supplied evidence.';
+const RETRY_INSTRUCTIONS = ' This is a second attempt. Return every supported field. End factual observations in -습니다 or -입니다 for record, caffeineSleep, behavior, caffeineDays, sleepHabits and difficulty. Use 해요체 for recordGood, recordReview, praise and plan, and warm polite Korean for memo. Keep recordGood and recordReview within 55 characters. Use no digits or generic filler. Use only the supplied evidence.';
 
 async function requestDrafts(group, { fetchImpl, key, model }, retry) {
   try {

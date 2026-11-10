@@ -725,7 +725,7 @@
   const noDiscomfort = symptom => /^(없음|해당 없음|없었어요|없다)$/.test(symptom);
 
   function buildSummaryCaffeineCharts(intakes) {
-    const noResponse = '<p class="summary-note">표시할 응답이 없다.</p>';
+    const noResponse = '<p class="summary-note">표시할 응답이 없습니다.</p>';
     const choices = value => (value || '').split(', ').map(item => item.trim()).filter(Boolean);
     const shortChoice = value => caffeineChoiceLabels.get(value) ?? pdfShort(value, 12);
     const rank = entries => {
@@ -777,11 +777,11 @@
     const late = counts[2] + counts[3];
     const side = symptomatic[0];
     const sideNote = symptomatic.length >= 2
-      ? `불편함을 기록한 ${symptomatic.length}건 중 ${symptomatic.filter(item => item.time >= 900).length}건은 15시 이후 섭취 기록이다.`
+      ? `불편함을 기록한 ${symptomatic.length}건 중 ${symptomatic.filter(item => item.time >= 900).length}건은 15시 이후 섭취 기록입니다.`
       : side && Number.isFinite(side.time) && Number.isFinite(side.bed)
-        ? `${pdfDay(side.date)}에는 ${pdfClock(side.time)}에 카페인을 마시고 ‘${side.options.join(', ')}’고 기록했다. 그날 밤 ${pdfClock(side.bed)}에 잠자리에 들었다.` : '';
-    const note = [top.count >= 2 && top.count > (second?.count ?? 0) ? `가장 자주 마신 음료는 ‘${top.name}’(${top.count}회)이다.` : '',
-      late ? `15시 이후 섭취는 ${late}회이다.` : '', sideNote].filter(Boolean).join(' ');
+        ? `${pdfDay(side.date)}에는 ${pdfClock(side.time)}에 카페인을 마시고 ‘${side.options.join(', ')}’고 기록했습니다. 그날 밤 ${pdfClock(side.bed)}에 잠자리에 들었습니다.` : '';
+    const note = [top.count >= 2 && top.count > (second?.count ?? 0) ? `가장 자주 마신 음료는 ‘${top.name}’(${top.count}회)입니다.` : '',
+      late ? `15시 이후 섭취는 ${late}회입니다.` : '', sideNote].filter(Boolean).join(' ');
     const reasonRows = topFour(reasons.map(row => ({ ...row, name: shortChoice(row.name) })));
     return { note, content: `<div class="summary-caf-grid">
       ${card('drink', '① 자주 마신 음료', '횟수 · 합계', horizontal(topFour(drinks, name => pdfShort(name, 12)), { wide: true }))}
@@ -792,16 +792,16 @@
   }
 
   function buildSummaryNoCaffeine(zero, periodDays) {
-    if (!zero.length) return { content: '<p class="summary-note">표시할 섭취 내역이 없다.</p>', note: '' };
+    if (!zero.length) return { content: '<p class="summary-note">표시할 섭취 내역이 없습니다.</p>', note: '' };
     let longest = 0, streak = 0, previous, last;
     for (const { date } of zero) {
       streak = previous === pdfShiftDate(date, -1) ? streak + 1 : 1;
       if (streak > longest) { longest = streak; last = date; }
       previous = date;
     }
-    const lead = zero.length === periodDays ? '이 기간에는 카페인을 마시지 않았다' : '기록한 날에는 카페인을 마시지 않았다';
-    const note = `‘안 마심’은 총 ${zero.length}일 기록했다. 최장 연속 기록은 ${pdfDay(pdfShiftDate(last, 1 - longest))}부터 ${pdfDay(last)}까지 ${longest}일이다.`;
-    return { note: longest >= 2 ? note : `‘안 마심’은 총 ${zero.length}일 기록했다.`, content: `<div class="summary-caf-none">
+    const lead = zero.length === periodDays ? '이 기간에는 카페인을 마시지 않았습니다' : '기록한 날에는 카페인을 마시지 않았습니다';
+    const note = `‘안 마심’은 총 ${zero.length}일 기록했습니다. 최장 연속 기록은 ${pdfDay(pdfShiftDate(last, 1 - longest))}부터 ${pdfDay(last)}까지 ${longest}일입니다.`;
+    return { note: longest >= 2 ? note : `‘안 마심’은 총 ${zero.length}일 기록했습니다.`, content: `<div class="summary-caf-none">
       <svg viewBox="0 0 120 120" width="140" height="140" aria-hidden="true"><circle cx="60" cy="60" r="56" fill="#fbeee4"/>
       <path d="M30 46h52l-6 44a8 8 0 0 1-8 7H44a8 8 0 0 1-8-7z" fill="#fff" stroke="#d98a55" stroke-width="4" stroke-linejoin="round"/>
       <path d="M82 54h6a10 10 0 0 1 0 20h-8" fill="none" stroke="#d98a55" stroke-width="4"/>
@@ -923,7 +923,7 @@
       weeklyMetric('condition', '평균 아침 컨디션', sleepField('condition'), value => fixed(value, '점')),
     ]) : dailyChart();
     const availableMetric = metrics.find(item => item.means);
-    const aNote = availableMetric ? `카페인을 마신 날과 마시지 않은 날의 ${availableMetric.title}은 각각 ${availableMetric.format(availableMetric.means[0])}, ${availableMetric.format(availableMetric.means[1])}이다.` : '';
+    const aNote = availableMetric ? `카페인을 마신 날과 마시지 않은 날의 ${availableMetric.title}은 각각 ${availableMetric.format(availableMetric.means[0])}, ${availableMetric.format(availableMetric.means[1])}입니다.` : '';
     const standards = finding('healthStandards')?.rows || [];
     const limitInfo = feedback.engine.summaryCaffeineLimit || { basis: report.limitBasis, amountMg: report.limit };
     const noWeight = limitInfo.basis === 'noWeight';
@@ -981,7 +981,7 @@
         <div class="summary-goal-label">${goalLabel(goal)}</div>
         ${shown.map(day => goalMark(goal, day)).join('')}<span class="summary-goal-total${goal.unavailable ? ' no-weight' : ''}">${goal.unavailable ? '체중 정보 없음' : goal.measured ? `${goal.kept}/${goal.measured}` : '–'}</span></div>`).join('')}
     </div>`;
-    const goalLimitNote = goals.length > goalsShown.length ? `<p class="summary-note">개인 목표 ${selected.length}개 중 처음 ${selected.length - (goals.length - goalsShown.length)}개를 표시했다.</p>` : '';
+    const goalLimitNote = goals.length > goalsShown.length ? `<p class="summary-note">개인 목표 ${selected.length}개 중 처음 ${selected.length - (goals.length - goalsShown.length)}개를 표시했습니다.</p>` : '';
     const ratioCell = (kept, measured) => {
       const tone = measured ? 'rate-' + Math.floor(4 * kept / measured) : 'no-data';
       return `<span class="summary-ratio ${tone}">${kept}/${measured}</span>`;
@@ -998,7 +998,7 @@
     const conditionCompare = compare([validSleep.filter(day => Number.isFinite(day.hours) && inRange(day.hours)),
       validSleep.filter(day => Number.isFinite(day.hours) && !inRange(day.hours))], 'condition');
     const bNote = conditionCompare.means
-      ? `다음 날 아침 컨디션은 8~10시간인 밤(${conditionCompare.size[0]}일) 평균 ${fixed(conditionCompare.means[0], '점')}, 그 밖의 밤(${conditionCompare.size[1]}일) 평균 ${fixed(conditionCompare.means[1], '점')}이다. 수면시간은 반올림 전 값을 기준으로 비교했다.`
+      ? `다음 날 아침 컨디션은 8~10시간인 밤(${conditionCompare.size[0]}일) 평균 ${fixed(conditionCompare.means[0], '점')}, 그 밖의 밤(${conditionCompare.size[1]}일) 평균 ${fixed(conditionCompare.means[1], '점')}입니다. 수면시간은 반올림 전 값을 기준으로 비교했습니다.`
       : '컨디션 비교에는 반올림 전 8~10시간인 밤과 그 밖의 밤의 기록이 각각 2일 이상 필요합니다.';
     const page1 = `<article class="summary-page"${weeks.length > 14 ? ' data-size="many-weeks"' : !weeks.length && n <= 7 ? ' data-size="week"' : ''}><header class="summary-header"><div>
       <p class="summary-kicker">카페인·수면 기록 요약 · 1쪽 한눈에 보기</p><h1>${name}의 기록</h1>
@@ -1007,7 +1007,7 @@
       ${block('A. 카페인과 수면', chart + comparisons + callout('caffeineSleep', 'A. 카페인과 수면 설명', aNote), weeks.length ? '주차별 평균 · 각 숫자 아래는 계산에 사용한 일수' : '')}
       ${block('B. 수면을 위한 행동과 결과', calendar + callout('behavior', 'B. 수면을 위한 행동과 결과 설명', bNote, 'mint'), weeks.length ? '지킨 날 / 판정 가능한 날 · 비율이 높을수록 진하게 표시 · 수면시간은 반올림해 판정' : '✓ 지킴 · × 못 지킴 · – 판정 없음 · 수면시간은 반올림해 판정', !weeks.length && n > 7)}
       <footer class="summary-foot">
-        <p>날짜는 해당 수면이 속한 밤을 기준으로 표시한다. 자정 이후 잠든 경우도 전날 밤에 포함한다. 수면시간은 취침부터 기상까지의 간격이다. 두 그룹에 유효 기록이 각각 2일 이상 있을 때 비교한다.</p>
+        <p>날짜는 해당 수면이 속한 밤을 기준으로 표시합니다. 자정 이후 잠든 경우도 전날 밤에 포함합니다. 수면시간은 취침부터 기상까지의 간격입니다. 두 그룹에 유효 기록이 각각 2일 이상 있을 때 비교합니다.</p>
         <div class="summary-foot-standards"><p>청소년 일일 최대 섭취량 = 내 체중 × 2.5mg(식품의약품안전처)</p><p>청소년 권장 수면 8~10시간(미국수면의학회, 2016)</p></div>
       </footer>
     </article>`;
@@ -1038,9 +1038,9 @@
     const phoneDates = finding('phoneBeforeBed')?.members || [[], []];
     const phoneGroups = phoneDates.map(list => { const keys = new Set(list); return validSleep.filter(day => keys.has(day.date)); });
     const phone = compare(phoneGroups, 'hours');
-    const dNote = phone.means ? `자기 전 스마트폰을 30분 이상 사용한 밤(${phone.size[0]}일)의 평균 수면시간은 ${fixed(phone.means[0], '시간')}이다. 사용 시간이 더 짧거나 사용하지 않은 밤(${phone.size[1]}일)의 평균은 ${fixed(phone.means[1], '시간')}이다.` : '';
-    const good = [validSleep.length ? `수면 기록은 ${closed.length}일 중 ${validSleep.length}일 확인된다.` : '',
-      zero.length ? `카페인을 마시지 않은 날도 ‘안 마심’으로 ${zero.length}일 기록했다.` : ''].filter(Boolean);
+    const dNote = phone.means ? `자기 전 스마트폰을 30분 이상 사용한 밤(${phone.size[0]}일)의 평균 수면시간은 ${fixed(phone.means[0], '시간')}입니다. 사용 시간이 더 짧거나 사용하지 않은 밤(${phone.size[1]}일)의 평균은 ${fixed(phone.means[1], '시간')}입니다.` : '';
+    const good = [validSleep.length ? `수면 기록은 ${closed.length}일 중 ${validSleep.length}일 확인됩니다.` : '',
+      zero.length ? `카페인을 마시지 않은 날도 ‘안 마심’으로 ${zero.length}일 기록했습니다.` : ''].filter(Boolean);
     const maximum = Number(maximumText);
     const overLimit = maximum > 0 ? cafDays.filter(day => day.caf?.status === 'known' && day.caf.totalMg > maximum) : [];
     const caffeineMissing = closed.filter(day => !day.caf?.recorded);
@@ -1052,9 +1052,9 @@
       return ` (${dates.slice(0, reviewDateLimit).map(pdfDay).join(', ')}${additional > 0 ? ` 외 ${additional}일` : ''})`;
     };
     const review = [
-      overLimit.length ? `일일 최대 섭취량(${maximumText}mg)을 초과한 날은 ${overLimit.length}일이다${reviewDates(overLimit)}.` : '',
-      caffeineMissing.length ? `카페인 기록이 없는 날은 ${caffeineMissing.length}일이다${reviewDates(caffeineMissing)}.` : '',
-      sleepMissing.length ? `수면 기록이 없는 밤은 ${sleepMissing.length}일이다${reviewDates(sleepMissing)}.` : '',
+      overLimit.length ? `일일 최대 섭취량(${maximumText}mg)을 초과한 날은 ${overLimit.length}일입니다${reviewDates(overLimit)}.` : '',
+      caffeineMissing.length ? `카페인 기록이 없는 날은 ${caffeineMissing.length}일입니다${reviewDates(caffeineMissing)}.` : '',
+      sleepMissing.length ? `수면 기록이 없는 밤은 ${sleepMissing.length}일입니다${reviewDates(sleepMissing)}.` : '',
     ].filter(Boolean);
     const goodCoach = zero.length ? '안 마신 날도 따로 남겼네요!'
       : validSleep.length ? '수면 기록을 남기며 내 습관을 돌아봤네요. 좋은 시작이에요!' : '';
@@ -1064,7 +1064,7 @@
     const ranked = goals.filter(goal => goal.measured > 0).sort((a, b) => b.kept / b.measured - a.kept / a.measured);
     const best = ranked[0];
     const hardest = ranked.filter(goal => goal.kept < goal.measured).at(-1);
-    const ratio = goal => `‘${goal.label}’ 기준을 확인 가능한 ${goal.measured}일 중 ${goal.kept}일 지켰다.`;
+    const ratio = goal => `‘${goal.label}’ 기준을 확인 가능한 ${goal.measured}일 중 ${goal.kept}일 지켰습니다.`;
     const sample = hardest && validSleep.find(day => hardest.states.get(day.date)?.kept && Number.isFinite(day.bed));
     const plan = sample && ['range', 'bedtime', 'sleepMin'].includes(hardest.criterion || hardest.id) ?
       `기준을 지킨 ${pdfDay(sample.date)} 밤처럼 ${pdfClock(sample.bed)} 무렵에 잠자리에 드는 것부터 해 볼까요?` : '';
@@ -1085,13 +1085,13 @@
     const page2 = `<article class="summary-page" data-page="2"><header class="summary-header">
       <p class="summary-kicker">카페인·수면 기록 요약 · 2쪽 자세히 보기</p><p class="summary-sub">${name} · ${period}</p></header>
       ${block('C. 카페인을 마신 날', caffeineContent.content + callout('caffeineDays', 'C. 카페인을 마신 날 설명', caffeineContent.note), caffeineNote)}
-      ${block('D. 수면과 생활습관', (habitBars || '<p class="summary-note">표시할 생활습관 응답이 없다.</p>') + callout('sleepHabits', 'D. 수면과 생활습관 설명', dNote, 'blue'), '밤 기록 중 고른 답 · 숫자는 일수')}
+      ${block('D. 수면과 생활습관', (habitBars || '<p class="summary-note">표시할 생활습관 응답이 없습니다.</p>') + callout('sleepHabits', 'D. 수면과 생활습관 설명', dNote, 'blue'), '밤 기록 중 고른 답 · 숫자는 일수')}
       <section class="summary-two">
-        <div class="summary-record-card good"><h2>E. 기록 · 잘한 점</h2>${recordNote('recordGood', 'E. 기록 · 잘한 점', good.length ? good : ['아직 확인할 기록이 없다.'], goodCoach)}</div>
-        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${recordNote('recordReview', 'E. 기록 · 아쉬운 점', review.length ? review : ['기록에서 확인된 보완 사항이 없다.'], reviewCoach)}</div>
+        <div class="summary-record-card good"><h2>E. 기록 · 잘한 점</h2>${recordNote('recordGood', 'E. 기록 · 잘한 점', good.length ? good : ['아직 확인할 기록이 없습니다.'], goodCoach)}</div>
+        <div class="summary-record-card review"><h2>E. 기록 · 아쉬운 점</h2>${recordNote('recordReview', 'E. 기록 · 아쉬운 점', review.length ? review : ['기록에서 확인된 보완 사항이 없습니다.'], reviewCoach)}</div>
       </section>
       <section class="summary-section summary-reflections"><h2>F. 돌아보기</h2><div class="summary-three">
-        ${reflection.map(([key, title, value]) => `<div class="summary-reflect-card"><h3>${title}</h3><p data-summary-text="${key}"${reportPlainText(value) ? '' : ' class="summary-note"'}>${reportTextHtml(reportPlainText(value) ? value : '기록에서 확인할 내용이 없다.')}</p></div>`).join('')}
+        ${reflection.map(([key, title, value]) => `<div class="summary-reflect-card"><h3>${title}</h3><p data-summary-text="${key}"${reportPlainText(value) ? '' : ' class="summary-note"'}>${reportTextHtml(reportPlainText(value) ? value : '기록에서 확인할 내용이 없습니다.')}</p></div>`).join('')}
       </div><div class="summary-teacher"><b>선생님 한마디</b><p data-summary-text="memo">${reportTextHtml(memo)}</p></div></section>
     </article>`;
     const comparison = report.goalComparison && window.teacherGoalComparison;
